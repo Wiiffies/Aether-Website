@@ -139,5 +139,8 @@ secrets in the repository, no client-side authorisation, no data reachable witho
 - Orders and questions — **questions@get-aether.de**
 - Business enquiries only — **business@get-aether.de**
 
-© 2026 Aether. All rights reserved. This repository is public for transparency and deployment —
-it is not an open-source project, and no licence is granted for reuse.
+© 2026 Aether. The source code in this repository is released under the [MIT Licence](LICENSE).
+
+MIT covers the code only. It grants no right to the **Aether name, logo or brand**, to the artwork
+in `public/`, or to the copy on the pages — those stay reserved. If you deploy this code, replace
+the branding rather than shipping it as "Aether".

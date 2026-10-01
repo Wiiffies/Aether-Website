@@ -12,8 +12,21 @@ The page it serves is `maintenance.html` on `main`, which is live at
 <https://get-aether.de/maintenance.html>. That file is the source of truth.
 
 - **Turn on:** Cloudflare dashboard → your zone `get-aether.de` → **Rules → Overview** →
-  enable the rule named **`Maintenance mode (site-wide)`**.
-- **Turn off:** disable the same rule. Nothing is deleted, so re-enabling is instant.
+  switch **`Maintenance mode (site-wide)`** on.
+- **Turn off:** switch the same rule off. Nothing is deleted, so re-enabling is instant.
+
+Live identifiers, so you never have to go hunting for the rule:
+
+| Thing | Value |
+| --- | --- |
+| zone | `74675dbf0eec6c0cba4b9674a9cd7431` |
+| ruleset (phase `http_request_dynamic_redirect`) | `81830ab5c40740d5a71a5909da775079` |
+| rule | `e9c622bba39d427186d4ac7fb4b68f73` |
+
+The rule matches `get-aether.de` and `www.get-aether.de` only, skips anything under `/api/*`,
+and skips `/maintenance.html` itself (without that last exclusion it would redirect to itself
+forever). It returns a **302**, not a 301, on purpose: a permanent redirect gets cached hard by
+browsers and would keep sending people to the notice after the site is back.
 
 The rule rewrites every request to `/maintenance.html` **except `/api/*`**, so the Worker,
 checkout, the payment IPN callback and the password-reset API all keep working while the site
@@ -55,6 +68,19 @@ Verify with a cache-busting request, which always reaches the origin:
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' "https://get-aether.de/?cb=$(date +%s)"
 ```
+
+### Checking the switch itself
+
+```bash
+# On: every public path answers 302 towards the notice, but these three must NOT move.
+for u in / /shop.html /account.html /maintenance.html /api/health; do
+  printf '%-18s ' "$u"
+  curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' "https://get-aether.de${u}?cb=$RANDOM"
+done
+```
+
+`/api/health` returning `200` (not a `302`) is the one line that proves the switch did not take
+the Worker, checkout or the payment IPN down with the site.
 
 ---
 

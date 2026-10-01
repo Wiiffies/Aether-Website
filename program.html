@@ -1,0 +1,149 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="theme-color" content="#08080a"><title>Aether Desktop — in development</title>
+<meta name="description" content="Aether Desktop is in development: a desktop app from the Aether studio. Beta testers get every build first.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Aether">
+<meta property="og:title" content="Aether Desktop — in development">
+<meta property="og:description" content="Aether Desktop is in development: a desktop app from the Aether studio. Beta testers get every build first.">
+<meta property="og:url" content="https://get-aether.de/program.html">
+<meta property="og:image" content="https://get-aether.de/public/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Aether Desktop — in development">
+<meta name="twitter:description" content="Aether Desktop is in development: a desktop app from the Aether studio. Beta testers get every build first.">
+<meta name="twitter:image" content="https://get-aether.de/public/og.png"><link rel="icon" href="public/aether-logo.png" type="image/png"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="public/aether.css?v=7"><link rel="stylesheet" href="public/pages.css?v=7"><link rel="stylesheet" href="public/ui.css?v=7"></head><body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header"><a class="brand" href="index.html"><img src="public/aether-logo.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="program.html" class="is-active" aria-current="page">Program</a><a href="account.html">Account</a></nav><a class="header-cta" href="account.html">Your account <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header>
+
+<main class="page-main" id="main">
+  <span class="page-kicker" id="program-kicker">In development</span>
+  <h1 id="program-title">Aether Desktop.<br><em>Not out yet.</em></h1>
+  <p class="page-lead" id="program-lead">A desktop app is being built in the studio — a real window on your machine instead of another tab. It is not finished, there is no release date yet, and nothing here is a promise. Beta testers get every build first.</p>
+
+  <div class="acc-note warn" id="program-flag" style="margin-top:22px;max-width:620px">
+    <b style="color:#fff">Status: in development.</b>
+    <span style="display:block;margin-top:5px">Everything below is wired and waiting. When a build exists, the download appears here for testers — no date is promised until one is ready.</span>
+  </div>
+
+  <section class="auth-card" id="download-card" style="margin-top:26px" aria-labelledby="dl-title">
+    <h2 id="dl-title">Beta build</h2>
+    <p class="sub" id="dl-sub">Checking whether your account has the Tester role…</p>
+
+    <div id="dl-locked" hidden>
+      <p class="sub" style="margin:0 0 16px">The beta build is handed out to testers first. Sign in with an account that has the Tester role and the download shows up right here — the server decides that, not this page.</p>
+      <div class="acc-row"><a class="button button-primary" href="account.html">Sign in <span>↗</span></a><a class="outline-button" href="contact.html">Ask to join the beta</a></div>
+    </div>
+
+    <div id="dl-soon" hidden>
+      <div class="acc-note ok" style="margin:0">
+        <b style="color:#fff">You are in the beta.</b>
+        <span style="display:block;margin-top:5px">No build is published yet. The moment one is uploaded it appears here on this same page, with its version and checksum — and we email the address on your account.</span>
+      </div>
+    </div>
+
+    <div id="dl-ready" hidden>
+      <dl class="acc-kv" style="margin:0 0 18px">
+        <dt>Version</dt><dd id="dl-version">—</dd>
+        <dt>Platform</dt><dd id="dl-platform">—</dd>
+        <dt>Size</dt><dd id="dl-size">—</dd>
+        <dt>SHA-256</dt><dd id="dl-sha" style="word-break:break-all;font-family:'DM Mono',monospace;font-size:11px">—</dd>
+      </dl>
+      <div class="acc-row">
+        <a class="button button-primary" id="dl-button" href="" rel="noopener">Download the build <span>↗</span></a>
+        <span class="form-msg" id="dl-msg" role="status"></span>
+      </div>
+      <p class="sub" style="margin:14px 0 0">Check the SHA-256 against the file you downloaded before you run it. Builds are unsigned while the project is this young, so your operating system will warn you — that warning is expected, and it is also why the checksum is printed here.</p>
+    </div>
+
+    <div id="dl-error" hidden>
+      <p class="sub" style="margin:0">Could not check your access just now. Reload the page, or open <a href="account.html" style="color:#fff">your account</a> — if the Tester role is on it, this page will hand you the build.</p>
+    </div>
+  </section>
+
+  <div class="page-grid">
+    <div class="page-card">
+      <h2>Why a desktop app</h2>
+      <p>Running locally means it can do the things a web page cannot: reach your own files and hardware, keep working while the network is down, and hold data on your machine instead of someone else's.</p>
+    </div>
+    <div class="page-card">
+      <h2>What to expect</h2>
+      <p>Beta builds are rough. Features change, files move, and something will be broken at some point. If that is not what you want from software, wait for the stable release.</p>
+    </div>
+    <div class="page-card">
+      <h2>How the beta works</h2>
+      <p>Every Aether account can ask for the Tester role. We hand it out by hand, so it may take a day or two. Testers also get the Beta area of the site and a direct line for feedback.</p>
+    </div>
+    <div class="page-card">
+      <h2>While you wait</h2>
+      <p>The studio is still taking website and Discord bot work, and those were never blocked on this. <a href="shop.html" style="color:#fff">Have a look at the shop</a> if you need something built properly.</p>
+    </div>
+  </div>
+
+  <div class="ui-note" style="margin-top:26px;max-width:620px">
+    This page is <b style="color:#fff">configuration-driven</b>. The name, tagline, platform, version, size, checksum and download link all come from one block in <code>public/aether-config.js</code> — so publishing a build is a single edit, and nothing here invents a version number or a file that does not exist.
+  </div>
+</main>
+
+<footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
+<script src="public/aether-config.js?v=8"></script>
+<script src="public/checkout.js?v=7"></script>
+<script>
+(() => {
+  const C = window.AetherCheckout;
+  if (!C) return;
+  const cfg = window.AETHER_CONFIG || {};
+  const program = cfg.program || {};
+  const cards = { locked: document.getElementById("dl-locked"), soon: document.getElementById("dl-soon"), ready: document.getElementById("dl-ready"), error: document.getElementById("dl-error") };
+  const sub = document.getElementById("dl-sub");
+
+  // Every value on this page is optional config, so a half-filled block degrades to plain copy
+  // instead of printing "undefined" at a visitor.
+  function text(el, value, fallback){ if (el) el.textContent = (value === undefined || value === null || value === "") ? (fallback || "—") : String(value); }
+  if (program.name) document.title = program.name + " — in development";
+  text(document.getElementById("program-kicker"), program.kicker, "In development");
+  if (program.name) document.getElementById("program-title").innerHTML = String(program.name).replace(/&/g, "&amp;").replace(/</g, "&lt;") + ".<br><em>" + (program.tagline ? String(program.tagline).replace(/&/g, "&amp;").replace(/</g, "&lt;") : "Not out yet.") + "</em>";
+  else if (program.tagline) document.getElementById("program-title").innerHTML = program.tagline + "<br><em>Not out yet.</em>";
+  if (program.description) document.getElementById("program-lead").textContent = program.description;
+  if (program.status) document.getElementById("program-flag").innerHTML = '<b style="color:#fff">Status: ' + String(program.status).replace(/&/g, "&amp;").replace(/</g, "&lt;") + '.</b><span style="display:block;margin-top:5px">' + (program.statusNote ? String(program.statusNote) : "When a build exists, the download appears here for testers.") + '</span>';
+
+  function show(which){
+    Object.keys(cards).forEach(k => { if (cards[k]) cards[k].hidden = (k !== which); });
+    if (cards[which] && which === "ready") {
+      text(document.getElementById("dl-version"), program.version, "—");
+      text(document.getElementById("dl-platform"), program.platform, "—");
+      text(document.getElementById("dl-size"), program.size, "—");
+      text(document.getElementById("dl-sha"), program.sha256, "not published");
+      const btn = document.getElementById("dl-button");
+      btn.href = String(program.downloadUrl);
+      C.ui.setMsg(document.getElementById("dl-msg"), "Signed link — do not repost it.", "ok");
+    }
+    if (cards[which] && which === "soon") C.ui.setMsg(sub, "Access confirmed.", "ok");
+    if (cards[which] && which === "locked") C.ui.setMsg(sub, "This build is testers-only.", "");
+  }
+
+  // The gate is decided by the server: /api/beta/access re-checks session + verified email + Tester
+  // role on every call and answers 401/403 to everyone else, so a visitor cannot talk their way in
+  // by editing this script. What this page must NOT do is pretend the link itself is a secret — it
+  // is only ever exposed to an allowed session, but the file it points at still has to be hosted
+  // somewhere that protects it (a private host or a signed URL), because anything the browser can
+  // fetch can be forwarded once by the person who fetched it.
+  (async () => {
+    let allowed = false;
+    try {
+      const access = await C.portal.betaAccess();
+      allowed = !!(access && access.allowed === true);
+    } catch (err) {
+      // 401 signed out, 403 not a tester, 429 rate limited, or the API is down — all the same answer
+      // to the visitor, except a genuine failure to reach the API, which is worth saying out loud.
+      allowed = false;
+      if (!err || (err.status !== 401 && err.status !== 403)) { C.ui.setMsg(sub, "", ""); return show("error"); }
+    }
+    if (!allowed) return show("locked");
+    return show(String(program.downloadUrl || "").trim() ? "ready" : "soon");
+  })();
+
+  if (C.markActiveNav) C.markActiveNav();
+})();
+</script>
+<script src="public/aether.js?v=7" defer></script>
+</body></html>
