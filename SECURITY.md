@@ -140,10 +140,19 @@ The frontend talks to the API **same-origin** by default (`public/aether-config.
 2. **Resend**: create the API key and set `RESEND_API_KEY` as a Worker secret. Until then
    password reset answers with an honest 503, no verification email is sent, and order
    emails stay in mock mode.
-3. **SSL/TLS mode — done (2026-10-01): `ssl = "strict"` (Full (strict))**. Verified live: the
-   zone setting reads `strict` and `get-aether.de` still answers 200 over HTTPS against the
-   GitHub Pages certificate. If a certificate ever mismatches, the site fails closed — that is
-   the intended behaviour, and Pages renews its Let's Encrypt certificate automatically.
+3. **SSL/TLS mode is `Full`, and it must stay `Full` while GitHub Pages is the origin — tested
+   2026-10-01, it is NOT a safe change.** Cloudflare `Full (strict)` was enabled, the whole site
+   instantly answered **HTTP 526 (origin SSL handshake failed)** and the setting was reverted
+   within minutes. Cause, measured with `openssl s_client -connect 185.199.108.153:443 -servername
+   get-aether.de`: GitHub Pages serves `subject=CN=*.github.io` for this hostname — no certificate
+   for `get-aether.de` has been provisioned, so there is nothing for strict validation to accept.
+   `Full` still encrypts the Cloudflare→origin leg, it just does not validate that certificate.
+   Two legitimate ways to reach `Full (strict)`: (a) serve the static site from Cloudflare Pages or a
+   Worker with static assets, which get a Cloudflare-managed certificate, or (b) let GitHub Pages
+   provision a certificate for `get-aether.de` first — which needs the Cloudflare proxy temporarily
+   switched to DNS-only so GitHub's validation can reach it, then the proxy re-enabled and the
+   certificate checked with `openssl`. Do not flip this setting “to be safer” without doing one of
+   those first; when in doubt, check the live site within 30 seconds of any SSL/TLS change.
 4. **Cache rules**: `browser_cache_ttl` is 4 h. Consider a "Cache Everything" rule for
    `/public/*`, `*.css`, `*.js`, images only, and confirm that `/api/*` is never cached
    (the Worker already sends `cache-control: no-store`).

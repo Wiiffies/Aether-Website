@@ -108,7 +108,7 @@ Single source of truth for the customer-portal / Beta work. Status legend:
 - [x] DDoS protection via Cloudflare proxy (always-on, automatic)
 - [ ] MANUAL: add edge rate-limit rules for `/api/conversations*` + `/api/beta/*` (free plan allows 1 rule)
 - [ ] MANUAL: deploy Turnstile widget + secrets (`TURNSTILE_SECRET`, `turnstileSiteKey`)
-- [x] SSL/TLS mode → **Full (strict)** (2026-10-01, zone setting verified as `strict`, site still 200 over HTTPS)
+- [!] SSL/TLS mode: **Full (strict) is impossible as long as GitHub Pages is the origin** — enabling it on 2026-10-01 produced an instant site-wide **HTTP 526**; reverted to `Full` within minutes and the site came back (verified: `/`, `/shop.html`, `/account.html`, `/public/checkout.js`, `/public/aether.css` all 200). GitHub Pages answers with `CN=*.github.io` for `get-aether.de`, so strict validation can never succeed. Prerequisite before retrying: move the static site behind a Cloudflare-managed certificate (Cloudflare Pages / Worker with static assets) or let GitHub provision a cert for the domain with the proxy temporarily DNS-only. See SECURITY.md §4.3.
 - [x] `ADMIN_EMAIL=alex.real.apple@gmail.com` set and the guessed `ADMIN_EMAILS=Wispz@outlook.de` emptied (bindings re-sent with `keep_bindings:["secret_text"]`; all four secrets + D1 survived, proven by `/api/health`)
 - [x] `ALLOWED_ORIGIN` set explicitly to `https://get-aether.de,https://www.get-aether.de,https://api.get-aether.de` (wildcards are still ignored by code)
 - [ ] MANUAL: set `RESEND_API_KEY` so verification/reset emails really send
@@ -149,4 +149,5 @@ Single source of truth for the customer-portal / Beta work. Status legend:
 - [ ] MANUAL: separate Beta Worker with its own D1/KV/secrets (data isolation) before real Beta testing — today isolation is configuration, not a hard boundary
 - [ ] MANUAL: DNS record + route if the portal should live on its own `Customer.get-aether.de` hostname (today it is same-origin on get-aether.de)
 - [ ] MANUAL: `PROMO_CODES`, `TURNSTILE_*`, `RESEND_API_KEY`, `ADMIN_EMAIL` dashboard values
-- [ ] MANUAL: SSL mode → Full (strict), explicit `ALLOWED_ORIGIN`, second edge rate-limit rule for chat/Beta/admin (free plan allows one)
+- [x] MANUAL: explicit `ALLOWED_ORIGIN` set (2026-10-01); SSL mode cannot move to `Full (strict)` until the origin stops being GitHub Pages (see §8)
+- [ ] MANUAL: second edge rate-limit rule for chat/Beta/admin (free plan allows one — the existing rule must not throttle `/api/ipn`)
