@@ -440,11 +440,38 @@ function sessionCookie(token, maxAgeSec, request){
   return `${SESSION_COOKIE}=${token}; Path=/; Max-Age=${maxAgeSec}; SameSite=${sameSite}; HttpOnly; Secure`;
 }
 function clearCookie(request){ return sessionCookie("", 0, request); }
+// The passwords that top every breach corpus. Matching is an exact test against the lowercased
+// password and against a punctuation-stripped form - deliberately never a substring test, so a
+// password that merely *contains* a listed word ("wrongpassword", "notpassword1") is still fine.
+// This runs when a password is CHOSEN (register / reset / change), never at login, so nobody who
+// already holds one of these is locked out - their existing password keeps working until they pick
+// a new one, and only then is the list applied.
+const COMMON_PASSWORDS = new Set([
+  "password", "password1", "password12", "password123", "password1234", "password12345",
+  "passwort", "passwort1", "passwort123", "passw0rd", "p4ssword", "p@ssword1",
+  "123456", "1234567", "12345678", "123456789", "1234567890", "12345678910",
+  "00000000", "11111111", "22222222", "66666666", "88888888", "99999999",
+  "qwerty", "qwerty1", "qwerty123", "qwerty1234", "qwertyuiop", "qwertz", "qwertz123",
+  "1q2w3e4r", "1qaz2wsx", "qazwsx123", "zaq12wsx", "a1b2c3d4", "asdf1234", "asdfghjkl",
+  "zxcvbnm1", "abc12345", "abcd1234", "1234abcd", "12345abc", "aaa12345",
+  "admin", "admin1", "admin123", "admin1234", "administrator", "root1234", "default123",
+  "changeme", "changeme1", "secret", "secret1", "secret123", "master123", "welcome1",
+  "welcome123", "letmein", "letmein1", "trustno1", "whatever1", "test1234", "testpass1",
+  "iloveyou", "sunshine1", "princess1", "football1", "baseball1", "starwars1", "superman1",
+  "monkey123", "dragon123", "shadow123", "michael1", "jordan23", "hunter2",
+  "aether", "aether1", "aether12", "aether123", "aether2025", "aether2026", "getaether",
+  "get-aether", "aetherwebsite", "aetherpass1", "aetherpassword",
+]);
+function isCommonPassword(password){
+  const s = String(password == null ? "" : password).toLowerCase();
+  return COMMON_PASSWORDS.has(s) || COMMON_PASSWORDS.has(s.replace(/[^a-z0-9]/g, ""));
+}
 function passwordProblem(password){
   const s = String(password == null ? "" : password);
   if (s.length < 8) return "Password must be at least 8 characters";
   if (s.length > 200) return "Password is too long (200 characters max)";
   if (!/[A-Za-z]/.test(s) || !/[0-9]/.test(s)) return "Use at least one letter and one number";
+  if (isCommonPassword(s)) return "That password is too common \u2014 please pick something less guessable";
   return "";
 }
 const MAX_SESSIONS_PER_USER = 10;
@@ -1315,6 +1342,40 @@ async function handleDeleteMe(request, env){
 // `delivery` describes the deployment, never the account: every branch answers with the same 200
 // body and only the log/webhook side effect differs, so this cannot be used to probe which email
 // addresses have an account.
+// A per-account ceiling on top of the per-IP one. A single IP is already capped at 6/h, but an
+// attacker with a botnet can rotate addresses and keep resetting one victim's password: every
+// request replaces their previous link and sends another email. Six per hour is generous for a
+// human who is genuinely stuck and worthless as an inbox bomb. The answer stays byte-identical to
+// a successful request, so a throttled address cannot be told apart from one that was served.
+function forgotAccountLimit(env){
+  const n = Number(env.FORGOT_ACCOUNT_LIMIT);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 6;
+}
+// user_id 0 is never a real account, so the stand-in writes below can never touch anybody's row.
+const FORGOT_DUMMY_USER = 0;
+// The response body of /api/auth/forgot is identical for every address, but the *work* is not: a
+// real account gets a lookup, a token write and an outbound email while an unknown one used to get
+// nothing at all. That difference in latency is an account oracle no matter how identical the JSON
+// is. So the unknown-address branch now performs the same database work (a lookup plus a single-use
+// token write that is rolled back in the same request) and every answer is padded past a jittered
+// floor. The floor removes the systematic gap - the database work - which is the part a script can
+// actually measure; outbound mail latency is far noisier than the gap it would have to reveal.
+const FORGOT_FLOOR_MS = 220;
+async function dummyForgotWork(env){
+  try {
+    await env.DB.prepare("SELECT id, email FROM users WHERE email = ?").bind("__aether_no_such_account__").first();
+    await env.DB.prepare("DELETE FROM auth_tokens WHERE user_id = ? AND purpose = ?").bind(FORGOT_DUMMY_USER, "reset").run();
+    const hash = await sha256Hex(newToken());
+    await env.DB.prepare("INSERT INTO auth_tokens (token_hash, user_id, purpose, expires_at, created_at) VALUES (?,?,?,?,?)")
+      .bind(hash, FORGOT_DUMMY_USER, "reset", Date.now() + 30*60*1000, Date.now()).run();
+    await env.DB.prepare("DELETE FROM auth_tokens WHERE token_hash = ?").bind(hash).run();
+  } catch(e){ /* the real branch swallows its failures too, so neither path can be spotted here */ }
+}
+async function equalizeForgotTiming(startedAt){
+  const target = FORGOT_FLOOR_MS + Math.floor(Math.random()*170);
+  const spent = Date.now() - startedAt;
+  if (spent < target) await new Promise(r => setTimeout(r, target - spent));
+}
 function resetDeliveryChannel(env){
   if (emailConfigured(env)) return "email";
   if (env.DISCORD_WEBHOOK_URL) return "discord";
@@ -1347,6 +1408,27 @@ async function deliverResetLink(env, email, link, emailPayload){
   console.log("[reset-link] " + email + " " + link);
   return "logs";
 }
+// Sent after every successful password reset or change. This is the cheapest detection control
+// there is: if somebody else took the account over, the real owner learns about it in their inbox
+// instead of only noticing later that their session was killed. It carries no password and no link,
+// so a misdelivered copy grants nothing, and a mail outage is logged and swallowed - a notification
+// must never be able to make a completed password change look like it failed.
+async function sendPasswordChangedNotice(env, email, via){
+  if (!emailConfigured(env) || !isEmail(email)) return;
+  const when = new Date().toISOString().replace("T"," ").slice(0,16) + " UTC";
+  try {
+    await sendEmail(env, {
+      to: email,
+      subject: "Your Aether password was changed",
+      html: orderHtml({
+        title:"Your password was changed",
+        fields:[["Account", email],["When", when],["Method", via],["Devices", "every other session was signed out"]],
+        note:"If this was you, nothing to do. If it was not, reply to this email immediately and we will secure the account \u2014 the new password is already active, so treat this as urgent.",
+      }),
+      text:`Your Aether password was changed.\n\nAccount: ${email}\nWhen: ${when}\nMethod: ${via}\nEvery other device was signed out.\n\nIf this was not you, contact questions@get-aether.de immediately.`,
+    });
+  } catch(e){ console.warn("password-changed notice failed", e && e.message); }
+}
 // ---------- password reset + account settings ----------
 // POST /api/auth/forgot { email } - always answers the same way, so the endpoint cannot be
 // used to find out which email addresses have an account.
@@ -1363,21 +1445,36 @@ async function handleForgotPassword(request, env){
       ? "Email delivery is not configured on this deployment, so the reset link went to the site's recovery channel instead of an inbox (the Discord ops channel, or the server log). It works once and expires after 30 minutes - contact questions@get-aether.de if you cannot reach it."
       : "Email delivery is not configured on this deployment, so the reset link was written to the server log instead of an inbox. It works once and expires after 30 minutes - contact questions@get-aether.de and we will retrieve it with you.";
   const generic = { ok:true, delivery:channel, message };
-  if (!isEmail(email)) return json(generic, 200, env, request);
-  // No email provider? deliverResetLink() hands the link to the recovery channel instead of refusing.
-  try {
-    const row = await env.DB.prepare("SELECT id, email FROM users WHERE email = ?").bind(email).first();
-    if (row) {
-      const token = await issueAuthToken(env, row.id, "reset", 30*60*1000);
-      const link = `${siteUrl(env)}/reset-password.html?token=${token}`;
-      await deliverResetLink(env, row.email, link, {
-        to: row.email,
-        subject:"Reset your Aether password",
-        html: orderHtml({ title:"Reset your password", fields:[["Account", row.email],["Link", link],["Valid for", "30 minutes \u2014 single use"]], note:"If you did not ask for this, ignore this email: your password stays unchanged. Signing in elsewhere is not affected until the link is used." }),
-        text:`Reset your Aether password:\n${link}\n\nValid for 30 minutes and single use. If you did not request it, ignore this email.`,
-      });
+  const startedAt = Date.now();
+  if (isEmail(email)) {
+    // The email is hashed before it becomes a rate-limit key, so the throttle table never holds a
+    // plaintext address and a compromised D1 snapshot cannot be used as a customer list.
+    const bucket = "forgot-acct:" + (await sha256Hex(email)).slice(0, 32);
+    const throttled = await hitRateLimit(env, bucket, forgotAccountLimit(env), 3600000);
+    if (throttled) {
+      // Silent drop: no token, no mail, no recovery-channel post - but the same database work and
+      // the same body, so this cannot be used to probe which addresses exist.
+      await dummyForgotWork(env);
+    } else {
+      // No email provider? deliverResetLink() hands the link to the recovery channel instead of refusing.
+      try {
+        const row = await env.DB.prepare("SELECT id, email FROM users WHERE email = ?").bind(email).first();
+        if (row) {
+          const token = await issueAuthToken(env, row.id, "reset", 30*60*1000);
+          const link = `${siteUrl(env)}/reset-password.html?token=${token}`;
+          await deliverResetLink(env, row.email, link, {
+            to: row.email,
+            subject:"Reset your Aether password",
+            html: orderHtml({ title:"Reset your password", fields:[["Account", row.email],["Link", link],["Valid for", "30 minutes \u2014 single use"]], note:"If you did not ask for this, ignore this email: your password stays unchanged. Signing in elsewhere is not affected until the link is used." }),
+            text:`Reset your Aether password:\n${link}\n\nValid for 30 minutes and single use. If you did not request it, ignore this email.`,
+          });
+        } else {
+          await dummyForgotWork(env);
+        }
+      } catch(e){ console.warn("forgot-password failed", e && e.message); }
     }
-  } catch(e){ console.warn("forgot-password failed", e && e.message); }
+  }
+  await equalizeForgotTiming(startedAt);
   return json(generic, 200, env, request);
 }
 // POST /api/auth/reset { token, password } - consumes the single-use token, replaces the
@@ -1401,6 +1498,7 @@ async function handleResetPassword(request, env){
   await env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(user.id).run();
   await env.DB.prepare("DELETE FROM auth_tokens WHERE user_id = ?").bind(user.id).run().catch(()=>{});
   const { token: session } = await createSession(env, user.id);
+  await sendPasswordChangedNotice(env, user.email, "password reset link");
   try { const v = await env.DB.prepare("SELECT email_verified, role FROM users WHERE id = ?").bind(user.id).first(); if (v) { user.email_verified = Number(v.email_verified)||0; if (v.role) user.role = v.role; } } catch {}
   return json({ ok:true, token: session, user: publicUser(env, user), emailVerified: isVerifiedUser(user), emailVerificationRequired: verificationRequired(env), isAdmin: isAdminEmail(env, user.email) }, 200, env, request, { "set-cookie": sessionCookie(session, SESSION_TTL_SEC, request) });
 }
@@ -1420,6 +1518,7 @@ async function handleChangePassword(request, env){
   await env.DB.prepare("UPDATE users SET password_hash = ? WHERE id = ?").bind(await hashPassword(next), auth.user.id).run();
   // Keep this session, drop every other one.
   await env.DB.prepare("DELETE FROM sessions WHERE user_id = ? AND token != ?").bind(auth.user.id, auth.token).run().catch(()=>{});
+  await sendPasswordChangedNotice(env, auth.user.email, "signed-in password change");
   return json({ ok:true, message:"Password updated. Other devices have been signed out." }, 200, env, request);
 }
 // POST /api/auth/verify-email { token }

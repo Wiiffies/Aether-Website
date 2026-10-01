@@ -1,7 +1,7 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="theme-color" content="#08080a"><title>Payment — Aether</title>
 <meta name="description" content="Payment received. Your receipt and order updates arrive by email and in your Aether account.">
 <meta name="robots" content="noindex"><link rel="icon" href="public/aether-logo.png" type="image/png"><link rel="stylesheet" href="public/aether.css?v=7"><link rel="stylesheet" href="public/pages.css?v=7"><link rel="stylesheet" href="public/ui.css?v=7">
-</head><body><header class="site-header"><a class="brand" href="index.html"><img src="public/aether-logo.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="account.html">Account</a></nav><a class="header-cta" href="shop.html">Shop <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header>
+</head><body><header class="site-header"><a class="brand" href="index.html"><img src="public/aether-logo.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="program.html">Program</a><a href="account.html">Account</a</nav><a class="header-cta" href="shop.html">Shop <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header>
 <main class="page-main">
   <span class="page-kicker">Payment</span>
   <h1 id="success-title">Verifying<br><em>payment…</em></h1>
@@ -21,10 +21,33 @@
     </ul>
   </div>
   <div class="detail-list" style="margin-top:22px"><div><b>Order ID</b><span id="order-id">—</span></div><div><b>Payment ID</b><span id="payment-id">—</span></div><div><b>Amount</b><span id="order-amount">—</span></div><div><b>Status</b><span id="order-status">Verifying…</span></div></div>
+  <section id="project-chat" style="display:none;margin-top:30px;border:1px solid #242529;border-radius:8px;background:#0b0b0c;overflow:hidden">
+    <div style="padding:16px 18px;border-bottom:1px solid #242529">
+      <div style="font:10px 'DM Mono',monospace;text-transform:uppercase;letter-spacing:.12em;color:#85878b">Project chat — opened for this order</div>
+      <h2 style="font-size:19px;font-weight:500;letter-spacing:-.03em;margin:8px 0 6px">Talk to us about your build</h2>
+      <p style="margin:0;font-size:12px;line-height:1.65;color:#9aa0a6">This thread already exists and is tied to your purchase, so nothing said here can get lost in an inbox. It is the same thread you will find under this Purchase ID in your account.</p>
+    </div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;padding:12px 18px;border-bottom:1px solid #242529;font-size:12px;color:#85878b">
+      <span>Purchase ID <b id="pc-purchase" style="color:#fff;font-family:'DM Mono',monospace">—</b></span>
+      <span>Account <b id="pc-email" style="color:#fff">—</b></span>
+    </div>
+    <div id="pc-thread" style="max-height:280px;overflow:auto;padding:14px 18px;font-size:12px;line-height:1.7;color:#c8c9cc"></div>
+    <div style="padding:14px 18px;border-top:1px solid #242529">
+      <label for="pc-input" style="display:block;font:10px 'DM Mono',monospace;text-transform:uppercase;letter-spacing:.1em;color:#85878b;margin-bottom:7px">First message</label>
+      <textarea id="pc-input" rows="3" placeholder="What are you building? Goals, pages, deadline, examples you like…" style="width:100%;box-sizing:border-box;background:#111214;border:1px solid #2a2e33;border-radius:6px;color:#f4f4f5;font:inherit;font-size:12px;padding:10px 12px;resize:vertical"></textarea>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap">
+        <button id="pc-send" type="button" class="purchase-button" style="margin:0">Send message <span>↗</span></button>
+        <a class="outline-button" href="account.html">Open in your account →</a>
+        <span id="pc-msg" role="status" aria-live="polite" style="font-size:12px;color:#9aa0a6"></span>
+      </div>
+    </div>
+  </section>
+
   <div class="page-actions" style="flex-wrap:wrap"><a class="purchase-button" href="shop.html">Back to shop <span>↗</span></a><a class="outline-button" href="mailto:questions@get-aether.de">Email us</a><button id="recheck-btn" type="button" class="outline-button" style="background:#111214;color:#fff;border:1px solid #333">Check status again</button></div>
   <a class="back-link" href="index.html">← Home</a>
 </main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
 <script src="public/aether-config.js?v=8"></script>
+<script src="public/checkout.js?v=7"></script>
 <script src="public/aether.js?v=7" defer></script>
 <script>
 (function(){
@@ -59,7 +82,7 @@
     leadEl.innerHTML='This link has no <code style="color:#fff">payment_id</code> — we can\'t verify a payment. If you just paid, open the success link from the checkout modal (it includes payment_id) or check your email.<br><br><span style="font-size:11px;color:#9aa0a6">Order: <b style="color:#fff">'+esc(oid||"—")+'</b> · Amount: <b style="color:#fff">'+esc(amt||"—")+'</b></span>';
     verifyBox.style.borderColor="#442"; verifyBox.style.background="#1a1510";
     verifyText.textContent="No payment_id in URL — cannot verify.";
-    verifyDetails.textContent="Open http://127.0.0.1:5501/discord-bot.html or shop.html → Pay with Crypto again to get a payment_id, or check your Discord/email for the pending payment. Direct opening of payment-success.html without paying is blocked.";
+    verifyDetails.textContent="Go back to the shop and pay again to get a fresh payment_id, or check your email for the pending payment. Opening payment-success.html directly, without paying, is blocked on purpose.";
     verifyBox.innerHTML='<div style="color:#c9a87a">⚠️ No payment to verify — success is only shown after verified payment.</div><div style="margin-top:8px;font:10px \'DM Mono\',monospace;color:#7a7d82">'+verifyDetails.textContent+'</div>';
     setStatus("No payment_id — not verified","#c9a87a");
     recheckBtn.style.display="none";
@@ -91,6 +114,7 @@
         verifyBox.innerHTML='<div style="color:#8ee0a0">✅ Payment verified — <b>'+esc(s)+'</b> · '+esc(String(payAmt))+' '+esc(payCur)+' · Order '+esc(orderId)+' · Payment '+esc(pid)+'</div><div style="margin-top:8px;font:10px \'DM Mono\',monospace;color:#7a7d82">Keep this page for your records. You\'ll also get email + Discord confirmation.</div>';
         clearInterval(timer); verifyDetails.textContent="";
         recheckBtn.textContent="Verified ✓"; recheckBtn.disabled=true;
+        openProjectChat(orderId,pid);
         return;
       } else if(j.isFailed){
         titleEl.innerHTML='Payment<br><em>failed.</em>';
@@ -115,6 +139,70 @@
       recheckBtn.textContent="Retry now"; recheckBtn.disabled=false;
     }
   }
+  // ---------- the project chat, opened automatically once the payment is verified ----------
+  // A custom website build needs a conversation the customer cannot lose, so the thread is created
+  // for them the moment the payment clears instead of asking them to find a chat button. The server
+  // owns that: fetching the purchase creates its conversation if it does not exist yet, so this is
+  // idempotent and a reload cannot produce a second thread.
+  var chatBox=document.getElementById("project-chat");
+  var chatState={ id:"", sending:false };
+  function chatMsg(t,color){ var m=document.getElementById("pc-msg"); m.textContent=t||""; m.style.color=color||"#9aa0a6"; }
+  function whenText(ts){ if(!ts) return ""; var d=new Date(ts); return isNaN(d)?"":d.toLocaleString("en-GB",{dateStyle:"medium",timeStyle:"short"}); }
+  function renderThread(messages){
+    var box=document.getElementById("pc-thread");
+    if(!messages.length){ box.innerHTML='<div style="color:#7a7d82">No messages yet. Anything you write here is attached to your purchase and we answer in this same thread.</div>'; return; }
+    box.innerHTML=messages.map(function(m){
+      var mine=String(m.sender||"").toLowerCase()==="customer";
+      return '<div style="margin:0 0 12px"><div style="font:10px \'DM Mono\',monospace;color:#7a7d82">'+esc(mine?"You":(m.sender||"Aether"))+(whenText(m.created_at)?" · "+esc(whenText(m.created_at)):"")+'</div><div style="white-space:pre-wrap">'+esc(m.body||"")+'</div></div>';
+    }).join("");
+    box.scrollTop=box.scrollHeight;
+  }
+  async function refreshThread(){
+    if(!chatState.id) return;
+    var thread=await window.AetherCheckout.portal.conversation(chatState.id);
+    renderThread((thread&&thread.messages)||[]);
+  }
+  async function openProjectChat(orderId,paymentId){
+    var C=window.AetherCheckout;
+    if(!C||!C.portal||!C.auth) return;
+    try{
+      var me=await C.auth.me();
+      if(!me||!me.authenticated) return;              // signed out: there is no account to attach it to
+      var list=await C.portal.purchases();
+      var orders=(list&&list.orders)||[];
+      var match=orders.filter(function(o){ return o.order_id===orderId; })[0]
+             || orders.filter(function(o){ return paymentId&&o.payment_id&&o.payment_id===paymentId; })[0];
+      if(!match) return;                              // the order has not reached this account yet
+      // Only the custom website service opens a thread by itself; a bot order stays a normal order.
+      if(String(match.type||"").toLowerCase()!=="website") return;
+      var got=await C.portal.purchase(match.purchase_id);   // server creates the conversation here
+      var conv=(got&&got.conversation)||{};
+      chatState.id=conv.conversation_id||"";
+      document.getElementById("pc-purchase").textContent=(got&&got.purchase&&got.purchase.purchase_id)||match.purchase_id||"—";
+      document.getElementById("pc-email").textContent=(me.user&&me.user.email)||"—";
+      chatBox.style.display="block";
+      if(chatState.id){ chatMsg("Thread created for this order — say hello and we pick it up from here.","#8ee0a0"); await refreshThread(); }
+      else { chatMsg("Could not open the thread automatically — use the button below.","#c9a87a"); }
+    }catch(e){
+      chatMsg("Could not open the chat automatically — open it from your account page.","#c9a87a");
+    }
+  }
+  document.getElementById("pc-send").addEventListener("click", async function(){
+    if(chatState.sending||!chatState.id) return;
+    var input=document.getElementById("pc-input");
+    var body=input.value.trim();
+    if(!body){ chatMsg("Write a message first.","#c9a87a"); input.focus(); return; }
+    chatState.sending=true;
+    try{
+      await window.AetherCheckout.portal.sendMessage(chatState.id, body);
+      input.value="";
+      await refreshThread();
+      chatMsg("Sent — we reply in this thread and by email.","#8ee0a0");
+    }catch(e){
+      chatMsg(e.message||"Could not send that — please try again.","#ff8a8a");
+    }finally{ chatState.sending=false; }
+  });
+
   recheckBtn.addEventListener("click", verify);
   verify();
   timer=setInterval(verify, 8000);

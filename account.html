@@ -12,7 +12,7 @@
 <meta name="twitter:title" content="Aether — Your account">
 <meta name="twitter:description" content="Sign in to your Aether account: purchases, order chats with the team, email confirmation and account settings — all in one place.">
 <meta name="twitter:image" content="https://get-aether.de/public/og.png"><link rel="icon" href="public/aether-logo.png" type="image/png"><link rel="stylesheet" href="public/aether.css?v=7"><link rel="stylesheet" href="public/pages.css?v=7"><link rel="stylesheet" href="public/portal.css?v=7"><link rel="stylesheet" href="public/ui.css?v=7">
-</head><body><header class="site-header"><a class="brand" href="index.html"><img src="public/aether-logo.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="account.html" class="active">Account</a><a href="beta.html" id="nav-beta" class="acc-hide">Beta</a></nav><a class="header-cta" href="shop.html">Shop <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header><main class="page-main acc-wrap">
+</head><body><header class="site-header"><a class="brand" href="index.html"><img src="public/aether-logo.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="program.html">Program</a><a href="account.html" class="active">Account</a<a href="beta.html" id="nav-beta" class="acc-hide">Beta</a></nav><a class="header-cta" href="shop.html">Shop <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header><main class="page-main acc-wrap">
 <span class="page-kicker">Aether account</span>
 <h1>Your orders.<br><em>Your chat.</em></h1>
 <p class="page-lead">Sign in to see every order you placed, chat with us about it in one place, and manage your account. There is no guest checkout: buying happens inside your account, so every order you place is listed here with its invoice and chat automatically.</p>
@@ -30,7 +30,11 @@
     <div class="acc-field"><label for="acc-pass">Password</label><input class="acc-input" id="acc-pass" type="password" placeholder="At least 8 characters" autocomplete="current-password" required></div>
     <div class="acc-field acc-hide" id="acc-discord-wrap"><label for="acc-discord">Discord username <span style="color:#7a7d82;font-weight:400;text-transform:none;letter-spacing:0">— optional</span></label><input class="acc-input" id="acc-discord" placeholder="yourname"></div>
     <div class="acc-field acc-hide" id="acc-turnstile-wrap"><div data-turnstile hidden></div></div>
-    <div class="acc-row"><button class="acc-btn" id="acc-submit" type="submit">Sign in →</button></div>
+    <div class="acc-row">
+      <button class="acc-btn" id="acc-submit" type="submit">Sign in →</button>
+      <button class="acc-btn ghost" id="acc-forgot" type="button">Forgot password?</button>
+    </div>
+    <p class="acc-msg" id="acc-forgot-note" style="color:#6f7277">Locked out? We email a single-use reset link to the address on the account. It expires after 30 minutes and is only ever sent to that inbox — the form never says whether an address has an account, so it cannot be used to look up who signed up.</p>
   </form>
   <div class="acc-msg" id="acc-auth-msg"></div>
   <div class="acc-msg" style="color:#6f7277">New here? Create an account — it is the only way to buy. If you ever ordered from Aether before accounts existed, registering with that same email claims those orders automatically. We only store your email, a password hash, your optional Discord name, your orders and this chat.</div>
@@ -131,7 +135,10 @@
       <div class="acc-field"><label for="acc-new2">Repeat new password</label><input class="acc-input" id="acc-new2" type="password" autocomplete="new-password" placeholder="Type it again" required></div>
       <div class="acc-row"><button class="acc-btn" id="acc-pass-submit" type="submit">Update password →</button><span class="acc-msg" id="acc-pass-msg" role="status" aria-live="polite"></span></div>
     </form>
-    <p class="sub" style="margin-top:14px">Forgot the current one? Sign out and use <a href="forgot-password.html" style="color:#fff">forgot password</a> — we email a single-use link.</p>
+    <div class="acc-row" style="margin-top:16px">
+      <a class="acc-btn ghost" href="forgot-password.html">Forgot it? Email me a reset link →</a>
+    </div>
+    <p class="sub" style="margin-top:10px">The link works once and expires after 30 minutes. Using it signs out every other device and emails you a confirmation so you always know when your password changed.</p>
   </div>
 
 </section>
@@ -187,6 +194,10 @@
     const reg = mode === "register";
     show($("acc-discord-wrap"), reg);
     show($("acc-turnstile-wrap"), reg);
+    // "Forgot password?" only makes sense on the sign-in side: on the register tab there is no
+    // password to recover yet.
+    show($("acc-forgot"), !reg);
+    show($("acc-forgot-note"), !reg);
     // Turnstile is only needed for registration; mount it lazily so the challenge script is
     // fetched only when someone actually chooses "Create account".
     if (reg && A.turnstile) A.turnstile.autoMount($("acc-turnstile-wrap"));
@@ -196,6 +207,13 @@
     $("acc-pass").setAttribute("autocomplete", reg ? "new-password" : "current-password");
     msg($("acc-auth-msg"), "");
   }));
+
+  // Carry the address the visitor already typed, so nobody retypes it, and leave the address bar
+  // tidy afterwards (forgot-password.html drops the parameter once it has prefilled).
+  $("acc-forgot").addEventListener("click", () => {
+    const typed = ($("acc-email").value || "").trim();
+    location.href = "forgot-password.html" + (A.isEmail && A.isEmail(typed) ? "?email=" + encodeURIComponent(typed) : "");
+  });
 
   $("acc-form").addEventListener("submit", async (e) => {
     e.preventDefault();

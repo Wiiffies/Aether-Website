@@ -1,6 +1,6 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="theme-color" content="#08080a"><title>Confirm your email — Aether</title><meta name="description" content="Confirm the email address on your Aether account."><meta name="robots" content="noindex"><link rel="icon" href="public/aether-logo.png" type="image/png"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="public/aether.css?v=7"><link rel="stylesheet" href="public/pages.css?v=7"><link rel="stylesheet" href="public/ui.css?v=7"></head><body>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="theme-color" content="#08080a"><title>Confirm your email — Aether</title><meta name="description" content="Confirm the email address on your Aether account."><meta name="robots" content="noindex"><meta name="referrer" content="no-referrer"><link rel="icon" href="public/aether-logo.png" type="image/png"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="public/aether.css?v=7"><link rel="stylesheet" href="public/pages.css?v=7"><link rel="stylesheet" href="public/ui.css?v=7"></head><body>
 <a class="skip-link" href="#main">Skip to content</a>
-<header class="site-header"><a class="brand" href="index.html"><img src="public/aether-logo.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="account.html">Account</a></nav><a class="header-cta" href="shop.html">Purchase <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header>
+<header class="site-header"><a class="brand" href="index.html"><img src="public/aether-logo.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="program.html">Program</a><a href="account.html">Account</a</nav><a class="header-cta" href="shop.html">Purchase <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header>
 
 <main class="page-main" id="main">
   <span class="page-kicker">Email confirmation</span>
@@ -25,16 +25,56 @@
   const note = document.getElementById("ve-note");
   const lead = document.getElementById("ve-lead");
   const title = document.getElementById("ve-title");
-  const token = new URLSearchParams(location.search).get("token") || "";
+  // Read the confirmation token, then drop it out of the address bar and out of history. The page
+  // turns a failed request into a retryable message, and a retryable link sitting in a URL is a link
+  // sitting in a screenshot, a shared tab and the Referer of anything this page loads from another
+  // origin - the no-referrer meta tag above closes that half of it.
+  // Same trade as the reset page: the token leaves the URL, so a copy lives in sessionStorage for
+  // this tab only. A reload after a SUCCESSFUL confirmation would otherwise re-send a spent token and
+  // report "invalid or expired" for a link that had just worked, so the outcome is remembered too.
+  const TOKEN_KEY = "aether.verify.token";
+  const DONE_KEY = "aether.verify.done";
+  function readToken(){
+    let raw = "";
+    try { raw = new URLSearchParams(location.search).get("token") || ""; } catch {}
+    if (!raw) {
+      // The entry's own history state is the one place a reload survives while the value stays out
+      // of the address bar and out of every Referer; sessionStorage backs it up.
+      try { raw = (history.state && history.state.aetherVerifyToken) || ""; } catch {}
+      if (!raw) { try { raw = sessionStorage.getItem(TOKEN_KEY) || ""; } catch {} }
+    }
+    if (raw) { try { sessionStorage.setItem(TOKEN_KEY, raw); } catch {} }
+    try { history.replaceState({ aetherVerifyToken: raw || null, aetherVerified: confirmedBefore() }, "", location.pathname + location.hash); } catch {}
+    return raw.trim().slice(0, 200);
+  }
+  function confirmedBefore(){
+    try { if (sessionStorage.getItem(DONE_KEY) === "1") return true; } catch {}
+    try { return !!(history.state && history.state.aetherVerified); } catch {}
+    return false;
+  }
+  function alreadyConfirmed(){ return confirmedBefore(); }
+  function rememberConfirmed(){
+    try { sessionStorage.setItem(DONE_KEY, "1"); sessionStorage.removeItem(TOKEN_KEY); } catch {}
+    try { history.replaceState({ aetherVerifyToken: null, aetherVerified: true }, "", location.pathname + location.hash); } catch {}
+  }
+  const token = readToken();
   function done(ok, text, leadText) {
     note.className = "ui-note " + (ok ? "ok" : "warn");
     note.textContent = text;
     if (leadText) lead.textContent = leadText;
     if (!ok && title) title.innerHTML = "That link did not<br><em>work.</em>";
   }
+  if (!token && alreadyConfirmed()) {
+    // The link already worked in this tab: say so instead of inventing a failure on reload.
+    if (title) title.innerHTML = "Email<br><em>confirmed.</em>";
+    done(true, "Thanks — your email address is confirmed on your Aether account.", "Your email address is confirmed. You can close this tab.");
+    if (C.markActiveNav) C.markActiveNav();
+    return;
+  }
   if (!token) { done(false, "This page needs the confirmation link from your email. Open the link exactly as it arrives.", "No confirmation token was found in this link."); return; }
   C.auth.verifyEmail(token)
     .then(() => {
+      rememberConfirmed();
       if (title) title.innerHTML = "Email<br><em>confirmed.</em>";
       done(true, "Thanks — your email address is confirmed on your Aether account.", "Your email address is confirmed. You can close this tab.");
     })

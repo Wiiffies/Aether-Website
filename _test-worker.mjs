@@ -447,6 +447,74 @@ check("the session that changed the password survives", r.status === 200, r.json
 r = await call("POST", "/api/auth/password", { body: { currentPassword: "changed123", newPassword: "changed456" } });
 check("password change without auth -> 401", r.status === 401, r.json);
 
+// Deeper guarantees on the same flow: an exact-match common-password blocklist instead of a vague
+// strength rule, a per-account ceiling above the per-IP one, the same database work on the
+// unknown-address branch as on a real one, and a notice to the owner whenever a password changes.
+console.log("\n--- hardening: common-password list / per-account throttle / change notice ---");
+for (const weak of ["password123", "Aether123", "qwerty123", "Passwort1"]) {
+  r = await call("POST", "/api/auth/register", { body: { email: "weaklist@example.com", password: weak } });
+  check("common password \"" + weak + "\" is refused at registration", r.status === 400 && /too common/i.test(r.json.error || ""), r.json);
+}
+r = await call("POST", "/api/auth/register", { body: { email: "contains@example.com", password: "notpassword1x" } });
+check("a password that merely contains a listed word is still allowed (exact match, never substring)", r.status === 200, r.json);
+r = await call("POST", "/api/auth/register", { body: { email: "notice@example.com", password: "noticepass1" } });
+check("the notice fixture account registers", r.status === 200, r.json);
+
+// The cheapest detection control there is: if somebody else took the account over, the real owner
+// finds out from their inbox instead of only noticing a killed session later.
+const noticeUserId = env.DB.db.prepare("SELECT id FROM users WHERE email = ?").get("notice@example.com").id;
+const noticeToken0 = "notice-token-" + "c".repeat(40);
+env.DB.db.prepare("INSERT INTO auth_tokens (token_hash, user_id, purpose, expires_at, created_at) VALUES (?,?,?,?,?)").run(sha(noticeToken0), noticeUserId, "reset", Date.now() + 600000, Date.now());
+env.EMAIL = { send: async (m) => { boundMail.push(m); return { messageId: "cf-msg-notice" }; } };
+const noticeFrom = boundMail.length;
+const noticeReset = await call("POST", "/api/auth/reset", { body: { token: noticeToken0, password: "noticepass2" } });
+const resetNotices = boundMail.slice(noticeFrom).filter(m => /password was changed/i.test(m.subject || ""));
+check("a completed reset emails the owner", noticeReset.status === 200 && resetNotices.length === 1, { status: noticeReset.status, subjects: boundMail.slice(noticeFrom).map(m => m.subject) });
+check("the notice carries neither the password nor a usable link", resetNotices.length === 1 && !/noticepass2/.test(JSON.stringify(resetNotices[0])) && !/token=/.test(resetNotices[0].text || ""), resetNotices[0] && resetNotices[0].text);
+const noticeSession = noticeReset.json.token;
+const changeFrom = boundMail.length;
+const changed = await call("POST", "/api/auth/password", { body: { currentPassword: "noticepass2", newPassword: "noticepass3" }, token: noticeSession });
+check("a signed-in password change emails the same notice", changed.status === 200 && boundMail.slice(changeFrom).filter(m => /password was changed/i.test(m.subject || "")).length === 1, { status: changed.status, subjects: boundMail.slice(changeFrom).map(m => m.subject) });
+env.EMAIL = { send: async () => { throw new Error("mail transport is down"); } };
+const brokenNotice = await call("POST", "/api/auth/password", { body: { currentPassword: "noticepass3", newPassword: "noticepass4" }, token: noticeSession });
+check("a broken mail transport cannot turn a completed change into an error", brokenNotice.status === 200, brokenNotice.json);
+delete env.EMAIL;
+
+// Per-account ceiling. A single IP was always capped, but a botnet rotating addresses could keep
+// re-sending reset mail to one victim - and every request also replaces their previous link.
+const throttleEmail = "throttle-target@example.com";
+env.DB.db.prepare("INSERT INTO users (email, password_hash) VALUES (?, ?)").run(throttleEmail, "x");
+const throttleId = env.DB.db.prepare("SELECT id FROM users WHERE email = ?").get(throttleEmail).id;
+// The guard keys on a hash of the address, so the exact seat it reads is reproducible here.
+const bucketKey = "forgot-acct:" + sha(throttleEmail).slice(0, 32);
+const servedLog = [];
+console.log = (...a) => { servedLog.push(a.map(String).join(" ")); };
+const served = await call("POST", "/api/auth/forgot", { body: { email: throttleEmail } });
+console.log = realConsoleLog;
+check("an account inside its ceiling still gets its link", served.status === 200 && servedLog.filter(l => l.includes("[reset-link]")).length === 1, served.json);
+seedRateLimit(bucketKey, 6, 3600000);
+const tokensBeforeThrottle = env.DB.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens WHERE user_id = ?").get(throttleId).n;
+const throttleLog = [];
+console.log = (...a) => { throttleLog.push(a.map(String).join(" ")); };
+const throttled = await call("POST", "/api/auth/forgot", { body: { email: throttleEmail }, ip: "198.51.100.99" });
+console.log = realConsoleLog;
+const tokensAfterThrottle = env.DB.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens WHERE user_id = ?").get(throttleId).n;
+check("at the ceiling the request is silently dropped - no link, no token", throttled.status === 200 && throttleLog.filter(l => l.includes("[reset-link]")).length === 0 && tokensAfterThrottle === tokensBeforeThrottle, { links: throttleLog.length, tokensBeforeThrottle, tokensAfterThrottle });
+check("a throttled account is answered identically to a served one", JSON.stringify(throttled.json) === JSON.stringify(served.json), { served: served.json, throttled: throttled.json });
+env.DB.db.prepare("DELETE FROM auth_tokens WHERE user_id = ?").run(throttleId);
+env.DB.db.prepare("DELETE FROM users WHERE id = ?").run(throttleId);
+env.DB.db.prepare("DELETE FROM rate_limits WHERE rl_key = ?").run(bucketKey);
+
+// Identical bodies are not enough on their own: if the unknown-address branch skipped the database
+// work and answered instantly, the clock would still say which addresses exist.
+const unknownStarted = Date.now();
+await call("POST", "/api/auth/forgot", { body: { email: "no-account-at-all@example.com" } });
+const unknownMs = Date.now() - unknownStarted;
+check("an unknown address is padded past the jitter floor instead of answered instantly", unknownMs >= 200, unknownMs);
+
+env.DB.db.prepare("DELETE FROM auth_tokens WHERE user_id = ?").run(noticeUserId);
+env.DB.db.prepare("DELETE FROM users WHERE email IN ('notice@example.com','contains@example.com')").run();
+
 const verifyToken = "verify-token-" + "b".repeat(40);
 env.DB.db.prepare("INSERT INTO auth_tokens (token_hash, user_id, purpose, expires_at, created_at) VALUES (?,?,?,?,?)").run(sha(verifyToken), memberId, "verify", Date.now() + 600000, Date.now());
 r = await call("POST", "/api/auth/verify-email", { body: { token: verifyToken } });
@@ -480,6 +548,28 @@ r = await call("GET", "/api/purchases/" + memberPurchaseId);
 check("anonymous Purchase ID lookup -> 401", r.status === 401, r.json);
 r = await call("GET", "/api/purchases/AETH-2026-NOPE", { token: freshSession });
 check("malformed Purchase ID -> 400", r.status === 400, r.json);
+
+// The success page opens a custom website's project chat by itself, so the two things it leans on
+// are contractual: the order list must name the type and the Purchase ID it matches on, and
+// fetching a purchase must be what creates that purchase's conversation - idempotently, because a
+// reload of the success page must never open a second thread.
+check("/api/orders names the type and Purchase ID the success page matches on",
+  memberOrders.every(o => typeof o.type === "string" && typeof o.purchase_id === "string")
+    && memberOrders.some(o => String(o.type).toLowerCase() === "website"),
+  memberOrders.map(o => ({ type: o.type, purchase_id: o.purchase_id })));
+r = await call("GET", "/api/purchases/" + memberPurchaseId, { token: freshSession });
+const autoChatId = r.json.conversation && r.json.conversation.conversation_id;
+check("fetching a purchase hands back its chat, creating it when it did not exist",
+  r.status === 200 && String(autoChatId).startsWith("conv_") && r.json.conversation.purchase_id === memberPurchaseId,
+  r.json.conversation);
+r = await call("GET", "/api/purchases/" + memberPurchaseId, { token: freshSession });
+check("a reload cannot open a second thread for the same purchase",
+  r.json.conversation && r.json.conversation.conversation_id === autoChatId
+    && env.DB.db.prepare("SELECT COUNT(*) AS n FROM conversations WHERE purchase_id = ?").get(memberPurchaseId).n === 1,
+  { again: r.json.conversation && r.json.conversation.conversation_id, first: autoChatId });
+// Deliberately no message is posted here. Messages are bridged across every conversation that
+// shares an order, so writing one would leak into the thread the checks further down assert on -
+// and posting into an owned thread is already covered there.
 r = await call("GET", "/api/invoice", { token: freshSession });
 check("invoice endpoint rejects GET", r.status !== 200, r.status);
 

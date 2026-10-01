@@ -50,6 +50,8 @@ jobs:
         run: node _check-email-regex.mjs
       - name: Shared assets + OG metadata
         run: node _check-assets.mjs
+      - name: Account-recovery flow intact
+        run: node _check-recovery.mjs
       - name: Worker is ASCII-only and compiles
         run: |
           node --check worker/src/index.js
