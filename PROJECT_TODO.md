@@ -68,7 +68,8 @@ Single source of truth for the customer-portal / Beta work. Status legend:
 - [x] Frontend: the pay modal hides the email field, states that an account is required and routes "Sign in to buy" / "Switch account" to `account.html?next=<page>`
 - [x] `account.html` honours `?next=` (same-site relative paths only, never itself) and returns a signed-in buyer to the page they came from
 - [x] Public copy cleaned up (`account.html`, `admin.html`, README, MASTER_PROMPT) — no "guest checkout still works" left anywhere
-- [x] `/api/order` (the free inquiry/quote form) never writes an order — it stays an email/Discord notification path only
+- [x] `/api/order` order requests (`type: discord_bot|website`) are **account-only too**: anonymous → `401 ACCOUNT_REQUIRED`, the account email is the only reply address, and the request is filed into the customer's portal chat (`conversationId` in the response). The general `type: contact` form stays open and still asks for an email.
+- [x] The request forms have **no email box left** (`discord-bot.html`, `website.html`): they show the signed-in account instead, gate submission on a session and use the same CTA as checkout; `/api/order` never writes an order row
 - [x] Legacy rows written by the old guest checkout are still claimed when that email registers (tested)
 
 ## 5. Tester / Beta
@@ -125,12 +126,13 @@ Single source of truth for the customer-portal / Beta work. Status legend:
 
 ## 10. Testing / audit
 
-- [x] 183 automated checks (`node _test-worker.mjs`) incl. IDOR, privilege escalation, Beta gating
+- [x] 191 automated checks (`node _test-worker.mjs`) incl. IDOR, privilege escalation, Beta gating
 - [x] Secret scan (repo + `public/` contain no keys, tokens, or credentials — only `.env.example` placeholders)
 - [x] Worker stays ASCII-only; `_build_chunks.mjs` ASCII guard passes (0 non-ASCII bytes)
 - [x] Worker rebuilt + redeployed live 2026-10-01: sha256 `1a1c22b74b282b96efb3739c9be233237ee4601b417c9e33e35f10e56a14fee7`, 135 027 bytes, 22 chunks, uploaded to `aether-api` **and** `aether-payments` (200/ok)
 - [x] Account-only checkout redeployed 2026-10-01: sha256 `5e139dde5031dc1d75ad0f5f0baf8cd655632aa1060f7f8948762be61cce48af`, 135 412 bytes, **6 of 22 chunks** changed (16–21), verified by re-downloading the KV chunks and comparing the sha256 before upload; `aether-meta` KV updated
 - [x] Live proof of the gate: anonymous `POST /api/invoice` → `401 {"error":"Checkout requires an account…","code":"ACCOUNT_REQUIRED"}`, a disallowed origin still → 403, `/api/conversations` → 401, `/api/health` all-true after both deploys and the binding change
+- [x] Account-only **request forms** deployed 2026-10-01: sha256 `934adbfd14d17d771260d4a2f904be8edfd57aaae7bbf0b2f1d64ff970a00268`, 137 805 bytes, 23 chunks, both scripts. Live proof: anonymous `POST /api/order` with `type: discord_bot` **and** `type: website` → `401 ACCOUNT_REQUIRED` (no email typed helps), while `type: contact` with an email still returns `ok:true` — so general questions stay open but nothing that buys or requests work can be placed from an accountless browser
 - [x] Live verification after deployment: `/api/health` → `{ok:true,email:false,payments:true,ipnSignature:true,discord:true,db:true}`; anonymous `/api/conversations`, `/api/purchases/…`, `/api/beta/access` and `/api/me` all 401
 - [x] Browser-verified locally: portal dashboard (purchase + conversation history), tester `beta.html`, admin tabs (Conversations, Beta config + audit) incl. the whole Beta-domain request/confirm flow
 

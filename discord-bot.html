@@ -186,13 +186,13 @@
   <section class="request" id="bot-request">
     <div class="request-head">
       <h2>CUSTOM BOT REQUEST</h2>
-      <p>Tell us what you want the bot to do. Send as inquiry (free) or pay with crypto right away — your builder estimate will be included.<br><span style="color:#9aa0a6">Please add as many notes/instructions as you can — the more detail, the faster I can quote. If you don’t have Discord, leave it blank.</span><br><b style="color:#c8c9cc">Building something big — a dashboard, economies, AI commands, sharding, ticket systems?</b> <span style="color:#9aa0a6">Set Project Size and send the inquiry: larger projects are quoted individually and you pay only once you approve the quote.</span></p>
+      <p>Tell us what you want the bot to do. <b style="color:#c8c9cc">Requests are account-only — sign in first</b> (the account email is the reply address and the request is filed in your portal chat). Send as inquiry (free) or pay with crypto right away — your builder estimate will be included.<br><span style="color:#9aa0a6">Please add as many notes/instructions as you can — the more detail, the faster I can quote. If you don’t have Discord, leave it blank.</span><br><b style="color:#c8c9cc">Building something big — a dashboard, economies, AI commands, sharding, ticket systems?</b> <span style="color:#9aa0a6">Set Project Size and send the inquiry: larger projects are quoted individually and you pay only once you approve the quote.</span></p>
     </div>
     <div class="divider"></div>
     <form class="request-body" id="bot-form" novalidate>
       <div class="form-grid">
         <div class="field"><label for="bot-discord">Discord Username <span style="color:#7a7d82;font-weight:400">— leave blank if you don’t have Discord</span></label><input id="bot-discord" name="discord" data-account-discord placeholder="example_user — leave blank if you don’t have Discord" autocomplete="username"></div>
-        <div class="field"><label for="bot-email">Email <span class="req" data-account-optional>*</span></label><input id="bot-email" name="email" type="email" placeholder="example@email.com" data-account-email autocomplete="email"><span data-account-email-note style="display:none;font:10px 'DM Mono',monospace;line-height:1.6;margin-top:6px"></span></div>
+        <div class="field" style="align-self:end"><label>Account</label><div id="bot-account-note" class="acc-note" style="margin:0">Sign in to send a request — there is no guest order. Your account email is used and the request is filed in your portal chat.</div></div>
         <div class="field wide"><label for="bot-desc">Bot Description <span class="req">*</span></label><textarea id="bot-desc" name="description" placeholder="What should the bot do? Who is it for? Any examples?" required></textarea></div>
         <div class="field wide"><label for="bot-cmds">Required Commands</label><textarea id="bot-cmds" name="commands_text" class="small" placeholder="/ban, /warn, /ticket, /giveaway ..."></textarea></div>
         <div class="field wide"><label for="bot-extra">Additional Information / Notes / Instructions <span style="color:#7a7d82;font-weight:400">— add as many as you can</span></label><textarea id="bot-extra" name="extra" class="small" placeholder="APIs, integrations, permissions, links, examples, how you want it to work, what to avoid, anything else — the more detail the better"></textarea></div>
@@ -206,7 +206,7 @@
       <div class="form-foot">
         <button type="submit" class="outline-button" style="min-width:170px" data-action="inquiry">Send Inquiry (free) <span>↗</span></button>
         <button type="button" id="bot-pay" class="tier-cta primary" style="width:auto;min-width:190px">Pay with Crypto — €50 <span>↗</span></button>
-        <span class="form-msg" id="bot-msg">Sending via Worker if configured — otherwise falls back to email. Paying redirects to NOWPayments.</span>
+        <span class="form-msg" id="bot-msg">Account required — sign in and your request + our replies stay in your account. Paying redirects to NOWPayments.</span>
       </div>
     </form>
   </section>
@@ -396,8 +396,8 @@
       const amt = Number(btn.dataset.amount);
       const pkg = btn.dataset.package;
       const desc = btn.dataset.desc || `Discord Bot ${pkg}`;
-      // try to use form defaults if present
-      const defEmail = document.getElementById('bot-email')?.value.trim() || '';
+      // form defaults: the account email (there is no email box any more) + the typed Discord
+      const defEmail = (C && C.accountEmail ? C.accountEmail() : '') || '';
       const defDiscord = document.getElementById('bot-discord')?.value.trim() || '';
       if(!C || !C.isConfigured()){
         // no worker — fallback to mailto but warn
@@ -427,31 +427,41 @@
   // Custom form helpers
   function collectCustom(){
     const discord = document.getElementById('bot-discord').value.trim();
-    const email = document.getElementById('bot-email').value.trim();
     const desc = document.getElementById('bot-desc').value.trim();
     const cmdsText = document.getElementById('bot-cmds').value.trim();
     const extra = document.getElementById('bot-extra').value.trim();
     const lang = document.querySelector('input[name="bot_lang_radio"]:checked')?.value || langSel.value;
     const { total, feats, size, sizeLabel } = calc();
-    return { discord, email, desc, cmdsText, extra, lang, total, feats, size, sizeLabel };
+    return { discord, desc, cmdsText, extra, lang, total, feats, size, sizeLabel };
   }
   function validateCustom(d){
-    // The signed-in account can supply the email, so this field is optional for members.
-    d.email = (C.resolveEmail ? C.resolveEmail(d.email) : d.email);
     if(!d.desc) return "Please describe what the bot should do. Discord is optional — leave it blank if you don’t have one.";
-    if(!d.email) return "Add an email, or sign in on the Account page and your account email is used automatically.";
     return null;
   }
 
   const form = document.getElementById('bot-form');
   const msg = document.getElementById('bot-msg');
-  // Signed in? Email + Discord are filled from the account and no longer required.
+  const acctNote = document.getElementById('bot-account-note');
+  // Requests are account-only: the account supplies the reply address and the request is filed in
+  // the portal chat, so a signed-out visitor is sent to the Account page instead of typing an email.
+  function requireAccount(){
+    const em = C && C.accountEmail ? C.accountEmail() : "";
+    if(em){
+      if(acctNote){ acctNote.className = "acc-note ok"; acctNote.textContent = "Signed in as " + em + " — the request and our replies stay in your account chat."; }
+      return true;
+    }
+    if(C && C.accountRequiredNotice) C.accountRequiredNotice(msg, "Order requests need an account — there is no guest order, and the reply plus the estimate live in your portal chat.");
+    return false;
+  }
+  // Prefill Discord from the account (the account email is used server-side either way).
   if(C && C.bindAccountFields) C.bindAccountFields(document);
+  requireAccount();
   form.addEventListener('submit', async (e)=>{
     e.preventDefault();
     const d = collectCustom();
     const err = validateCustom(d);
     if(err){ msg.textContent=err; msg.className='form-msg err'; return; }
+    if(!requireAccount()) return;
     // honeypot
     const honey = form.querySelector('[name="website"]')?.value;
     if(honey){ msg.textContent='Thanks! We got your request.'; msg.className='form-msg ok'; return; }
@@ -462,7 +472,7 @@
       package: 'Custom',
       amount: d.total,
       discord: d.discord,
-      email: d.email,
+      // No email here on purpose: the worker always replies to the account address.
       description: d.desc,
       meta: { language: d.lang, commands, features: d.feats, projectSize: d.sizeLabel, revisions },
       requiredCommands: d.cmdsText,
@@ -472,7 +482,7 @@
     try{
       if(C && C.isConfigured()){
         const res = await C.submitOrder(payload);
-        msg.textContent = 'Sent! Check your email — I most likely reply within 3 days.';
+        msg.textContent = 'Sent! Your request is in your account chat now — I most likely reply within 3 days.';
         msg.className='form-msg ok';
         form.reset();
         // reset radios
@@ -487,7 +497,7 @@
       // fallback to mailto
       const now = new Date().toLocaleDateString('en-GB',{ day:'2-digit', month:'long', year:'numeric'});
       const featLine = d.feats.length ? d.feats.map(f=>`✓ ${f}`).join('\n') : '—';
-      const body = `NEW DISCORD BOT ORDER\n\nPackage: Custom\nEstimated Price: €${d.total}\n\nCustomer:\nDiscord: ${d.discord}\nEmail: ${d.email}\n\nLanguage:\n${d.lang}\n\nCommands:\n${commands}\n\nFeatures:\n${featLine}\n\nDescription:\n${d.desc}\n\nRequired Commands:\n${d.cmdsText || '—'}\n\nAdditional Information:\n${d.extra || '—'}\n\nSubmitted:\n${now}\n`;
+      const body = `NEW DISCORD BOT ORDER\n\nPackage: Custom\nEstimated Price: €${d.total}\n\nCustomer:\nDiscord: ${d.discord}\nAccount: ${(C && C.accountEmail && C.accountEmail()) || '—'}\n\nLanguage:\n${d.lang}\n\nCommands:\n${commands}\n\nFeatures:\n${featLine}\n\nDescription:\n${d.desc}\n\nRequired Commands:\n${d.cmdsText || '—'}\n\nAdditional Information:\n${d.extra || '—'}\n\nSubmitted:\n${now}\n`;
       const subject = `Custom Discord Bot — €${d.total} — ${d.discord}`;
       C.mailtoFallback({ subject, body });
       msg.textContent = 'Worker not configured — opening your mail app. Email questions@get-aether.de if it didn’t open. See worker/README.md to enable direct delivery.';
@@ -500,6 +510,7 @@
     const d = collectCustom();
     const err = validateCustom(d);
     if(err){ msg.textContent=err; msg.className='form-msg err'; document.getElementById('bot-discord')?.focus(); return; }
+    if(!requireAccount()) return;
     if(!C || !C.isConfigured()){
       msg.textContent='Checkout not configured yet — set public/aether-config.js → apiBase to your Worker URL. You can still Send Inquiry (email fallback). See worker/README.md.';
       msg.className='form-msg err';
@@ -516,7 +527,7 @@
       title: `Custom Discord Bot — €${total}`,
       amount: total,
       breakdownHtml: breakdown,
-      defaultEmail: d.email,
+      defaultEmail: (C.accountEmail ? C.accountEmail() : ''),
       defaultDiscord: d.discord,
       onConfirm: async ({email, discord, payCurrency})=>{
         // validate promo again server-side for safety
