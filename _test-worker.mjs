@@ -54,6 +54,7 @@ async function call(method, path, opt = {}) {
   };
   if (opt.body !== undefined) headers["content-type"] = "application/json";
   if (opt.token) headers.authorization = "Bearer " + opt.token;
+  if (opt.cookie) headers.cookie = opt.cookie;
   if (opt.contentLength) headers["content-length"] = String(opt.contentLength);
   const res = await worker.fetch(new Request((opt.host || "https://api.get-aether.de") + path, {
     method, headers, body: opt.body === undefined ? undefined : JSON.stringify(opt.body),
@@ -649,9 +650,12 @@ r = await call("POST", "/api/beta/redeem", { body: { ticket: betaTicket } });
 check("beta ticket is single use", r.status === 400, r.json);
 
 // The program build. The whole point of this section is that the file's location never reaches the
-// browser: the API hands out metadata and a single-use ticket, and streams the bytes itself.
+// browser: the API answers with metadata and a single-use ticket cookie, and streams the bytes itself.
 console.log("\n--- program builds: tester-only download, location held server-side ---");
 const realFetchProgram = globalThis.fetch;
+const programSessionCookie = (t) => "__Host-aether_session=" + t;
+const buildBytes = "BINARY-BYTES-CONTENT";
+const buildSha = sha(buildBytes);
 r = await call("GET", "/api/program");
 check("anonymous cannot read the program build -> 403", r.status === 403, r.json);
 r = await call("GET", "/api/program", { token: adminToken });
@@ -667,46 +671,134 @@ r = await call("GET", "/api/program", { token: freshSession });
 check("a tester sees the build metadata", r.status === 200 && r.json.available === true && r.json.build.version === "0.1.0-beta.1", r.json.build);
 check("a checksum that is not 64 hex characters is never printed as one", r.json.build.sha256 === "", r.json.build.sha256);
 check("the metadata never contains the build's location", !JSON.stringify(r.json).includes("files.internal.invalid"), JSON.stringify(r.json));
+check("the ticket lifetime reported by the API is the server's own number", r.json.expiresIn === 120, r.json.expiresIn);
 env.PROGRAM_SHA256 = "a".repeat(64);
 r = await call("GET", "/api/program", { token: freshSession });
 check("a real checksum is passed through", r.json.build.sha256 === "a".repeat(64), r.json.build.sha256);
+
+// A download is a browser navigation, and a navigation can only carry a cookie - so the mint refuses
+// to issue a ticket the browser could never complete instead of handing out a dead one.
 r = await call("POST", "/api/program/download", { token: freshSession });
-const dlTicket = (r.json.url || "").split("ticket=")[1] || "";
-check("minting returns a ticket, not the file's location",
-  r.status === 200 && dlTicket.length === 64 && !JSON.stringify(r.json).includes("files.internal.invalid"), r.json);
+check("minting without the session cookie is refused with an actionable reason -> 400 COOKIE_REQUIRED",
+  r.status === 400 && r.json.code === "COOKIE_REQUIRED", r.json);
+r = await call("POST", "/api/program/download", { token: freshSession, cookie: programSessionCookie(freshSession) });
+let dlTicket = (/aether_dl=([0-9a-f]{64})/.exec(r.setCookie || "") || [])[1] || "";
+check("minting answers with a path and a cookie, never a secret in the body",
+  r.status === 200 && r.json.url === "/api/program/file" && !JSON.stringify(r.json).includes("files.internal.invalid") && !JSON.stringify(r.json).includes(dlTicket), r.json);
+check("the ticket cookie is path-narrowed, HttpOnly, Secure and SameSite=Strict",
+  /aether_dl=[0-9a-f]{64}/.test(r.setCookie) && r.setCookie.includes("Path=/api/program/file") && r.setCookie.includes("HttpOnly") && r.setCookie.includes("Secure") && r.setCookie.includes("SameSite=Strict"), r.setCookie);
 check("the ticket is stored only as a hash",
   env.DB.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens WHERE token_hash = ?").get(sha(dlTicket)).n === 1 &&
   env.DB.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens WHERE token_hash = ?").get(dlTicket).n === 0);
-// The bytes are streamed through the Worker, so the real host never reaches the browser.
+check("the ticket names the session that minted it",
+  String((env.DB.db.prepare("SELECT payload FROM auth_tokens WHERE token_hash = ?").get(sha(dlTicket)) || {}).payload || "").includes(sha(freshSession)),
+  (env.DB.db.prepare("SELECT payload FROM auth_tokens WHERE token_hash = ?").get(sha(dlTicket)) || {}).payload);
+
 const streamed = [];
-globalThis.fetch = async (u) => { streamed.push(String(u)); return { ok: true, status: 200, body: "BINARY-BYTES" }; };
-r = await call("GET", "/api/program/file?ticket=" + dlTicket, { token: freshSession });
-globalThis.fetch = realFetchProgram;
-check("the file is streamed as an attachment named after the real artifact",
-  r.status === 200 && /attachment; filename="aether-desktop-0\.1\.0-beta\.1\.exe"/.test(r.headers.get("content-disposition") || ""), r.headers.get("content-disposition"));
-check("the download is uncacheable and noindex",
-  /no-store/.test(r.headers.get("cache-control") || "") && /noindex/.test(r.headers.get("x-robots-tag") || ""),
-  { cc: r.headers.get("cache-control"), robots: r.headers.get("x-robots-tag") });
-check("the worker fetched the configured upstream exactly once", streamed.length === 1 && streamed[0] === env.PROGRAM_URL, streamed);
-check("the bytes came back to the visitor", r.json && r.json.raw === "BINARY-BYTES", r.json);
-r = await call("GET", "/api/program/file?ticket=" + dlTicket, { token: freshSession });
-check("the same ticket cannot be spent twice -> 400", r.status === 400, r.json);
+globalThis.fetch = async (u) => { streamed.push(String(u)); return new Response(buildBytes, { headers: { "content-length": String(buildBytes.length), "content-type": "application/octet-stream" } }); };
+r = await call("GET", "/api/program/file", { cookie: programSessionCookie(freshSession) });
+check("the file endpoint with no ticket cookie -> 400 TICKET_REQUIRED", r.status === 400 && r.json.code === "TICKET_REQUIRED", r.json);
+r = await call("GET", "/api/program/file", { cookie: "aether_dl=" + "f".repeat(64) + "; " + programSessionCookie(freshSession) });
+check("a forged ticket cookie -> 400 TICKET_SPENT", r.status === 400 && r.json.code === "TICKET_SPENT", r.json);
+r = await call("GET", "/api/program/file", { cookie: "aether_dl=" + dlTicket });
+check("the ticket on its own, without the sign-in it was minted for -> 403 WRONG_SESSION",
+  r.status === 403 && r.json.code === "WRONG_SESSION", r.json);
+check("a refused ticket is spent anyway and the upstream is never reached",
+  env.DB.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens WHERE token_hash = ?").get(sha(dlTicket)).n === 0 && streamed.length === 0,
+  { rows: env.DB.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens WHERE token_hash = ?").get(sha(dlTicket)).n, streamed });
+check("every refusal clears the ticket cookie on the device",
+  /aether_dl=;/.test(r.setCookie || "") && /Max-Age=0/.test(r.setCookie || ""), r.setCookie);
+
+// A checksum that does not describe what the host actually serves: nothing may be sent.
+r = await call("POST", "/api/program/download", { token: freshSession, cookie: programSessionCookie(freshSession) });
+dlTicket = (/aether_dl=([0-9a-f]{64})/.exec(r.setCookie || "") || [])[1] || "";
+r = await call("GET", "/api/program/file", { cookie: "aether_dl=" + dlTicket + "; " + programSessionCookie(freshSession) });
+check("an artifact that does not match the published checksum is refused -> 409 CHECKSUM_MISMATCH",
+  r.status === 409 && r.json.code === "CHECKSUM_MISMATCH", r.json);
+check("and not one byte of it reached the visitor", !JSON.stringify(r.json).includes("BINARY-BYTES"), r.json);
+check("the refusal is in the audit log",
+  env.DB.db.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'program.download.mismatch'").get().n >= 1);
+
 // A role revoked between minting and use must stop a ticket that was already issued.
-r = await call("POST", "/api/program/download", { token: freshSession });
-const dlTicket2 = (r.json.url || "").split("ticket=")[1] || "";
+r = await call("POST", "/api/program/download", { token: freshSession, cookie: programSessionCookie(freshSession) });
+dlTicket = (/aether_dl=([0-9a-f]{64})/.exec(r.setCookie || "") || [])[1] || "";
 env.DB.db.prepare("UPDATE users SET role = 'user' WHERE id = ?").run(memberId);
-globalThis.fetch = async () => { throw new Error("the upstream must not be reached"); };
-r = await call("GET", "/api/program/file?ticket=" + dlTicket2, { token: freshSession });
-globalThis.fetch = realFetchProgram;
+r = await call("GET", "/api/program/file", { cookie: "aether_dl=" + dlTicket + "; " + programSessionCookie(freshSession) });
 check("a ticket stops working when the role is revoked before it is used -> 403", r.status === 403, r.json);
-r = await call("POST", "/api/program/download", { token: freshSession });
+r = await call("POST", "/api/program/download", { token: freshSession, cookie: programSessionCookie(freshSession) });
 check("and a normal account cannot mint one at all -> 403", r.status === 403, r.json);
-r = await call("GET", "/api/program/file?ticket=" + "f".repeat(64));
-check("a forged ticket is refused -> 400", r.status === 400, r.json);
 env.DB.db.prepare("UPDATE users SET role = 'tester' WHERE id = ?").run(memberId);
+
+// The real thing: a matching checksum, and the bytes.
+env.PROGRAM_SHA256 = buildSha;
+r = await call("POST", "/api/program/download", { token: freshSession, cookie: programSessionCookie(freshSession) });
+const firstTicket = (/aether_dl=([0-9a-f]{64})/.exec(r.setCookie || "") || [])[1] || "";
+r = await call("POST", "/api/program/download", { token: freshSession, cookie: programSessionCookie(freshSession) });
+dlTicket = (/aether_dl=([0-9a-f]{64})/.exec(r.setCookie || "") || [])[1] || "";
+r = await call("GET", "/api/program/file", { cookie: "aether_dl=" + firstTicket + "; " + programSessionCookie(freshSession) });
+check("minting again invalidates the previous ticket (one live ticket per account) -> 400",
+  r.status === 400 && r.json.code === "TICKET_SPENT", r.json);
+const fetchesBefore = streamed.length;
+r = await call("GET", "/api/program/file", { cookie: "aether_dl=" + dlTicket + "; " + programSessionCookie(freshSession) });
+globalThis.fetch = realFetchProgram;
+check("the verified build is served as an attachment named after the real artifact",
+  r.status === 200 && /attachment; filename="aether-desktop-0\.1\.0-beta\.1\.exe"/.test(r.headers.get("content-disposition") || ""), r.headers.get("content-disposition"));
+check("the download is uncacheable, noindex, and marked as verified against the published checksum",
+  /no-store/.test(r.headers.get("cache-control") || "") && /noindex/.test(r.headers.get("x-robots-tag") || "") && r.headers.get("x-content-verified") === "sha256" && r.headers.get("x-checksum-sha256") === buildSha,
+  { cc: r.headers.get("cache-control"), robots: r.headers.get("x-robots-tag"), verified: r.headers.get("x-content-verified"), sum: r.headers.get("x-checksum-sha256") });
+check("the exact byte length and a content digest travel with it",
+  r.headers.get("content-length") === String(buildBytes.length) && /^sha-256=:/.test(r.headers.get("content-digest") || ""),
+  { len: r.headers.get("content-length"), digest: r.headers.get("content-digest") });
+check("the worker fetched the configured upstream once, and only that upstream",
+  streamed.length === fetchesBefore + 1 && streamed[streamed.length - 1] === env.PROGRAM_URL && streamed.every(u => u === env.PROGRAM_URL), streamed);
+check("the bytes came back to the visitor", r.json && r.json.raw === buildBytes, r.json);
+r = await call("GET", "/api/program/file", { cookie: "aether_dl=" + dlTicket + "; " + programSessionCookie(freshSession) });
+check("the same ticket cannot be spent twice -> 400", r.status === 400 && r.json.code === "TICKET_SPENT", r.json);
+
+// Too large to hold in memory: still served, but labelled instead of pretending to be verified.
+const bigBytes = "B".repeat(4096);
+env.PROGRAM_VERIFY_MAX_BYTES = "1024";
+r = await call("POST", "/api/program/download", { token: freshSession, cookie: programSessionCookie(freshSession) });
+dlTicket = (/aether_dl=([0-9a-f]{64})/.exec(r.setCookie || "") || [])[1] || "";
+globalThis.fetch = async () => new Response(bigBytes, { headers: { "content-length": String(bigBytes.length) } });
+r = await call("GET", "/api/program/file", { cookie: "aether_dl=" + dlTicket + "; " + programSessionCookie(freshSession) });
+globalThis.fetch = realFetchProgram;
+check("an artifact above the verification limit is served but labelled x-content-verified: unverified",
+  r.status === 200 && r.headers.get("x-content-verified") === "unverified" && r.headers.get("content-digest") === null,
+  { verified: r.headers.get("x-content-verified"), digest: r.headers.get("content-digest"), status: r.status });
+delete env.PROGRAM_VERIFY_MAX_BYTES;
+env.PROGRAM_SHA256 = "";
+r = await call("POST", "/api/program/download", { token: freshSession, cookie: programSessionCookie(freshSession) });
+dlTicket = (/aether_dl=([0-9a-f]{64})/.exec(r.setCookie || "") || [])[1] || "";
+globalThis.fetch = async () => new Response(buildBytes, { headers: { "content-length": String(buildBytes.length) } });
+r = await call("GET", "/api/program/file", { cookie: "aether_dl=" + dlTicket + "; " + programSessionCookie(freshSession) });
+globalThis.fetch = realFetchProgram;
+check("with no checksum published the build is still served, unverified and without an invented checksum header",
+  r.status === 200 && r.headers.get("x-content-verified") === "unverified" && r.headers.get("x-checksum-sha256") === null,
+  { verified: r.headers.get("x-content-verified"), sum: r.headers.get("x-checksum-sha256"), status: r.status });
+
+// Plaintext is not a download source: a checksum would only describe whatever the path rewrote it to.
+env.PROGRAM_SHA256 = buildSha;
+env.PROGRAM_URL = "http://files.example.com/build.exe";
+r = await call("GET", "/api/program", { token: freshSession });
+check("an http build source counts as not configured at all", r.status === 200 && r.json.available === false, r.json);
+r = await call("POST", "/api/program/download", { token: freshSession, cookie: programSessionCookie(freshSession) });
+check("and nothing can be minted for it -> 503", r.status === 503, r.json);
+env.PROGRAM_URL = "http://127.0.0.1:5501/public/aether-logo.png";
+r = await call("GET", "/api/program", { token: freshSession });
+check("loopback http is refused too while ALLOW_DEV_ORIGIN is off", r.json.available === false, r.json);
+env.ALLOW_DEV_ORIGIN = "true";
+r = await call("GET", "/api/program", { token: freshSession });
+check("the local dev server can still stand a local file in for a build", r.json.available === true, r.json);
+delete env.ALLOW_DEV_ORIGIN;
+env.PROGRAM_URL = "https://files.internal.invalid/builds/aether-desktop-0.1.0-beta.1.exe";
+r = await call("POST", "/api/program");
+check("POST on the info endpoint -> 405", r.status === 405, r.json);
+r = await call("POST", "/api/program/file");
+check("POST on the file endpoint -> 405", r.status === 405, r.json);
 delete env.PROGRAM_URL; delete env.PROGRAM_VERSION; delete env.PROGRAM_PLATFORM;
 delete env.PROGRAM_SIZE; delete env.PROGRAM_SHA256; delete env.PROGRAM_NAME;
-r = await call("POST", "/api/program/download", { token: freshSession });
+r = await call("POST", "/api/program/download", { token: freshSession, cookie: programSessionCookie(freshSession) });
 check("with nothing published the mint answers an honest 503 instead of a fake link", r.status === 503, r.json);
 r = await call("POST", "/api/beta/ticket", { token: adminToken });
 const adminTicket = r.json.ticket;

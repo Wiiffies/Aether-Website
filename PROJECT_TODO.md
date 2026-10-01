@@ -174,3 +174,41 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
 - [ ] MANUAL: secret `CLOUDFLARE_API_TOKEN` — Cloudflare refuses to mint tokens for our automation (`9109 Unauthorized`), so it has to be created in the dashboard with **Workers Scripts:Edit + Workers KV Storage:Edit + D1:Edit**. Until then `deploy-worker.yml` runs the checks and skips the deploy
 - [ ] MANUAL (optional): add `RESEND_API_KEY` to GitHub once Resend exists — the sync step then keeps the Worker and the repo in agreement
 - [ ] MANUAL: set `BETA_TARGET` to a Cloudflare Pages project — the publish job is wired and refuses to fall back to the production Pages site
+
+## 14. Tester download + maintenance mode (2026-10-01, evening)
+
+- [x] `program.html` announces the desktop app; every value that has to be *true* (version,
+      platform, size, checksum) is served by the Worker, never written into the page or into
+      `public/aether-config.js`, which ships to every browser
+- [x] Download is server-mediated: the Worker holds the build's location and streams the bytes, so
+      the browser never learns where the file lives and nothing can be linked to it
+- [x] The single-use ticket travels as a **path-narrowed `aether_dl` cookie**
+      (`Path=/api/program/file`, `SameSite=Strict`, `HttpOnly`, `Secure`, 120 s) — never in a URL, so
+      there is nothing in the address bar, in history, in a shared link or in a request log
+- [x] The ticket is bound to the session that minted it and the file request must arrive with that
+      same session (mismatch → `403 WRONG_SESSION`), so a copied cookie is worthless on its own
+- [x] The mint refuses with `400 COOKIE_REQUIRED` when the browser cannot carry the ticket — a dead
+      ticket would be worse than an honest refusal
+- [x] `PROGRAM_URL` must be `https://`; plaintext is treated as "not configured" (the only exception
+      is loopback while `ALLOW_DEV_ORIGIN` is on, i.e. the local dev server)
+- [x] The Worker hashes the artifact against `PROGRAM_SHA256` **before sending a byte**: a mismatch
+      answers `409 CHECKSUM_MISMATCH`, delivers nothing and writes `program.download.mismatch` to the
+      audit log. Above `PROGRAM_VERIFY_MAX_BYTES` (default 32 MB) the file is served but labelled
+      `x-content-verified: unverified` instead of pretending
+- [x] Response carries `x-content-verified`, `x-checksum-sha256`, `content-digest` (RFC 9530) and a
+      real `content-length`, plus `no-store`, `noindex` and `attachment`
+- [x] 264 checks in `_test-worker.mjs` (40 for the download), `_check-program.mjs` wired into all
+      three workflows and mutation-tested (3 injected regressions caught)
+- [x] Proven against the local Worker end to end: mint → cookie → download, **byte-identical** to the
+      published artifact with the checksum verified, replay `400`, wrong checksum `409` with zero
+      bytes delivered, and both outcomes written to the audit log
+- [x] `_dev-server.mjs` fixed twice over for this: it decoded API responses as text (mangling any
+      binary body) and never sent `content-length`, so the verified path could not be exercised
+      locally. It also translates the `__Host-` session cookie name, which browsers refuse over
+      plain http even on 127.0.0.1
+- [x] Site put behind `maintenance.html` with `/api/*`, `/admin.html`, `/beta.html` and
+      `/maintenance.html` exempt (live rule enabled 2026-10-01; see `maintenance/README.md`)
+- [ ] MANUAL: `CLOUDFLARE_API_TOKEN` — until it exists **none of the Worker work above is live** and
+      `/api/program` still answers 404 in production. Worked through step by step in `LAUNCH_BRIEF.md`
+- [ ] MANUAL: host the build privately, set `PROGRAM_*` on the Worker, then grant a Tester role
+- [ ] MANUAL: turn the maintenance rule back off and purge the cache when the work is done

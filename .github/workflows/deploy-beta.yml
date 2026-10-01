@@ -51,6 +51,8 @@ jobs:
         run: node _check-assets.mjs
       - name: Account-recovery flow intact
         run: node _check-recovery.mjs
+      - name: Tester download intact
+        run: node _check-program.mjs
       - name: Worker is ASCII-only and compiles
         run: |
           node --check worker/src/index.js

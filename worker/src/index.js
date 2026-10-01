@@ -679,7 +679,46 @@ function normalizePurchaseId(v){
 // request, and hands out a single-use 120-second ticket that is stored only as a hash. The bytes are
 // streamed back through the Worker, so the upstream the file really lives on is never exposed
 // either, and a spent, forged or forwarded ticket stops working after exactly one use.
-function programConfigured(env){ return !!String(env.PROGRAM_URL || "").trim(); }
+const PROGRAM_TICKET_COOKIE = "aether_dl";
+const PROGRAM_TICKET_SECONDS = 120;
+const PROGRAM_VERIFY_MAX_DEFAULT = 32 * 1024 * 1024;
+function programUrl(env){ return String(env.PROGRAM_URL || "").trim(); }
+// A build fetched over plain http can be rewritten by anyone on the path, and a checksum then only
+// describes the tampered file. Loopback stays available for local development, and only while
+// ALLOW_DEV_ORIGIN is explicitly on, so production cannot be talked into a plaintext fetch.
+function programSourceOk(env, value){
+  let u; try { u = new URL(String(value)); } catch { return false; }
+  if (u.protocol === "https:") return true;
+  if (u.protocol !== "http:") return false;
+  return String(env.ALLOW_DEV_ORIGIN || "").toLowerCase() === "true" && /^(127\.0\.0\.1|localhost|\[::1\])$/i.test(u.hostname);
+}
+function programSource(env){ const raw = programUrl(env); return raw && programSourceOk(env, raw) ? raw : ""; }
+function programConfigured(env){ return !!programSource(env); }
+// How large an artifact may be before the worker stops holding it in memory to verify it. Bigger
+// builds are still served - labelled unverified rather than pretending - with the checksum published
+// for a manual check.
+function programVerifyMaxBytes(env){
+  const raw = Number(env.PROGRAM_VERIFY_MAX_BYTES || 0);
+  if (Number.isFinite(raw) && raw >= 1024) return Math.min(raw, 64 * 1024 * 1024);
+  return PROGRAM_VERIFY_MAX_DEFAULT;
+}
+function cookieValue(request, name){
+  const ck = request.headers.get("cookie") || "";
+  for (const part of ck.split(";")) {
+    const [k, ...rest] = part.trim().split("=");
+    if (k.trim() === name) return rest.join("=").trim();
+  }
+  return "";
+}
+function programTicketCookie(value, maxAgeSec){
+  // Path-narrowed: the browser only ever sends this cookie to the one endpoint that spends it.
+  // SameSite=Strict + HttpOnly + Secure on top, so no script, no cross-site request and no copied
+  // link can use it, and Max-Age keeps a spent ticket from sitting on the device.
+  return PROGRAM_TICKET_COOKIE + "=" + value + "; Path=/api/program/file; Max-Age=" + maxAgeSec + "; SameSite=Strict; HttpOnly; Secure";
+}
+function hexOfBytes(buf){ return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join(""); }
+// Only ever used on a digest (32 bytes), never on the artifact itself.
+function base64OfBytes(buf){ let s = ""; for (const b of new Uint8Array(buf)) s += String.fromCharCode(b); return btoa(s); }
 function programBuild(env){
   const b = {
     name: String(env.PROGRAM_NAME || "Aether Desktop").slice(0,80),
@@ -702,38 +741,91 @@ async function handleProgramInfo(request, env){
   const auth = await requireTester(request, env);
   if (!auth) return json({ error:"A program build requires a Tester account with a verified email." }, 403, env, request);
   const ready = programReady(env);
-  return json({ ok:true, available:ready, build: ready ? programBuild(env) : null, reason: ready ? null : noBuildYet(), role: effectiveRole(env, auth.user) }, 200, env, request);
+  return json({ ok:true, available:ready, build: ready ? programBuild(env) : null, reason: ready ? null : noBuildYet(), role: effectiveRole(env, auth.user), expiresIn: PROGRAM_TICKET_SECONDS }, 200, env, request);
 }
 // POST /api/program/download - mint the single-use ticket that actually fetches the file.
 async function handleProgramDownload(request, env){
   const auth = await requireTester(request, env);
   if (!auth) return json({ error:"A program build requires a Tester account with a verified email." }, 403, env, request);
+  // The request that follows is a browser navigation, and the only credential a navigation can carry
+  // here is a cookie. When the browser is not sending the session cookie the ticket would be handed
+  // out dead, so the honest answer names what to change instead of minting one that cannot work.
+  if (!cookieValue(request, SESSION_COOKIE)) return json({ error:"This download needs the sign-in cookie your browser is not sending. Allow cookies for this site (a private window or a blocker can block them) and reload the page.", code:"COOKIE_REQUIRED" }, 400, env, request);
   if (!programReady(env)) return json({ error: noBuildYet() }, 503, env, request);
   const build = programBuild(env);
-  const ticket = await issueAuthToken(env, auth.user.id, "download", 120*1000, JSON.stringify({ version: build.version }));
-  await audit(env, auth.user, "program.download.request", build.version, "single-use ticket, 120s");
-  return json({ ok:true, url:"/api/program/file?ticket=" + ticket, expiresIn:120, version:build.version, sha256:build.sha256 }, 200, env, request);
+  // One live ticket per account (issuing a new one deletes the old), single use, two minutes, and
+  // bound to the hash of the session that minted it - so a ticket copied out of the browser is not
+  // enough for whoever copied it.
+  const ticket = await issueAuthToken(env, auth.user.id, "download", PROGRAM_TICKET_SECONDS * 1000, JSON.stringify({ version: build.version, session: auth.token }));
+  await audit(env, auth.user, "program.download.request", build.version, "single-use ticket bound to this session, " + PROGRAM_TICKET_SECONDS + "s");
+  // The secret travels as a path-narrowed HttpOnly cookie and never in the URL: nothing to copy out
+  // of the address bar, nothing in browser history, nothing in a request log, nothing to forward.
+  return json({ ok:true, url:"/api/program/file", expiresIn:PROGRAM_TICKET_SECONDS, version:build.version, sha256:build.sha256 }, 200, env, request, { "set-cookie": programTicketCookie(ticket, PROGRAM_TICKET_SECONDS) });
 }
-// GET /api/program/file?ticket=... - spend the ticket and stream the build.
-async function handleProgramFile(request, env, url){
+// GET /api/program/file - spend the one-time ticket cookie and stream the build.
+async function handleProgramFile(request, env){
   if (!hasDb(env)) return json({ error:"Accounts not configured" }, 503, env, request);
-  const row = await consumeAuthToken(env, String(url.searchParams.get("ticket") || "").trim(), "download");
-  if (!row) return json({ error:"This download link is invalid, already used, or expired. Open the program page and start the download again." }, 400, env, request);
-  const user = await env.DB.prepare("SELECT id, email, discord, created_at FROM users WHERE id = ?").bind(row.user_id).first();
-  if (!user) return json({ error:"This download link is invalid, already used, or expired." }, 400, env, request);
+  // Every way out of here clears the ticket cookie, so a spent or refused ticket never stays on the
+  // device waiting to be replayed.
+  const spent = { "set-cookie": programTicketCookie("", 0) };
+  const ticket = cookieValue(request, PROGRAM_TICKET_COOKIE);
+  if (!ticket) return json({ error:"Start the download from the program page in this browser: the one-time ticket it uses is a cookie, and it was missing or blocked. Allow cookies for this site and press the button again.", code:"TICKET_REQUIRED" }, 400, env, request, spent);
+  // Spent before anything else is trusted, so a forged, forwarded, expired or already-used ticket is
+  // destroyed by the attempt itself instead of surviving a failed check.
+  const row = await consumeAuthToken(env, ticket, "download");
+  if (!row) return json({ error:"This download ticket is invalid, already used, or expired. Open the program page and start the download again.", code:"TICKET_SPENT" }, 400, env, request, spent);
+  // The ticket names the session that minted it and this request has to arrive with that same
+  // session, so neither half is useful without the other.
+  const auth = await requireAuth(request, env);
+  let bound = "", wanted = "";
+  try { const carried = JSON.parse(String(row.payload || "{}")); bound = String(carried.session || ""); wanted = String(carried.version || ""); } catch {}
+  if (!auth || !bound || bound !== auth.token || Number(auth.user.id) !== Number(row.user_id))
+    return json({ error:"This download ticket belongs to a different sign-in. Open the program page in the browser that started the download.", code:"WRONG_SESSION" }, 403, env, request, spent);
+  const user = auth.user;
   try { const v = await env.DB.prepare("SELECT email_verified, role FROM users WHERE id = ?").bind(row.user_id).first(); if (v) { user.email_verified = Number(v.email_verified)||0; if (v.role) user.role = v.role; } } catch {}
   // Checked again AFTER the ticket is spent: an account that loses the Tester role between minting
   // the ticket and using it is still stopped, instead of riding a ticket that was valid a moment ago.
-  if (verificationRequired(env) && !isVerifiedUser(user)) return json({ error:"Verify your email before downloading a build." }, 403, env, request);
+  if (verificationRequired(env) && !isVerifiedUser(user)) return json({ error:"Verify your email before downloading a build." }, 403, env, request, spent);
   const role = effectiveRole(env, user);
-  if (role !== ROLE_TESTER && role !== ROLE_ADMIN) return json({ error:"This account is not a Tester." }, 403, env, request);
-  const source = String(env.PROGRAM_URL || "").trim();
-  if (!source) return json({ error: noBuildYet() }, 503, env, request);
+  if (role !== ROLE_TESTER && role !== ROLE_ADMIN) return json({ error:"This account is not a Tester." }, 403, env, request, spent);
+  const source = programSource(env);
+  if (!source) return json({ error: noBuildYet() }, 503, env, request, spent);
   let upstream;
   try { upstream = await fetch(source, { redirect:"follow" }); }
   catch (e) { return json({ error:"The build is temporarily unavailable \u2014 try again in a moment." }, 502, env, request); }
   if (!upstream.ok || !upstream.body) return json({ error:"The build is temporarily unavailable \u2014 try again in a moment." }, 502, env, request);
   const build = programBuild(env);
+  // The download must be the build the page showed when the ticket was minted. A checksum that
+  // describes a file other than the one on screen cannot be told apart from tampering, so it stops.
+  if (wanted && wanted !== build.version) return json({ error:"The published build changed while you were downloading. Reload the program page and start the download again.", code:"BUILD_CHANGED" }, 409, env, request, spent);
+  // Checksum verification, and the one failure that is never papered over: when a checksum is
+  // published the worker hashes the artifact itself before a single byte leaves, and a mismatch
+  // sends nothing and leaves an audit trail. An artifact too large to hold in memory is still served
+  // - a beta that cannot be downloaded is worse - but it is labelled unverified instead of
+  // pretending, and the published checksum is still there for the tester to check by hand.
+  const declared = String(build.sha256 || "");
+  const upstreamLen = Number(upstream.headers.get("content-length") || 0);
+  const compressedUpstream = !!upstream.headers.get("content-encoding");
+  const verifyCap = programVerifyMaxBytes(env);
+  let payload = upstream.body, verified = "unverified", digest = "", unverifiedWhy = "";
+  if (!declared) unverifiedWhy = "no checksum published";
+  else if (!(upstreamLen > 0)) unverifiedWhy = "artifact size unknown to the host";
+  else if (upstreamLen > verifyCap) unverifiedWhy = "artifact larger than the verification limit";
+  else {
+    let buf;
+    try { buf = await upstream.arrayBuffer(); }
+    catch { return json({ error:"The build could not be read. Try again in a moment." }, 502, env, request, spent); }
+    const sum = await crypto.subtle.digest("SHA-256", buf);
+    const actual = hexOfBytes(sum);
+    if (actual !== declared) {
+      console.error("program build checksum mismatch");
+      await audit(env, auth.user, "program.download.mismatch", build.version || "build", "declared " + declared.slice(0,12) + ", got " + actual.slice(0,12) + " - the download was refused");
+      return json({ error:"This build does not match its published checksum, so nothing was sent. We have been alerted - please tell us through the contact page.", code:"CHECKSUM_MISMATCH" }, 409, env, request, spent);
+    }
+    verified = "sha256";
+    digest = "sha-256=:" + base64OfBytes(sum) + ":";
+    payload = buf;
+  }
   // The filename is taken from the real artifact so the saved file keeps its true extension, and
   // restricted to a safe character set because it is echoed into a response header.
   let filename = "aether-desktop-" + (build.version || "build");
@@ -741,14 +833,26 @@ async function handleProgramFile(request, env, url){
     const base = decodeURIComponent(new URL(source).pathname.split("/").pop() || "");
     if (/^[A-Za-z0-9._-]{1,80}$/.test(base) && base !== "." && base !== "..") filename = base;
   } catch {}
-  await audit(env, user, "program.download", build.version || "build", "streamed to " + String(user.email || "").slice(0,120));
-  return new Response(upstream.body, { status:200, headers:{
-    ...SECURITY_HEADERS, ...corsHeaders(env, request),
+  await audit(env, user, "program.download", build.version || "build", (verified === "sha256" ? "served with the checksum verified" : "served unverified (" + unverifiedWhy + ")") + " to " + String(user.email || "").slice(0,120));
+  const headers = {
+    ...SECURITY_HEADERS, ...corsHeaders(env, request), ...spent,
     "content-type": "application/octet-stream",
     "content-disposition": 'attachment; filename="' + filename + '"',
     "cache-control": "no-store, no-cache, must-revalidate, private",
     "x-robots-tag": "noindex, nofollow, noarchive",
-  }});
+    // What was verified, stated only when it is true: an unverified artifact is labelled as one
+    // rather than wearing a reassuring header it did not earn.
+    "x-content-verified": verified,
+  };
+  if (declared) headers["x-checksum-sha256"] = declared;
+  if (digest) headers["content-digest"] = digest;
+  // A length is published only when it is the real one: for a verified artifact it is the buffered
+  // byte count, and for a streamed one it is passed through from the host - never when the host
+  // compressed the body, where the declared length describes the compressed bytes and a client
+  // would read that as a truncated file.
+  if (verified === "sha256") headers["content-length"] = String(payload.byteLength);
+  else if (upstreamLen > 0 && !compressedUpstream) headers["content-length"] = String(upstreamLen);
+  return new Response(payload, { status: 200, headers });
 }
 
 // ---------- conversations (customer chat) ----------
@@ -2257,7 +2361,7 @@ async function handleRequest(request, env, ctx){
     if(path==="/api/program/file"||path==="/api/program/file/"){
       if(request.method!=="GET") return json({error:"Method not allowed"},405,env,request);
       const rl = await rlGuard(request, env, "program-file", 30, 3600000); if(rl) return rl;
-      return handleProgramFile(request, env, url);
+      return handleProgramFile(request, env);
     }
     if(path==="/api/me" || path==="/me") return request.method==="DELETE" ? handleDeleteMe(request, env) : handleMe(request, env);
     // orders + chat (more specific first)

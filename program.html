@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="theme-color" content="#08080a"><title>Aether Desktop — in development</title>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="theme-color" content="#08080a"><meta name="referrer" content="no-referrer"><title>Aether Desktop — in development</title>
 <meta name="description" content="Aether Desktop is in development: a desktop app from the Aether studio. Beta testers get every build first.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Aether">
@@ -50,13 +50,31 @@
       </dl>
       <div class="acc-row">
         <button class="button button-primary" id="dl-button" type="button">Download the build <span>↗</span></button>
+        <button class="outline-button" id="dl-copy" type="button" hidden>Copy checksum</button>
         <span class="form-msg" id="dl-msg" role="status" aria-live="polite"></span>
       </div>
-      <p class="sub" style="margin:14px 0 0">The button asks the server for a link that works <b style="color:#fff">once</b> and expires after two minutes, so it cannot be copied out of the page and shared — a second visitor gets nothing. The file is handed to you by the server itself, which means the place it is stored is never sent to your browser. Check the SHA-256 against the file you received before you run it: builds are unsigned while the project is this young, so your operating system will warn you, and that warning is exactly why the checksum is printed here.</p>
+      <div class="acc-note" style="margin:16px 0 0">
+        <b style="color:#fff">Nothing you can copy out of this page will get the file.</b>
+        <span style="display:block;margin-top:5px">The server holds where the build really lives, re-checks your account on every single request, and hands out a ticket that works once and expires after <span id="dl-window">two minutes</span>. That ticket is a cookie sent only to the one request that spends it — it is never in the address bar, never in your history, and worthless if forwarded, because it only works for the sign-in that asked for it. When a checksum is published the server also hashes the file itself before it sends a single byte, and refuses to send anything at all if the two do not match.</span>
+      </div>
+      <div id="dl-verify" hidden style="margin:14px 0 0;padding:12px 14px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.03)">
+        <b style="color:#fff;font-size:12px;letter-spacing:.06em;text-transform:uppercase">Check the file yourself</b>
+        <pre style="margin:8px 0 0;font-family:'DM Mono',monospace;font-size:11px;line-height:1.8;color:#c9ced6;white-space:pre-wrap">Windows  certutil -hashfile &lt;file&gt; SHA256
+macOS    shasum -a 256 &lt;file&gt;
+Linux    sha256sum &lt;file&gt;</pre>
+        <span class="sub" style="display:block;margin-top:8px">Builds are unsigned while the project is this young, so your operating system will warn you when you run it. That warning is exactly why the checksum exists.</span>
+      </div>
     </div>
 
     <div id="dl-error" hidden>
-      <p class="sub" style="margin:0">Could not check your access just now. Reload the page, or open <a href="account.html" style="color:#fff">your account</a> — if the Tester role is on it, this page will hand you the build.</p>
+      <div class="acc-note warn" style="margin:0 0 16px">
+        <b style="color:#fff" id="dl-error-title">Nothing was sent.</b>
+        <span style="display:block;margin-top:5px" id="dl-error-body">The server refused this download. Reload the page and try again — if it keeps happening, tell us through the contact page.</span>
+      </div>
+      <div class="acc-row">
+        <button class="outline-button" id="dl-retry" type="button">Reload and try again</button>
+        <a class="outline-button" href="contact.html">Tell us about it</a>
+      </div>
     </div>
   </section>
 
@@ -80,7 +98,7 @@
   </div>
 
   <div class="ui-note" style="margin-top:26px;max-width:620px">
-    This page is <b style="color:#fff">configuration-driven</b>. The name, tagline, platform, version, size, checksum and download link all come from one block in <code>public/aether-config.js</code> — so publishing a build is a single edit, and nothing here invents a version number or a file that does not exist.
+    The <b style="color:#fff">name and wording</b> come from one block in <code>public/aether-config.js</code>. Everything that has to be true — the version, platform, size, checksum and the file itself — comes from the server instead, which is why none of it is written into this page: there is nothing here to edit into believing a build exists.
   </div>
 </main>
 
@@ -114,32 +132,71 @@
 
   // Filled from the server's answer, never from this file: a version or a checksum that the visitor
   // could edit in their own browser is worth nothing to them, and worth less than nothing here.
+  let checksum = "";
   function renderBuild(build){
     const b = build || {};
     text(document.getElementById("dl-version"), b.version, "—");
     text(document.getElementById("dl-platform"), b.platform, "—");
     text(document.getElementById("dl-size"), b.size, "—");
     text(document.getElementById("dl-sha"), b.sha256, "not published");
+    checksum = String(b.sha256 || "");
+    // The copy button and the how-to-check block only appear when there is something real to check.
+    const copy = document.getElementById("dl-copy");
+    if (copy) copy.hidden = !checksum;
+    const verify = document.getElementById("dl-verify");
+    if (verify) verify.hidden = !checksum;
     show("ready");
   }
 
-  // One ticket per click. The URL that comes back is spent by the navigation itself, so nothing here
-  // is stored, logged or reused — a reload cannot replay it.
+  // A refusal is not a generic error: the server declined to hand over a file it could not vouch for,
+  // and that deserves its own card instead of a line of small print.
+  function refuse(title, body){
+    const t = document.getElementById("dl-error-title"), b = document.getElementById("dl-error-body");
+    if (t) t.textContent = title;
+    if (b) b.textContent = body;
+    show("error");
+  }
+  const retry = document.getElementById("dl-retry");
+  if (retry) retry.addEventListener("click", () => location.reload());
+  const copyBtn = document.getElementById("dl-copy");
+  if (copyBtn) copyBtn.addEventListener("click", async () => {
+    if (!checksum) return;
+    const note = document.getElementById("dl-msg");
+    try { await navigator.clipboard.writeText(checksum); C.ui.setMsg(note, "Checksum copied.", "ok"); }
+    catch { C.ui.setMsg(note, "Copying needs permission here — select the checksum above instead.", "err"); }
+  });
+
+  // One ticket per press. It never appears in a URL: the server sets it as a cookie scoped to the
+  // single request that spends it and bound to this sign-in, so nothing is stored, logged or reused
+  // — a reload cannot replay it, and there is nothing to forward.
   document.getElementById("dl-button").addEventListener("click", async () => {
     const btn = document.getElementById("dl-button");
     if (btn.disabled) return;
+    const note = document.getElementById("dl-msg");
     C.ui.loading(btn, true, "Preparing…");
-    C.ui.setMsg(document.getElementById("dl-msg"), "", "");
+    C.ui.setMsg(note, "", "");
     try {
       const ticket = await C.portal.programDownload();
-      if (!ticket || !ticket.url) throw new Error("The server did not return a download link.");
-      C.ui.setMsg(document.getElementById("dl-msg"), "Link ready — starting your download.", "ok");
-      // Same origin, and the ticket only works for this session, so this is a plain navigation.
+      if (!ticket || !ticket.url) throw new Error("The server did not return a download path.");
+      C.ui.setMsg(note, "Ticket issued — your download is starting.", "ok");
+      // Same origin and no secret in the URL, so this is a plain navigation.
       location.href = ticket.url;
+      // A download does not unload the page, so the button says what happened and stays down for the
+      // server's own ticket window — a second press would only spend another ticket.
+      C.ui.loading(btn, true, "Download started");
+      window.setTimeout(() => C.ui.loading(btn, false), (Number(ticket.expiresIn) || 120) * 1000);
     } catch (err) {
-      C.ui.setMsg(document.getElementById("dl-msg"), err.message || "Could not prepare the download — try again.", "err");
-    } finally {
       C.ui.loading(btn, false);
+      const message = (err && err.message) ? err.message : "Could not prepare the download — try again.";
+      // Both 409s mean the same thing to a visitor: nothing was sent. The checksum one is the serious
+      // one and says so; the other means the build was replaced while they were on the page.
+      if (err && err.status === 409 && /checksum/i.test(message)) {
+        refuse("Nothing was sent.", "The file the server was about to hand you did not match the checksum printed above, so it was refused instead of sent. That is the check doing its job, and it has been logged — please tell us through the contact page. Do not run any copy of this build you already have.");
+      } else if (err && err.status === 409) {
+        refuse("Nothing was sent.", "The build was replaced on the server while you were on this page, so the file you would have received is not the one described above. Reload and start again.");
+      } else {
+        C.ui.setMsg(note, message, "err");
+      }
     }
   });
 
@@ -155,15 +212,24 @@
       info = await C.portal.programInfo();
     } catch (err) {
       // 401 signed out and 403 not a tester both mean the same thing to a visitor, and both are the
-      // locked card. Anything else is a real failure to reach the API, which is worth saying out loud
-      // rather than dressing up as "you are not allowed".
+      // locked card.
       if (err && (err.status === 401 || err.status === 403)) { show("locked"); return; }
-      C.ui.setMsg(sub, "", "");
-      show("error");
+      // Anything else means the build status could not be read. For a program with no published build
+      // the truthful visitor-facing state is still "not available yet", so it shows the same card as
+      // a published-but-pending build and says plainly that the status is unconfirmed - rather than
+      // telling a visitor their access could not be checked, which reads like a broken page and says
+      // something about their account that is not true.
+      show("soon");
+      const note = document.querySelector("#dl-soon .acc-note span");
+      if (note) note.textContent = "The build status could not be confirmed just now. This is not about your account \u2014 reload the page in a moment and it will be checked again.";
       return;
     }
     if (!info || info.available !== true) { show("soon"); return; }
     renderBuild(info.build);
+    // The window printed on the page is the server's own number, not a promise written into this file.
+    const win = document.getElementById("dl-window");
+    const seconds = Number(info.expiresIn) || 120;
+    if (win) win.textContent = seconds === 120 ? "two minutes" : (seconds + " seconds");
   })();
 
   if (C.markActiveNav) C.markActiveNav();

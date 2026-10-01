@@ -67,11 +67,14 @@ const env = {
   //   PROGRAM_URL=http://127.0.0.1:5501/public/aether-logo.png PROGRAM_VERSION=0.1.0-beta.1 \
   //     node _dev-server.mjs
   // The Worker streams whatever PROGRAM_URL returns, so any local file stands in for a real build.
+  // Loopback http is only accepted while ALLOW_DEV_ORIGIN is on (it is, below) - the live worker
+  // refuses a plaintext build source outright.
   PROGRAM_NAME: process.env.PROGRAM_NAME || "Aether Desktop",
   PROGRAM_VERSION: process.env.PROGRAM_VERSION || "",
   PROGRAM_PLATFORM: process.env.PROGRAM_PLATFORM || "",
   PROGRAM_SIZE: process.env.PROGRAM_SIZE || "",
   PROGRAM_SHA256: process.env.PROGRAM_SHA256 || "",
+  PROGRAM_VERIFY_MAX_BYTES: process.env.PROGRAM_VERIFY_MAX_BYTES || "",
   PROGRAM_URL: process.env.PROGRAM_URL || "",
 };
 
@@ -109,6 +112,10 @@ async function serveStatic(pathname, res) {
       "content-type": MIME[extname(target).toLowerCase()] || "application/octet-stream",
       "cache-control": "no-store",
       "x-content-type-options": "nosniff",
+      // GitHub Pages announces the length of everything it serves, and the worker decides whether it
+      // can verify a build from exactly that header - so the local server has to send it too, or the
+      // verified path could never be exercised here.
+      "content-length": String(body.length),
     });
     res.end(body);
   } catch {
@@ -121,6 +128,26 @@ async function serveStatic(pathname, res) {
   }
 }
 
+// ---------- cookie name shim (local development only) ----------
+// The Worker's session cookie is `__Host-aether_session`, which is the right name over https: it is
+// pinned to the exact host, cannot carry a Domain and must use Path=/. Browsers refuse a `__Host-`
+// cookie that arrives over plain http - including http://127.0.0.1, which is where this dev server
+// runs - so a session created here would be dropped by the browser and every signed-in page would
+// look signed out. This shim renames the cookie in both directions, so the production cookie name
+// stays exactly as deployed and the local flow still exercises the same server code.
+const DEV_SESSION_COOKIE = "aether_session";
+const PROD_SESSION_COOKIE = "__Host-aether_session";
+function devIncomingCookie(raw){
+  return String(raw || "").split(";").map(part => {
+    const [k, ...rest] = part.trim().split("=");
+    if (k.trim() === DEV_SESSION_COOKIE) return PROD_SESSION_COOKIE + "=" + rest.join("=");
+    return part.trim();
+  }).filter(Boolean).join("; ");
+}
+function devOutgoingCookie(value){
+  return String(value).replace(/^__Host-aether_session=/, DEV_SESSION_COOKIE + "=");
+}
+
 // ---------- server ----------
 createServer(async (req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
@@ -129,18 +156,25 @@ createServer(async (req, res) => {
     for await (const chunk of req) chunks.push(chunk);
     const body = chunks.length ? Buffer.concat(chunks) : undefined;
     const headers = { ...req.headers };
+    if (headers.cookie) headers.cookie = devIncomingCookie(headers.cookie);
     if (!headers["cf-connecting-ip"]) headers["cf-connecting-ip"] = req.socket.remoteAddress || "127.0.0.1";
     const request = new Request(url.toString(), { method: req.method, headers, body, duplex: "half" });
     try {
       const started = Date.now();
       const out = await worker.fetch(request, env, { waitUntil() {}, passThroughOnException() {} });
-      const text = await out.text();
+      // Bytes, not text: a build download is binary, and decoding it as UTF-8 would replace every
+      // byte that is not valid UTF-8 and hand back a file that does not match its own checksum.
+      const buf = Buffer.from(await out.arrayBuffer());
       const outHeaders = {};
       out.headers.forEach((v, k) => { outHeaders[k] = v; });
-      const cookies = out.headers.getSetCookie ? out.headers.getSetCookie() : [];
+      const cookies = (out.headers.getSetCookie ? out.headers.getSetCookie() : []).map(devOutgoingCookie);
       if (cookies.length) outHeaders["set-cookie"] = cookies;
+      delete outHeaders["transfer-encoding"];
+      // Keep the worker's own length when it set one (that is what a client would get in production),
+      // and describe the body when it deliberately did not.
+      if (!outHeaders["content-length"]) outHeaders["content-length"] = String(buf.length);
       res.writeHead(out.status, outHeaders);
-      res.end(text);
+      res.end(buf);
       console.log(`${req.method} ${url.pathname}${url.search} -> ${out.status} (${Date.now() - started}ms)`);
     } catch (e) {
       console.error("worker error", e);
@@ -152,5 +186,7 @@ createServer(async (req, res) => {
 }).listen(PORT, "127.0.0.1", () => {
   console.log(`\nAether dev server: http://127.0.0.1:${PORT}`);
   console.log(`  admin account (in-memory only): ${adminEmail} / ${adminPassword}`);
-  console.log(`  API is served same-origin at /api/* through the real worker\n`);
+  console.log(`  API is served same-origin at /api/* through the real worker`);
+  console.log(`  session cookie: deployed as ${PROD_SESSION_COOKIE}, sent here as ${DEV_SESSION_COOKIE}`);
+  console.log(`  (browsers reject the __Host- name over http, so this server translates it both ways)\n`);
 });

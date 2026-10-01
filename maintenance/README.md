@@ -1,5 +1,9 @@
 # Maintenance mode
 
+> **State on 2026-10-01: the rule is ON** (`enabled: true`) with the four exclusions below, so
+> every public page redirects to the notice while `/admin.html`, `/beta.html`, `/maintenance.html`
+> and `/api/*` stay reachable. Take the rule off to reopen the site.
+
 There are **two switches**, and either one is enough. They are independent on purpose: the
 Cloudflare rule is the fast one (seconds), the Pages branch is the one that works even if the
 Cloudflare zone is ever changed by someone else.
@@ -12,7 +16,7 @@ The page it serves is `maintenance.html` on `main`, which is live at
 <https://get-aether.de/maintenance.html>. That file is the source of truth.
 
 - **Turn on:** Cloudflare dashboard → your zone `get-aether.de` → **Rules → Overview** →
-  switch **`Maintenance mode (site-wide)`** on.
+  switch **`Maintenance mode (site-wide, admin + beta exempt)`** on.
 - **Turn off:** switch the same rule off. Nothing is deleted, so re-enabling is instant.
 
 Live identifiers, so you never have to go hunting for the rule:
@@ -21,18 +25,33 @@ Live identifiers, so you never have to go hunting for the rule:
 | --- | --- |
 | zone | `74675dbf0eec6c0cba4b9674a9cd7431` |
 | ruleset (phase `http_request_dynamic_redirect`) | `81830ab5c40740d5a71a5909da775079` |
-| rule | `e9c622bba39d427186d4ac7fb4b68f73` |
+| rule | find it by its description — the whole ruleset is replaced on edit, so the rule id is reissued every time |
 
-The rule matches `get-aether.de` and `www.get-aether.de` only, skips anything under `/api/*`,
-and skips `/maintenance.html` itself (without that last exclusion it would redirect to itself
-forever). It returns a **302**, not a 301, on purpose: a permanent redirect gets cached hard by
-browsers and would keep sending people to the notice after the site is back.
+The rule matches `get-aether.de` and `www.get-aether.de` only, and returns a **302**, not a 301,
+on purpose: a permanent redirect gets cached hard by browsers and would keep sending people to
+the notice after the site is back.
 
-The rule rewrites every request to `/maintenance.html` **except `/api/*`**, so the Worker,
-checkout, the payment IPN callback and the password-reset API all keep working while the site
-is closed. That exclusion is the whole reason the rule is safe to leave armed.
+### What stays reachable while the site is closed
+
+The expression is deliberately narrow, because a maintenance page that also takes down support or
+payments costs more than the outage it announces:
+
+| Path | Behaviour | Why |
+| --- | --- | --- |
+| `/api/*` | untouched | the Worker, checkout, the payment IPN callback, `/api/beta/*` and the password-reset API all keep working |
+| `/admin.html` | untouched | the operator needs the panel to answer customers; it is linked from nowhere public, so it is reached by typing the URL |
+| `/beta.html` | untouched | testers keep their area |
+| `/maintenance.html` | untouched | without this exclusion the rule redirects to itself forever |
+| everything else | `302` → `/maintenance.html` | `/`, `/shop.html`, `/program.html`, `/account.html`, `/donate.html`, every bookmark |
+
+The Beta hostname (`betatester.get-aether.de`) is a different host and is not matched by this rule
+at all — it is never affected by maintenance mode.
 
 ## Switch B — GitHub Pages branch
+
+> This switch is **incompatible with the exclusions above**: the branch publishes only the notice,
+> so `/admin.html` and `/beta.html` would 404 while it is on. Use it when the site should be closed
+> to everyone including you, and use Switch A when only visitors should be stopped.
 
 - **Turn on:** repo **Settings → Pages → Build and deployment → Deploy from a branch** →
   branch **`maintenance`**, folder **`/ (root)`** → Save.
@@ -72,15 +91,16 @@ curl -s -o /dev/null -w '%{http_code}\n' "https://get-aether.de/?cb=$(date +%s)"
 ### Checking the switch itself
 
 ```bash
-# On: every public path answers 302 towards the notice, but these three must NOT move.
-for u in / /shop.html /account.html /maintenance.html /api/health; do
+# On: the public paths answer 302 towards the notice; the exempt ones must NOT move.
+for u in / /shop.html /program.html /account.html /maintenance.html /admin.html /beta.html /api/health; do
   printf '%-18s ' "$u"
   curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' "https://get-aether.de${u}?cb=$RANDOM"
 done
 ```
 
-`/api/health` returning `200` (not a `302`) is the one line that proves the switch did not take
-the Worker, checkout or the payment IPN down with the site.
+Five `302`s and four `200`s is the healthy state. `/api/health` returning `200` (not a `302`)
+proves the switch did not take the Worker, checkout or the payment IPN down with the site, and
+`/admin.html` returning `200` is what keeps the panel reachable during an outage.
 
 ---
 
