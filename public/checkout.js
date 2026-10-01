@@ -631,6 +631,10 @@
       betaFeedback(area, message){ return apiFetch("/api/beta/feedback", { method:"POST", body:{ area, message } }); },
       betaTicket(){ return apiFetch("/api/beta/ticket", { method:"POST", body:{} }); },
       betaRedeem(ticket){ return postJson(apiUrl("/api/beta/redeem"), { ticket }); },
+      // Program builds. The server holds the file and decides access; these two calls never receive
+      // a durable URL, only a single-use ticket that expires in 120 seconds.
+      programInfo(){ return apiFetch("/api/program"); },
+      programDownload(){ return apiFetch("/api/program/download", { method:"POST", body:{} }); },
     },
     // Admin helpers — only work when the signed-in account is listed in ADMIN_EMAILS
     admin: {

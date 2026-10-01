@@ -71,6 +71,24 @@ for (const page of pages) {
   }
 }
 
+// ---------- 4. a build's location must never live in a file that ships to the browser ----------
+// Everything under public/ is public the moment it is committed, so a download URL or a checksum
+// written there is readable by anyone and the gate around it is decoration. The program build lives
+// in the Worker's environment instead (see programBuild() in worker/src/index.js), which is why
+// finding one here is a failed build rather than a note in a review.
+const PUBLIC_JS = readdirSync("public").filter((f) => f.endsWith(".js"));
+const BUILD_KEY = /\b(downloadUrl|download_url|buildUrl|build_url)\s*:/i;
+const HEX64_LITERAL = /["'][0-9a-f]{64}["']/i;
+for (const asset of PUBLIC_JS) {
+  const text = readFileSync("public/" + asset, "utf8");
+  if (BUILD_KEY.test(text)) {
+    problems.push("public/" + asset + ": assigns a download location in public JavaScript — the build's location belongs in the Worker's environment, reachable only through /api/program/download");
+  }
+  if (HEX64_LITERAL.test(text)) {
+    problems.push("public/" + asset + ": contains a 64-character hex literal, which is what a published build checksum looks like — serve checksums from the API instead");
+  }
+}
+
 console.log("asset versions across " + pages.length + " pages: " + summary);
 console.log("og card: public/og.png " + (ogSize || "missing") + "; indexable pages with og:image: " + indexable.length);
 if (problems.length) {

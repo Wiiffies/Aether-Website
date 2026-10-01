@@ -62,6 +62,17 @@ const env = {
   SITE_URL: `http://127.0.0.1:${PORT}`,
   PROMO_CODES: '{"WELCOME10":{"type":"percent","value":10}}',
   ADMIN_EMAILS: adminEmail,
+  // Program builds (program.html). Passed through from the shell so the tester-only download can be
+  // exercised locally:
+  //   PROGRAM_URL=http://127.0.0.1:5501/public/aether-logo.png PROGRAM_VERSION=0.1.0-beta.1 \
+  //     node _dev-server.mjs
+  // The Worker streams whatever PROGRAM_URL returns, so any local file stands in for a real build.
+  PROGRAM_NAME: process.env.PROGRAM_NAME || "Aether Desktop",
+  PROGRAM_VERSION: process.env.PROGRAM_VERSION || "",
+  PROGRAM_PLATFORM: process.env.PROGRAM_PLATFORM || "",
+  PROGRAM_SIZE: process.env.PROGRAM_SIZE || "",
+  PROGRAM_SHA256: process.env.PROGRAM_SHA256 || "",
+  PROGRAM_URL: process.env.PROGRAM_URL || "",
 };
 
 const worker = (await import("./worker/src/index.js")).default;

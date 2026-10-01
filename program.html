@@ -49,10 +49,10 @@
         <dt>SHA-256</dt><dd id="dl-sha" style="word-break:break-all;font-family:'DM Mono',monospace;font-size:11px">—</dd>
       </dl>
       <div class="acc-row">
-        <a class="button button-primary" id="dl-button" href="" rel="noopener">Download the build <span>↗</span></a>
-        <span class="form-msg" id="dl-msg" role="status"></span>
+        <button class="button button-primary" id="dl-button" type="button">Download the build <span>↗</span></button>
+        <span class="form-msg" id="dl-msg" role="status" aria-live="polite"></span>
       </div>
-      <p class="sub" style="margin:14px 0 0">Check the SHA-256 against the file you downloaded before you run it. Builds are unsigned while the project is this young, so your operating system will warn you — that warning is expected, and it is also why the checksum is printed here.</p>
+      <p class="sub" style="margin:14px 0 0">The button asks the server for a link that works <b style="color:#fff">once</b> and expires after two minutes, so it cannot be copied out of the page and shared — a second visitor gets nothing. The file is handed to you by the server itself, which means the place it is stored is never sent to your browser. Check the SHA-256 against the file you received before you run it: builds are unsigned while the project is this young, so your operating system will warn you, and that warning is exactly why the checksum is printed here.</p>
     </div>
 
     <div id="dl-error" hidden>
@@ -85,8 +85,8 @@
 </main>
 
 <footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
-<script src="public/aether-config.js?v=8"></script>
-<script src="public/checkout.js?v=7"></script>
+<script src="public/aether-config.js?v=9"></script>
+<script src="public/checkout.js?v=8"></script>
 <script>
 (() => {
   const C = window.AetherCheckout;
@@ -108,18 +108,40 @@
 
   function show(which){
     Object.keys(cards).forEach(k => { if (cards[k]) cards[k].hidden = (k !== which); });
-    if (cards[which] && which === "ready") {
-      text(document.getElementById("dl-version"), program.version, "—");
-      text(document.getElementById("dl-platform"), program.platform, "—");
-      text(document.getElementById("dl-size"), program.size, "—");
-      text(document.getElementById("dl-sha"), program.sha256, "not published");
-      const btn = document.getElementById("dl-button");
-      btn.href = String(program.downloadUrl);
-      C.ui.setMsg(document.getElementById("dl-msg"), "Signed link — do not repost it.", "ok");
-    }
     if (cards[which] && which === "soon") C.ui.setMsg(sub, "Access confirmed.", "ok");
     if (cards[which] && which === "locked") C.ui.setMsg(sub, "This build is testers-only.", "");
   }
+
+  // Filled from the server's answer, never from this file: a version or a checksum that the visitor
+  // could edit in their own browser is worth nothing to them, and worth less than nothing here.
+  function renderBuild(build){
+    const b = build || {};
+    text(document.getElementById("dl-version"), b.version, "—");
+    text(document.getElementById("dl-platform"), b.platform, "—");
+    text(document.getElementById("dl-size"), b.size, "—");
+    text(document.getElementById("dl-sha"), b.sha256, "not published");
+    show("ready");
+  }
+
+  // One ticket per click. The URL that comes back is spent by the navigation itself, so nothing here
+  // is stored, logged or reused — a reload cannot replay it.
+  document.getElementById("dl-button").addEventListener("click", async () => {
+    const btn = document.getElementById("dl-button");
+    if (btn.disabled) return;
+    C.ui.loading(btn, true, "Preparing…");
+    C.ui.setMsg(document.getElementById("dl-msg"), "", "");
+    try {
+      const ticket = await C.portal.programDownload();
+      if (!ticket || !ticket.url) throw new Error("The server did not return a download link.");
+      C.ui.setMsg(document.getElementById("dl-msg"), "Link ready — starting your download.", "ok");
+      // Same origin, and the ticket only works for this session, so this is a plain navigation.
+      location.href = ticket.url;
+    } catch (err) {
+      C.ui.setMsg(document.getElementById("dl-msg"), err.message || "Could not prepare the download — try again.", "err");
+    } finally {
+      C.ui.loading(btn, false);
+    }
+  });
 
   // The gate is decided by the server: /api/beta/access re-checks session + verified email + Tester
   // role on every call and answers 401/403 to everyone else, so a visitor cannot talk their way in
@@ -128,18 +150,20 @@
   // somewhere that protects it (a private host or a signed URL), because anything the browser can
   // fetch can be forwarded once by the person who fetched it.
   (async () => {
-    let allowed = false;
+    let info = null;
     try {
-      const access = await C.portal.betaAccess();
-      allowed = !!(access && access.allowed === true);
+      info = await C.portal.programInfo();
     } catch (err) {
-      // 401 signed out, 403 not a tester, 429 rate limited, or the API is down — all the same answer
-      // to the visitor, except a genuine failure to reach the API, which is worth saying out loud.
-      allowed = false;
-      if (!err || (err.status !== 401 && err.status !== 403)) { C.ui.setMsg(sub, "", ""); return show("error"); }
+      // 401 signed out and 403 not a tester both mean the same thing to a visitor, and both are the
+      // locked card. Anything else is a real failure to reach the API, which is worth saying out loud
+      // rather than dressing up as "you are not allowed".
+      if (err && (err.status === 401 || err.status === 403)) { show("locked"); return; }
+      C.ui.setMsg(sub, "", "");
+      show("error");
+      return;
     }
-    if (!allowed) return show("locked");
-    return show(String(program.downloadUrl || "").trim() ? "ready" : "soon");
+    if (!info || info.available !== true) { show("soon"); return; }
+    renderBuild(info.build);
   })();
 
   if (C.markActiveNav) C.markActiveNav();

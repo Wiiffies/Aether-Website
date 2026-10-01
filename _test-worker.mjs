@@ -647,6 +647,67 @@ r = await call("POST", "/api/beta/redeem", { body: { ticket: betaTicket } });
 check("beta ticket redeems into a session", r.status === 200 && typeof r.json.token === "string" && r.json.user.role === "tester", r.json);
 r = await call("POST", "/api/beta/redeem", { body: { ticket: betaTicket } });
 check("beta ticket is single use", r.status === 400, r.json);
+
+// The program build. The whole point of this section is that the file's location never reaches the
+// browser: the API hands out metadata and a single-use ticket, and streams the bytes itself.
+console.log("\n--- program builds: tester-only download, location held server-side ---");
+const realFetchProgram = globalThis.fetch;
+r = await call("GET", "/api/program");
+check("anonymous cannot read the program build -> 403", r.status === 403, r.json);
+r = await call("GET", "/api/program", { token: adminToken });
+check("with no build configured -> available:false, no build, no location anywhere in the body",
+  r.status === 200 && r.json.available === false && r.json.build === null && !/http|url/i.test(JSON.stringify(r.json)), r.json);
+env.PROGRAM_NAME = "Aether Desktop";
+env.PROGRAM_VERSION = "0.1.0-beta.1";
+env.PROGRAM_PLATFORM = "Windows 10/11 (x64)";
+env.PROGRAM_SIZE = "48 MB";
+env.PROGRAM_SHA256 = "not-a-checksum";
+env.PROGRAM_URL = "https://files.internal.invalid/builds/aether-desktop-0.1.0-beta.1.exe";
+r = await call("GET", "/api/program", { token: freshSession });
+check("a tester sees the build metadata", r.status === 200 && r.json.available === true && r.json.build.version === "0.1.0-beta.1", r.json.build);
+check("a checksum that is not 64 hex characters is never printed as one", r.json.build.sha256 === "", r.json.build.sha256);
+check("the metadata never contains the build's location", !JSON.stringify(r.json).includes("files.internal.invalid"), JSON.stringify(r.json));
+env.PROGRAM_SHA256 = "a".repeat(64);
+r = await call("GET", "/api/program", { token: freshSession });
+check("a real checksum is passed through", r.json.build.sha256 === "a".repeat(64), r.json.build.sha256);
+r = await call("POST", "/api/program/download", { token: freshSession });
+const dlTicket = (r.json.url || "").split("ticket=")[1] || "";
+check("minting returns a ticket, not the file's location",
+  r.status === 200 && dlTicket.length === 64 && !JSON.stringify(r.json).includes("files.internal.invalid"), r.json);
+check("the ticket is stored only as a hash",
+  env.DB.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens WHERE token_hash = ?").get(sha(dlTicket)).n === 1 &&
+  env.DB.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens WHERE token_hash = ?").get(dlTicket).n === 0);
+// The bytes are streamed through the Worker, so the real host never reaches the browser.
+const streamed = [];
+globalThis.fetch = async (u) => { streamed.push(String(u)); return { ok: true, status: 200, body: "BINARY-BYTES" }; };
+r = await call("GET", "/api/program/file?ticket=" + dlTicket, { token: freshSession });
+globalThis.fetch = realFetchProgram;
+check("the file is streamed as an attachment named after the real artifact",
+  r.status === 200 && /attachment; filename="aether-desktop-0\.1\.0-beta\.1\.exe"/.test(r.headers.get("content-disposition") || ""), r.headers.get("content-disposition"));
+check("the download is uncacheable and noindex",
+  /no-store/.test(r.headers.get("cache-control") || "") && /noindex/.test(r.headers.get("x-robots-tag") || ""),
+  { cc: r.headers.get("cache-control"), robots: r.headers.get("x-robots-tag") });
+check("the worker fetched the configured upstream exactly once", streamed.length === 1 && streamed[0] === env.PROGRAM_URL, streamed);
+check("the bytes came back to the visitor", r.json && r.json.raw === "BINARY-BYTES", r.json);
+r = await call("GET", "/api/program/file?ticket=" + dlTicket, { token: freshSession });
+check("the same ticket cannot be spent twice -> 400", r.status === 400, r.json);
+// A role revoked between minting and use must stop a ticket that was already issued.
+r = await call("POST", "/api/program/download", { token: freshSession });
+const dlTicket2 = (r.json.url || "").split("ticket=")[1] || "";
+env.DB.db.prepare("UPDATE users SET role = 'user' WHERE id = ?").run(memberId);
+globalThis.fetch = async () => { throw new Error("the upstream must not be reached"); };
+r = await call("GET", "/api/program/file?ticket=" + dlTicket2, { token: freshSession });
+globalThis.fetch = realFetchProgram;
+check("a ticket stops working when the role is revoked before it is used -> 403", r.status === 403, r.json);
+r = await call("POST", "/api/program/download", { token: freshSession });
+check("and a normal account cannot mint one at all -> 403", r.status === 403, r.json);
+r = await call("GET", "/api/program/file?ticket=" + "f".repeat(64));
+check("a forged ticket is refused -> 400", r.status === 400, r.json);
+env.DB.db.prepare("UPDATE users SET role = 'tester' WHERE id = ?").run(memberId);
+delete env.PROGRAM_URL; delete env.PROGRAM_VERSION; delete env.PROGRAM_PLATFORM;
+delete env.PROGRAM_SIZE; delete env.PROGRAM_SHA256; delete env.PROGRAM_NAME;
+r = await call("POST", "/api/program/download", { token: freshSession });
+check("with nothing published the mint answers an honest 503 instead of a fake link", r.status === 503, r.json);
 r = await call("POST", "/api/beta/ticket", { token: adminToken });
 const adminTicket = r.json.ticket;
 r = await call("POST", "/api/admin/users/" + memberRow.id + "/role", { token: adminToken, body: { role: "user" } });

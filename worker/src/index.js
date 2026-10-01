@@ -671,6 +671,86 @@ function normalizePurchaseId(v){
   return PURCHASE_ID_RE.test(s) ? s : "";
 }
 
+// ---------- program builds: a tester download whose location never reaches the browser ----------
+// The location of the build is deliberately NOT in public/aether-config.js. That file ships to every
+// browser, so a URL written there is public and the gate around it is decoration - anyone who can
+// read the page can read the URL, and this project already says as much: client-side role checks and
+// hidden buttons are not security. So the Worker holds the location, re-decides access on every
+// request, and hands out a single-use 120-second ticket that is stored only as a hash. The bytes are
+// streamed back through the Worker, so the upstream the file really lives on is never exposed
+// either, and a spent, forged or forwarded ticket stops working after exactly one use.
+function programConfigured(env){ return !!String(env.PROGRAM_URL || "").trim(); }
+function programBuild(env){
+  const b = {
+    name: String(env.PROGRAM_NAME || "Aether Desktop").slice(0,80),
+    version: String(env.PROGRAM_VERSION || "").slice(0,40),
+    platform: String(env.PROGRAM_PLATFORM || "").slice(0,80),
+    size: String(env.PROGRAM_SIZE || "").slice(0,40),
+    notes: String(env.PROGRAM_NOTES || "").slice(0,400),
+    sha256: String(env.PROGRAM_SHA256 || "").trim().toLowerCase(),
+  };
+  // A checksum that is not 64 hex characters is not a checksum. Printing one that cannot be checked
+  // is worse than printing none, because it looks like verification and is not.
+  if (!/^[0-9a-f]{64}$/.test(b.sha256)) b.sha256 = "";
+  return b;
+}
+function programReady(env){ return programConfigured(env) && !!programBuild(env).version; }
+function noBuildYet(){ return "No build has been published yet."; }
+// GET /api/program - what exists, for an allowed tester only. The metadata is read from the Worker's
+// own environment, so nobody can edit a version number or a checksum in the page that shows them.
+async function handleProgramInfo(request, env){
+  const auth = await requireTester(request, env);
+  if (!auth) return json({ error:"A program build requires a Tester account with a verified email." }, 403, env, request);
+  const ready = programReady(env);
+  return json({ ok:true, available:ready, build: ready ? programBuild(env) : null, reason: ready ? null : noBuildYet(), role: effectiveRole(env, auth.user) }, 200, env, request);
+}
+// POST /api/program/download - mint the single-use ticket that actually fetches the file.
+async function handleProgramDownload(request, env){
+  const auth = await requireTester(request, env);
+  if (!auth) return json({ error:"A program build requires a Tester account with a verified email." }, 403, env, request);
+  if (!programReady(env)) return json({ error: noBuildYet() }, 503, env, request);
+  const build = programBuild(env);
+  const ticket = await issueAuthToken(env, auth.user.id, "download", 120*1000, JSON.stringify({ version: build.version }));
+  await audit(env, auth.user, "program.download.request", build.version, "single-use ticket, 120s");
+  return json({ ok:true, url:"/api/program/file?ticket=" + ticket, expiresIn:120, version:build.version, sha256:build.sha256 }, 200, env, request);
+}
+// GET /api/program/file?ticket=... - spend the ticket and stream the build.
+async function handleProgramFile(request, env, url){
+  if (!hasDb(env)) return json({ error:"Accounts not configured" }, 503, env, request);
+  const row = await consumeAuthToken(env, String(url.searchParams.get("ticket") || "").trim(), "download");
+  if (!row) return json({ error:"This download link is invalid, already used, or expired. Open the program page and start the download again." }, 400, env, request);
+  const user = await env.DB.prepare("SELECT id, email, discord, created_at FROM users WHERE id = ?").bind(row.user_id).first();
+  if (!user) return json({ error:"This download link is invalid, already used, or expired." }, 400, env, request);
+  try { const v = await env.DB.prepare("SELECT email_verified, role FROM users WHERE id = ?").bind(row.user_id).first(); if (v) { user.email_verified = Number(v.email_verified)||0; if (v.role) user.role = v.role; } } catch {}
+  // Checked again AFTER the ticket is spent: an account that loses the Tester role between minting
+  // the ticket and using it is still stopped, instead of riding a ticket that was valid a moment ago.
+  if (verificationRequired(env) && !isVerifiedUser(user)) return json({ error:"Verify your email before downloading a build." }, 403, env, request);
+  const role = effectiveRole(env, user);
+  if (role !== ROLE_TESTER && role !== ROLE_ADMIN) return json({ error:"This account is not a Tester." }, 403, env, request);
+  const source = String(env.PROGRAM_URL || "").trim();
+  if (!source) return json({ error: noBuildYet() }, 503, env, request);
+  let upstream;
+  try { upstream = await fetch(source, { redirect:"follow" }); }
+  catch (e) { return json({ error:"The build is temporarily unavailable \u2014 try again in a moment." }, 502, env, request); }
+  if (!upstream.ok || !upstream.body) return json({ error:"The build is temporarily unavailable \u2014 try again in a moment." }, 502, env, request);
+  const build = programBuild(env);
+  // The filename is taken from the real artifact so the saved file keeps its true extension, and
+  // restricted to a safe character set because it is echoed into a response header.
+  let filename = "aether-desktop-" + (build.version || "build");
+  try {
+    const base = decodeURIComponent(new URL(source).pathname.split("/").pop() || "");
+    if (/^[A-Za-z0-9._-]{1,80}$/.test(base) && base !== "." && base !== "..") filename = base;
+  } catch {}
+  await audit(env, user, "program.download", build.version || "build", "streamed to " + String(user.email || "").slice(0,120));
+  return new Response(upstream.body, { status:200, headers:{
+    ...SECURITY_HEADERS, ...corsHeaders(env, request),
+    "content-type": "application/octet-stream",
+    "content-disposition": 'attachment; filename="' + filename + '"',
+    "cache-control": "no-store, no-cache, must-revalidate, private",
+    "x-robots-tag": "noindex, nofollow, noarchive",
+  }});
+}
+
 // ---------- conversations (customer chat) ----------
 // A conversation belongs to exactly one account. The owner is always taken from the session,
 // never from the request, so /api/conversations/<someone else's id> is a 404 (no IDOR).
@@ -2161,6 +2241,23 @@ async function handleRequest(request, env, ctx){
       if(request.method!=="POST") return json({error:"Method not allowed"},405,env,request);
       const rl = await rlGuard(request, env, "beta-redeem", 120, 3600000); if(rl) return rl;
       return handleBetaRedeem(request, env);
+    }
+    // Program builds (Tester-only, and server-mediated: the file's location is never sent to the
+    // browser, only a single-use ticket that the next request immediately spends).
+    if(path==="/api/program"||path==="/api/program/"){
+      if(request.method!=="GET") return json({error:"Method not allowed"},405,env,request);
+      const rl = await rlGuard(request, env, "program", 120, 3600000); if(rl) return rl;
+      return handleProgramInfo(request, env);
+    }
+    if(path==="/api/program/download"||path==="/api/program/download/"){
+      if(request.method!=="POST") return json({error:"Method not allowed"},405,env,request);
+      const rl = await rlGuard(request, env, "program-mint", 30, 3600000); if(rl) return rl;
+      return handleProgramDownload(request, env);
+    }
+    if(path==="/api/program/file"||path==="/api/program/file/"){
+      if(request.method!=="GET") return json({error:"Method not allowed"},405,env,request);
+      const rl = await rlGuard(request, env, "program-file", 30, 3600000); if(rl) return rl;
+      return handleProgramFile(request, env, url);
     }
     if(path==="/api/me" || path==="/me") return request.method==="DELETE" ? handleDeleteMe(request, env) : handleMe(request, env);
     // orders + chat (more specific first)

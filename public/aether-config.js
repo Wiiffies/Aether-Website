@@ -34,13 +34,16 @@ window.AETHER_CONFIG = window.AETHER_CONFIG || {
   // on the site's own origin.
 
   // ---- Aether Desktop (program.html) ----
-  // The whole program page reads from this one block, so publishing a build is a single edit. Any
-  // value left empty degrades to plain "not out yet" copy instead of printing something invented.
+  // PRESENTATION ONLY, and deliberately so. This file ships to every browser, so a download link
+  // written here is public the moment it is committed and any gate around it is decoration.
   //
-  // SECURITY: this file ships to every browser, so a downloadUrl put here is public the moment it is
-  // committed. Only use a link that is safe to be public — a host that checks the session itself, or
-  // an unguessable short-lived one. program.html only *renders* the link for an allowed session; no
-  // amount of client-side gating can make a URL secret.
+  // The build itself — where it lives, its version, platform, size and checksum — is NOT here. It
+  // lives in the Worker's own environment (PROGRAM_URL, PROGRAM_VERSION, PROGRAM_PLATFORM,
+  // PROGRAM_SIZE, PROGRAM_SHA256, PROGRAM_NAME, PROGRAM_NOTES). The Worker re-checks the session, the
+  // verified email and the Tester role on every request, then streams the file back itself, so the
+  // browser never learns the location and a leaked link is useless to anyone else.
+  //
+  // To publish a build: set those variables on the Worker and commit nothing here.
   program: {
     name: "Aether Desktop",
     tagline: "Not out yet.",
@@ -48,10 +51,5 @@ window.AETHER_CONFIG = window.AETHER_CONFIG || {
     status: "in development",
     // description:  one sentence replacing the default lead paragraph
     // statusNote:   one sentence shown next to the status line
-    platform: "",      // e.g. "Windows 10/11 (x64)"
-    version: "",       // e.g. "0.1.0-beta.1"
-    size: "",          // e.g. "48 MB"
-    sha256: "",        // publish this whenever downloadUrl is set — testers are told to verify it
-    downloadUrl: "",   // empty => a tester sees "no build published yet"
   },
 };
