@@ -1,5 +1,5 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Aether — Admin</title><link rel="icon" href="public/aether-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="public/aether.css?v=6"><link rel="stylesheet" href="public/pages.css"><link rel="stylesheet" href="public/portal.css"><link rel="stylesheet" href="public/ui.css?v=6">
-</head><body><header class="site-header"><a class="brand" href="index.html"><img src="public/aether-logo.svg" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="account.html">Account</a><a href="admin.html" class="active">Admin</a></nav><a class="header-cta" href="account.html">Account <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header><main class="page-main acc-wrap">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Aether — Admin</title><link rel="icon" href="public/aether-logo.png" type="image/png"><link rel="stylesheet" href="public/aether.css?v=6"><link rel="stylesheet" href="public/pages.css"><link rel="stylesheet" href="public/portal.css"><link rel="stylesheet" href="public/ui.css?v=6">
+</head><body><header class="site-header"><a class="brand" href="index.html"><img src="public/aether-logo.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="account.html">Account</a><a href="admin.html" class="active">Admin</a></nav><a class="header-cta" href="account.html">Account <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header><main class="page-main acc-wrap">
 <span class="page-kicker">Aether control room</span>
 <h1>Everything.<br><em>In one place.</em></h1>
 <p class="page-lead">Every order, every account and every direct message — the support inbox without leaving the site. Only accounts listed in <code>ADMIN_EMAILS</code> can open this page.</p>
@@ -221,7 +221,7 @@
     if (first) {
       $("ad-detail-title").textContent = o.order_id || orderId;
       $("ad-detail-kv").innerHTML = [
-        ["Order ID", o.order_id], ["Status", o.status], ["Customer", o.user_email || (o.user_id ? "#" + o.user_id : "guest checkout")],
+        ["Order ID", o.order_id], ["Status", o.status], ["Customer", o.user_email || (o.user_id ? "#" + o.user_id : "legacy order \u2014 no account")],
         ["Amount", money(o.amount, o.currency)], ["Package", o.package || "Custom"],
         ["Promo", o.promo_code ? o.promo_code + (o.discount ? " (−€" + Number(o.discount).toFixed(0) + ")" : "") : "—"],
         ["Payment ID", o.payment_id || "—"], ["Description", o.description || "—"], ["Placed", when(o.created_at)],

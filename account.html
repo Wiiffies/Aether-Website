@@ -1,8 +1,8 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Aether — Your account</title><link rel="icon" href="public/aether-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="public/aether.css?v=6"><link rel="stylesheet" href="public/pages.css?v=6"><link rel="stylesheet" href="public/portal.css?v=6"><link rel="stylesheet" href="public/ui.css?v=6">
-</head><body><header class="site-header"><a class="brand" href="index.html"><img src="public/aether-logo.svg" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="account.html" class="active">Account</a><a href="beta.html" id="nav-beta" class="acc-hide">Beta</a></nav><a class="header-cta" href="shop.html">Shop <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header><main class="page-main acc-wrap">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Aether — Your account</title><link rel="icon" href="public/aether-logo.png" type="image/png"><link rel="stylesheet" href="public/aether.css?v=6"><link rel="stylesheet" href="public/pages.css?v=6"><link rel="stylesheet" href="public/portal.css?v=6"><link rel="stylesheet" href="public/ui.css?v=6">
+</head><body><header class="site-header"><a class="brand" href="index.html"><img src="public/aether-logo.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="account.html" class="active">Account</a><a href="beta.html" id="nav-beta" class="acc-hide">Beta</a></nav><a class="header-cta" href="shop.html">Shop <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header><main class="page-main acc-wrap">
 <span class="page-kicker">Aether account</span>
 <h1>Your orders.<br><em>Your chat.</em></h1>
-<p class="page-lead">Sign in to see every order you placed, chat with us about it in one place, and manage your account. Guest checkout still works — but when you check out with the same email you signed up with, the order is filed to your account automatically.</p>
+<p class="page-lead">Sign in to see every order you placed, chat with us about it in one place, and manage your account. There is no guest checkout: buying happens inside your account, so every order you place is listed here with its invoice and chat automatically.</p>
 
 <!-- ---------- auth ---------- -->
 <section id="acc-auth" class="acc-card acc-hide">
@@ -11,7 +11,7 @@
     <button type="button" class="acc-tab" data-mode="register">Create account</button>
   </div>
   <h2 id="acc-auth-title">Welcome back</h2>
-  <p class="sub" id="acc-auth-sub">Sign in with the email you used at checkout to see your orders and chat.</p>
+  <p class="sub" id="acc-auth-sub">Sign in to see your orders, invoices and chat — an account is required to buy.</p>
   <form id="acc-form" autocomplete="on">
     <div class="acc-field"><label for="acc-email">Email</label><input class="acc-input" id="acc-email" type="email" placeholder="you@example.com" autocomplete="email" required></div>
     <div class="acc-field"><label for="acc-pass">Password</label><input class="acc-input" id="acc-pass" type="password" placeholder="At least 8 characters" autocomplete="current-password" required></div>
@@ -150,6 +150,22 @@
     return isNaN(d) ? String(ts) : d.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
   }
 
+  // ---------- ?next= ----------
+  // Checkout sends signed-out buyers here as account.html?next=<page>. Once the session exists we
+  // send them straight back. Only same-site relative paths are honoured (never a full URL, never a
+  // bounce back to this page, so this can never be used as an open redirect).
+  function nextTarget(){
+    let raw = "";
+    try { raw = (new URLSearchParams(location.search).get("next") || "").trim(); } catch { return ""; }
+    if (!raw) return "";
+    if (/^(?:[a-z][a-z0-9+.\-]*:|\/\/)/i.test(raw)) return "";   // absolute or protocol-relative -> ignore
+    if (/[\\\s"]/.test(raw)) return "";                          // no backslashes, spaces or quotes
+    if (!/^\/?[A-Za-z0-9._~%!$&'()*+,;=:@\/?#\-]+$/.test(raw)) return "";
+    const path = raw.split("#")[0].split("?")[0];
+    if (/(^|\/)account\.html$/i.test(path)) return "";            // never loop back to the portal
+    return raw;
+  }
+
   // ---------- auth UI ----------
   document.querySelectorAll("[data-mode]").forEach(btn => btn.addEventListener("click", () => {
     mode = btn.dataset.mode;
@@ -157,7 +173,7 @@
     const reg = mode === "register";
     show($("acc-discord-wrap"), reg);
     $("acc-auth-title").textContent = reg ? "Create your account" : "Welcome back";
-    $("acc-auth-sub").textContent = reg ? "Use the same email you order with so your orders land in your account." : "Sign in with the email you used at checkout to see your orders and chat.";
+    $("acc-auth-sub").textContent = reg ? "Your account email is the one your invoices and order updates go to — an account is required to buy." : "Sign in to see your orders, invoices and chat.";
     $("acc-submit").textContent = reg ? "Create account →" : "Sign in →";
     $("acc-pass").setAttribute("autocomplete", reg ? "new-password" : "current-password");
     msg($("acc-auth-msg"), "");
@@ -448,6 +464,9 @@
     show($("acc-list-card"), !gate);
     show($("acc-chats-card"), !gate);
     A.ui.setMsg($("acc-auth-msg"), "", "");
+    // Signed in and past the verification gate: return to the page that asked for an account.
+    const back = nextTarget();
+    if (back && !gate) { location.replace(back); return; }
     if (!gate) { await loadOrders(); await loadConversations(); }
     // Beta entry: the server decides. A hidden button is never the security boundary.
     try {

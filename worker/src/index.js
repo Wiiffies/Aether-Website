@@ -1487,7 +1487,7 @@ async function handleOrder(request, env){
   const meta= body.meta && typeof body.meta==="object" ? body.meta : {};
   const ip = clientIp(request);
   if(hitRL("order:" + ip, 12)) return json({ error:"Too many requests \u2014 slow down." }, 429, env, request);
-  if(!isEmail(email)) return json({ error:"Valid email required \u2014 sign in and your account email is used automatically" }, 400, env, request);
+  if(!isEmail(email)) return json({ error:"A valid email is required so we can reply \u2014 sign in and your account email is used automatically" }, 400, env, request);
   if(!description || description.length < 8) return json({ error:"Description too short" }, 400, env, request);
   if(body.website || body._gotcha) return json({ ok:true, mocked:true }, 200, env, request);
   const submitted=new Date().toLocaleString("en-GB",{ timeZone:"Europe/Berlin", dateStyle:"long", timeStyle:"short"});
@@ -1561,14 +1561,17 @@ async function handleInvoice(request, env){
   let amount=Number(body.amount ?? body.price_amount ?? body.estimatedPrice);
   if(!Number.isFinite(amount)||amount<1) return json({ error:"Valid amount required" }, 400, env, request);
   if(amount>5000) return json({ error:"Amount too large" }, 400, env, request);
-  // 99999% -- signed-in customers never retype their email or Discord: the account supplies both.
-  // Signed out, an email is still required (that is how we reach you about the order).
+  // 99999% -- checkout is ACCOUNT-ONLY: there is no guest purchase. The account supplies the
+  // customer email and Discord, the order is filed to it, and portal chat/history follow from it.
   const earlyAuth=await requireAuth(request, env).catch(()=>null);
-  const accountEmail=(earlyAuth && earlyAuth.user && isEmail(earlyAuth.user.email)) ? String(earlyAuth.user.email).trim() : "";
-  const discord=String(body.discord||body.discordUsername||(earlyAuth && earlyAuth.user && earlyAuth.user.discord)||"").trim().slice(0,120);
-  let email=String(body.email||body.customerEmail||"").trim();
-  if(!isEmail(email) && accountEmail) email=accountEmail;
-  if(!isEmail(email)) return json({ error:"Valid customer email required \u2014 sign in to use your account email" }, 400, env, request);
+  if(!earlyAuth) return json({ error:"Checkout requires an account \u2014 create one or sign in, then pay.", code:"ACCOUNT_REQUIRED" }, 401, env, request);
+  const invoiceGate=verifiedGate(earlyAuth, env, request);
+  if(invoiceGate) return invoiceGate;
+  const accountEmail=(earlyAuth.user && isEmail(earlyAuth.user.email)) ? String(earlyAuth.user.email).trim() : "";
+  const discord=String(body.discord||body.discordUsername||(earlyAuth.user && earlyAuth.user.discord)||"").trim().slice(0,120);
+  // The account email always wins; a posted email is only a fallback for an unusable account row.
+  const email=accountEmail || String(body.email||body.customerEmail||"").trim();
+  if(!isEmail(email)) return json({ error:"Your account has no usable email address \u2014 contact questions@get-aether.de" }, 400, env, request);
   const currency=String(body.currency||body.price_currency||"eur").toLowerCase();
   const payCurrency=String(body.pay_currency||body.payCurrency||body.coin||"").toLowerCase().trim();
   if(!payCurrency) return json({ error:"Please select BTC, ETH or LTC" }, 400, env, request);
@@ -1604,7 +1607,7 @@ async function handleInvoice(request, env){
   const auth = earlyAuth;
   // Link the order to an account: the signed-in user, or whichever account owns this email.
   // That way "checkout with your account email" files the order to your portal automatically.
-  let linkedUserId = auth ? auth.user.id : null;
+  let linkedUserId = auth.user.id; // account-only checkout: the order always belongs to the session account
   if (!linkedUserId && hasDb(env)) {
     try {
       const owner = await env.DB.prepare("SELECT id FROM users WHERE lower(email) = lower(?)").bind(email).first();

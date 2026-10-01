@@ -114,25 +114,40 @@ console.log("\n--- orders / invoice ---");
 r = await call("GET", "/api/orders", { token: custToken });
 check("orders empty for new account", r.status === 200 && r.json.orders.length === 0, r.json);
 
-r = await call("POST", "/api/invoice", { body: { amount: 74, pay_currency: "btc", email: "test@example.com", discord: "tester#1", type: "discord_bot", package: "Custom", description: "Test order", meta: { commands: 12 } } });
+r = await call("POST", "/api/invoice", {  body: { amount: 74, pay_currency: "btc", email: "stranger@example.com", discord: "tester#1", type: "discord_bot", package: "Custom", description: "Test order", meta: { commands: 12 } }, token: custToken });
 check("invoice without NOWPayments key -> 503", r.status === 503, r.json);
 const orderId = r.json.orderId || "__missing__";
 check("invoice returns an order id", typeof r.json.orderId === "string" && r.json.orderId.startsWith("aether_"), r.json);
 
 const row = env.DB.db.prepare("SELECT user_id, email, amount, promo_code FROM orders WHERE order_id = ?").get(orderId);
-check("guest checkout with account email links to the account", row && row.user_id === 1, row);
-check("order stores the customer email", row && row.email === "test@example.com", row);
+check("invoice is filed to the signed-in account", row && row.user_id === 1, row);
+check("the account email wins over a posted one", row && row.email === "test@example.com", row);
 
-r = await call("POST", "/api/invoice", { body: { amount: 30, pay_currency: "ltc", email: "stranger@example.com", type: "website", package: "BASIC", description: "Guest order" } });
-check("second invoice succeeds (503 expected, no key)", r.status === 503, r.json);
+// A second real account: guest purchases no longer exist, so "someone else's order" now means an
+// actual other customer.
+r = await call("POST", "/api/auth/register", { body: { email: "other@example.com", password: "otherpass123" } });
+check("second customer account created", r.status === 200 && !!r.json.token, r.json);
+const otherToken = r.json.token;
+const otherId = env.DB.db.prepare("SELECT id FROM users WHERE email = ?").get("other@example.com").id;
+r = await call("POST", "/api/invoice", { body: { amount: 30, pay_currency: "ltc", type: "website", package: "BASIC", description: "Second order" }, token: otherToken });
+check("the other account can buy (503 expected, no key)", r.status === 503, r.json);
 const guestOrderId = r.json.orderId || "__missing__";
 const guestRow = env.DB.db.prepare("SELECT user_id, email FROM orders WHERE order_id = ?").get(guestOrderId);
-check("guest order stays unlinked", guestRow && guestRow.user_id === null && guestRow.email === "stranger@example.com", guestRow);
+check("that order belongs to the other account", guestRow && guestRow.user_id === otherId && guestRow.email === "other@example.com", guestRow);
 
-r = await call("POST", "/api/invoice", { body: { amount: 30, pay_currency: "dogecoin", email: "test@example.com" } });
+r = await call("POST", "/api/invoice", { body: { amount: 30, pay_currency: "dogecoin", email: "test@example.com" }, token: custToken });
 check("unsupported coin -> 400", r.status === 400, r.json);
-r = await call("POST", "/api/invoice", { body: { amount: 30, pay_currency: "btc", email: "test@example.com", promoCode: "GHOST" } });
+r = await call("POST", "/api/invoice", { body: { amount: 30, pay_currency: "btc", email: "test@example.com", promoCode: "GHOST" }, token: custToken });
 check("invalid promo on invoice -> 400", r.status === 400, r.json);
+
+console.log("\n--- account-only checkout: no guest purchases ---");
+const ordersBeforeGuest = env.DB.db.prepare("SELECT COUNT(*) AS n FROM orders").get().n;
+r = await call("POST", "/api/invoice", { body: { amount: 15, pay_currency: "btc", email: "guest@example.com", type: "website", package: "STARTER", description: "A guest tries to buy" } });
+check("anonymous invoice -> 401 ACCOUNT_REQUIRED", r.status === 401 && r.json.code === "ACCOUNT_REQUIRED", r.json);
+check("the rejected guest wrote no order", env.DB.db.prepare("SELECT COUNT(*) AS n FROM orders").get().n === ordersBeforeGuest);
+check("no order carries the guest email", env.DB.db.prepare("SELECT COUNT(*) AS n FROM orders WHERE email = ?").get("guest@example.com").n === 0);
+r = await call("POST", "/api/invoice", { body: { amount: 15, pay_currency: "btc", email: "guest@example.com", type: "website", package: "STARTER", description: "A stale token tries to buy" }, token: "deadbeefdeadbeef" });
+check("a junk session token cannot buy either", r.status === 401 && r.json.code === "ACCOUNT_REQUIRED", r.json);
 
 r = await call("GET", "/api/orders", { token: custToken });
 check("orders list contains the linked order", r.status === 200 && r.json.orders.length === 1 && r.json.orders[0].order_id === orderId, r.json.orders);
@@ -172,7 +187,7 @@ r = await call("GET", "/api/admin", { token: adminToken });
 check("admin index lists routes", r.status === 200 && r.json.routes.length >= 6, r.json);
 r = await call("GET", "/api/admin/orders", { token: adminToken });
 check("admin sees every order", r.status === 200 && r.json.orders.length === 2, r.json.orders && r.json.orders.length);
-check("admin order rows carry the customer email", (r.json.orders || []).some(o => o.user_email === "stranger@example.com"), r.json.orders);
+check("admin order rows carry the customer email", (r.json.orders || []).some(o => o.user_email === "other@example.com"), r.json.orders);
 r = await call("GET", "/api/admin/orders?status=pending", { token: adminToken });
 check("admin status filter works", r.status === 200 && r.json.orders.length === 2, r.json);
 r = await call("GET", "/api/admin/orders/" + orderId, { token: adminToken });
@@ -183,23 +198,27 @@ check("admin unknown order -> 404", r.status === 404, r.json);
 r = await call("POST", "/api/admin/orders/" + orderId + "/message", { token: adminToken, body: { body: "Added - new total EUR 76." } });
 check("admin reply stored as admin", r.status === 200 && r.json.messages.length === 2 && r.json.messages[1].sender === "admin", r.json);
 r = await call("POST", "/api/admin/orders/" + guestOrderId + "/message", { token: adminToken, body: { body: "Hello guest" } });
-check("admin can reply on a guest order", r.status === 200 && r.json.messages.length === 1, r.json);
+check("admin can reply on another account's order", r.status === 200 && r.json.messages.length === 1, r.json);
 
 r = await call("GET", "/api/admin/users", { token: adminToken });
-check("admin sees both accounts", r.status === 200 && r.json.users.length === 2, r.json.users);
+check("admin sees every account", r.status === 200 && r.json.users.length === 3, r.json.users);
 check("admin user stats present", Array.isArray(r.json.stats) && r.json.stats.length >= 1, r.json.stats);
 r = await call("GET", "/api/admin/messages", { token: adminToken });
 check("admin message inbox has 3 entries", r.status === 200 && r.json.messages.length === 3, r.json.messages && r.json.messages.length);
 
-console.log("\n--- claim guest orders on register ---");
-r = await call("POST", "/api/auth/register", { body: { email: "stranger@example.com", password: "stranger123" } });
-check("stranger registers", r.status === 200, r.json);
-const strangerToken = r.json.token;
-r = await call("GET", "/api/orders", { token: strangerToken });
-check("earlier guest order was claimed on register", r.json.orders.length === 1 && r.json.orders[0].order_id === guestOrderId, r.json.orders);
+console.log("\n--- legacy guest rows (created before account-only checkout) ---");
+// Rows written by the old guest checkout can still exist in a live database. Registering that
+// email must claim them, otherwise those customers would lose their order history.
+env.DB.db.prepare("INSERT INTO orders (user_id, order_id, amount, currency, type, package, description, status, email) VALUES (NULL, ?, 15, 'eur', 'website', 'STARTER', 'Legacy guest order', 'pending', ?)").run("aether_legacy_guest_1", "legacy@example.com");
+r = await call("POST", "/api/auth/register", { body: { email: "legacy@example.com", password: "legacypass1" } });
+check("the email of a legacy guest order can register", r.status === 200 && !!r.json.token, r.json);
+const legacyToken = r.json.token;
+r = await call("GET", "/api/orders", { token: legacyToken });
+check("the legacy guest order was claimed on register", (r.json.orders || []).some(o => o.order_id === "aether_legacy_guest_1"), r.json.orders);
 
 console.log("\n--- delete account ---");
-const userId = env.DB.db.prepare("SELECT id FROM users WHERE email = ?").get("stranger@example.com").id;
+const userId = env.DB.db.prepare("SELECT id FROM users WHERE email = ?").get("other@example.com").id;
+const ordersBeforeDelete = env.DB.db.prepare("SELECT COUNT(*) AS n FROM orders").get().n;
 r = await call("DELETE", "/api/admin/users/" + 999, { token: adminToken });
 check("admin delete missing user -> 404", r.status === 404, r.json);
 r = await call("DELETE", "/api/admin/users/" + env.DB.db.prepare("SELECT id FROM users WHERE email = ?").get("admin@example.com").id, { token: adminToken });
@@ -214,14 +233,13 @@ check("user deletes own account", r.status === 200 && r.json.deleted === true, r
 r = await call("GET", "/api/me", { token: custToken });
 check("deleted user token is dead -> 401", r.status === 401, r.json);
 check("deleted user row is gone", env.DB.db.prepare("SELECT COUNT(*) AS n FROM users WHERE email = ?").get("test@example.com").n === 0);
-check("their orders survive", env.DB.db.prepare("SELECT COUNT(*) AS n FROM orders").get().n === 2);
+check("their orders survive", env.DB.db.prepare("SELECT COUNT(*) AS n FROM orders").get().n === ordersBeforeDelete);
 r = await call("DELETE", "/api/admin/users/abc", { token: adminToken });
 check("admin delete with junk id -> 403/404 not a crash", r.status === 404 || r.status === 403, r.json);
 
 console.log("\n--- signed in: the account supplies the email ---");
 r = await call("POST", "/api/invoice", { body: { amount: 42, pay_currency: "eth", type: "website", package: "Custom", description: "No email and not signed in" } });
-check("invoice with no email while signed out -> 400", r.status === 400, r.json);
-
+check("invoice while signed out -> 401 account required", r.status === 401 && r.json.code === "ACCOUNT_REQUIRED", r.json);
 r = await call("POST", "/api/auth/register", { body: { email: "member@example.com", password: "memberpass1", discord: "member#7" } });
 check("member account created", r.status === 200 && !!r.json.token, r.json);
 const memberToken = r.json.token;
@@ -236,7 +254,9 @@ check("invoice linked to the signed-in account", acctRow && acctRow.user_id === 
 
 r = await call("POST", "/api/invoice", { body: { amount: 20, pay_currency: "ltc", email: "other@example.com", type: "website", package: "STARTER", description: "Typed a different email" }, token: memberToken });
 const typedRow = env.DB.db.prepare("SELECT user_id, email FROM orders WHERE order_id = ?").get(r.json.orderId || "__none__");
-check("a typed email still wins over the account email", typedRow && typedRow.email === "other@example.com", typedRow);
+check("a typed email can no longer override the account email", typedRow && typedRow.email === "member@example.com", typedRow);
+r = await call("GET", "/api/orders/" + orderId, { token: memberToken });
+check("another account cannot read that order -> 404", r.status === 404, r.json);
 
 r = await call("POST", "/api/order", { body: { type: "website", package: "Custom", amount: 90, description: "Big custom build, no email typed" }, token: memberToken });
 check("inquiry with no email while signed in -> accepted", r.status === 200 && r.json.ok === true, r.json);
@@ -336,7 +356,7 @@ console.log("\n--- hardening: input caps / error hygiene ---");
 r = await call("POST", "/api/order", { body: { type: "website", description: "ok description", amount: 5 }, contentLength: 90000 });
 check("oversized payload -> 413", r.status === 413, r.json);
 const hugeDesc = "y".repeat(20000);
-r = await call("POST", "/api/invoice", { body: { amount: 25, pay_currency: "btc", email: "member@example.com", description: hugeDesc } });
+r = await call("POST", "/api/invoice", { body: { amount: 25, pay_currency: "btc", email: "member@example.com", description: hugeDesc }, token: freshSession });
 const hugeRow = env.DB.db.prepare("SELECT description FROM orders WHERE order_id = ?").get(r.json.orderId || "__none__");
 check("oversized description is truncated before it reaches storage", hugeRow && String(hugeRow.description).length <= 200, hugeRow && String(hugeRow.description).length);
 r = await call("GET", "/api/payment/123456");

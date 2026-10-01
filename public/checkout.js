@@ -62,6 +62,13 @@
     try{ a ? sessionStorage.setItem(ACCOUNT_KEY, JSON.stringify(a)) : sessionStorage.removeItem(ACCOUNT_KEY); localStorage.removeItem(ACCOUNT_KEY); }catch{}
   }
   function accountEmail(){ const a = account(); return a && isEmail(a.email) ? String(a.email).trim() : ""; }
+  // Accounts are mandatory: there is no guest checkout. Send anyone who is not signed in to the
+  // portal, and bring them back to the page they were on (account.html honours ?next=).
+  function accountUrl(){
+    const here = location.pathname + location.search + location.hash;
+    const back = /account\.html$/.test(location.pathname) ? "" : ("?next=" + encodeURIComponent(here));
+    return "account.html" + back;
+  }
   function accountDiscord(){ const a = account(); return a && a.discord ? String(a.discord).trim() : ""; }
   function loadAccount(force){
     if(!getToken() && CROSS_ORIGIN){ setAccount(null); return Promise.resolve(null); }
@@ -276,7 +283,7 @@
             <button type="button" data-close style="padding:12px 14px;border-radius:6px;border:1px solid #333;background:transparent;color:#fff;font-size:12px;cursor:pointer">Cancel</button>
           </div>
           <div data-msg style="margin-top:10px;font-size:11px;line-height:1.6;color:#9aa0a6;white-space:pre-wrap"></div>
-          ${!isConfigured() ? `<div style="margin-top:10px;padding:10px 12px;border:1px solid #442;border-radius:6px;background:#1a1510;color:#c9a87a;font-size:11px;line-height:1.6">Worker not configured yet — <code style="color:#fff">public/aether-config.js → apiBase</code> is empty. This will fall back to email.</div>` : ``}
+          ${!isConfigured() ? `<div style="margin-top:10px;padding:10px 12px;border:1px solid #442;border-radius:6px;background:#1a1510;color:#c9a87a;font-size:11px;line-height:1.6">Worker not configured yet — <code style="color:#fff">public/aether-config.js → apiBase</code> is empty. Checkout needs the API to create a payment.</div>` : ``}
         </div>
       </div>
     `;
@@ -288,6 +295,9 @@
     const coinBtns = overlay.querySelectorAll('[data-coin]');
     // --- account-aware email: never ask a signed-in customer for their email ---------
     const emailWrap = emailInput.closest("label") || emailInput.parentNode;
+    // The email field never appears any more: the account supplies it, or the CTA asks for an account.
+    emailWrap.style.display = "none";
+    const confirmBtn = overlay.querySelector("[data-confirm]");
     let accountMode = false;
     let resolvedAccountEmail = "";
     const acctRow = document.createElement("div");
@@ -300,10 +310,12 @@
       <span style="font:10px 'DM Mono',monospace;line-height:1.6;color:#7a7d82">Invoice, order updates and chat stay tied to this account.</span>`;
     const acctChip = acctRow.querySelector("[data-acct-chip]");
     emailWrap.parentNode.insertBefore(acctRow, emailWrap);
-    const guestHint = document.createElement("div");
-    guestHint.style.cssText = "font:10px 'DM Mono',monospace;line-height:1.6;color:#7a7d82";
-    guestHint.innerHTML = `Guest checkout &mdash; or <a href="account.html" style="color:#c8c9d8">sign in</a> and your account email is filled in for you.`;
-    emailWrap.parentNode.insertBefore(guestHint, emailWrap.nextSibling);
+    const accountNotice = document.createElement("div");
+    accountNotice.style.cssText = "padding:12px;border:1px solid #3a3a1e;border-radius:6px;background:rgba(255,204,0,.06);font:11px 'DM Mono',monospace;line-height:1.7;color:#e8d48a";
+    accountNotice.innerHTML = `<b style="color:#fff">An account is required to buy.</b><br>Your orders, invoices and chat history live in your account &mdash; there is no guest checkout.<br><span data-goto-account style="display:inline-block;margin-top:9px;padding:8px 12px;border-radius:6px;border:1px solid #fff;background:#fff;color:#000;font-weight:700">Create an account / sign in</span>`;
+    accountNotice.style.cursor = "pointer";
+    accountNotice.addEventListener("click", ()=>{ location.href = accountUrl(); });
+    emailWrap.parentNode.insertBefore(accountNotice, emailWrap.nextSibling);
     function useAccount(acct){
       if(!overlay.isConnected) return false;
       const em = (acct && isEmail(acct.email)) ? String(acct.email).trim() : "";
@@ -313,21 +325,30 @@
       acctChip.textContent = em;
       emailInput.value = em;
       emailWrap.style.display = "none";
-      guestHint.style.display = "none";
+      accountNotice.style.display = "none";
       acctRow.style.display = "flex";
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "Pay with Crypto \u2192";
+      confirmBtn.style.opacity = "";
+      confirmBtn.style.cursor = "pointer";
       if(!discordInput.value.trim() && acct.discord) discordInput.value = String(acct.discord).trim();
       return true;
     }
-    function useTypedEmail(){
+    function useAccountRequired(){
       accountMode = false;
+      resolvedAccountEmail = "";
       acctRow.style.display = "none";
-      guestHint.style.display = "";
-      emailWrap.style.display = "flex";
-      emailInput.focus();
-      emailInput.select();
+      accountNotice.style.display = "";
+      emailWrap.style.display = "none";
+      // Kept clickable on purpose: clicking "Sign in to buy" sends the visitor to the portal.
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "Sign in to buy \u2192";
+      confirmBtn.style.opacity = ".6";
+      confirmBtn.style.cursor = "pointer";
     }
-    acctRow.querySelector("[data-acct-change]").addEventListener("click", useTypedEmail);
-    useAccount(account());
+    acctRow.querySelector("[data-acct-change]").textContent = "Switch account";
+    acctRow.querySelector("[data-acct-change]").addEventListener("click", ()=>{ location.href = accountUrl(); });
+    if(!useAccount(account())) useAccountRequired();
     // token present but nothing cached yet: upgrade the modal as soon as /api/me answers
     if(!accountMode && getToken()){ loadAccount(false).then(a=>{ if(a && !accountMode) useAccount(a); }).catch(()=>{}); }
     let payCurrency = (opts.defaultCoin||"").toLowerCase().trim();
@@ -356,11 +377,13 @@
     const msg = overlay.querySelector("[data-msg]");
 
     confirm.addEventListener("click", async ()=>{
-      const typedEmail = (emailInput.value||"").trim();
-      // Empty field + a known account email = use the account email, never nag.
-      const email = typedEmail || resolvedAccountEmail;
+      // Accounts are mandatory \u2014 there is no guest checkout. The worker rejects anonymous
+      // invoices with 401 ACCOUNT_REQUIRED, so anyone signed out goes to the portal instead.
+      const fresh = account();
+      if(fresh) useAccount(fresh);
+      if(!accountMode || !isEmail(resolvedAccountEmail)){ location.href = accountUrl(); return; }
+      const email = resolvedAccountEmail;
       const discord = (discordInput.value||"").trim();
-      if(!isEmail(email)){ msg.textContent="Please enter a valid email \u2014 or sign in and your account email is used automatically."; msg.style.color="#ff8a8a"; if(emailWrap.style.display!=="none") emailInput.focus(); return; }
       if(!payCurrency){ msg.textContent="Please select BTC, LTC or ETH."; msg.style.color="#ff8a8a"; return; }
       confirm.disabled = true;
       confirm.textContent = "Creating payment…";
@@ -620,7 +643,7 @@
     },
     async createInvoice(payload){
       const url = apiUrl("/api/invoice");
-      if(!url) throw new Error("Checkout not configured — set public/aether-config.js → apiBase to your Worker URL (e.g. https://api.get-aether.de). Orders will be sent by email as fallback.");
+      if(!url) throw new Error("Checkout is offline — set public/aether-config.js → apiBase to your Worker URL (e.g. https://api.get-aether.de). Nothing was charged: email questions@get-aether.de and we will take the order manually.");
       // Keep legacy field name /api/invoice — backend now uses Payment API and expects pay_currency
       return postJson(url, {
         amount: payload.amount,
