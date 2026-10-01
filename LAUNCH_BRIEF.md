@@ -109,7 +109,41 @@ Legend: `[ ]` = to do, `[x]` = done and verified.
       no route and no deployment** for it. `/beta.html` on the main site does work (it is exempt from
       maintenance mode), but the separate host is still unbuilt — see `PROJECT_TODO.md` §12 and §11.
 
-## 5. Optional, but it is the next real security step
+## 5. Domain-level hardening (done for you, one step left)
+
+- [x] **SPF + DKIM** were already in place (Cloudflare Email Routing).
+- [x] **DMARC now exists**: `_dmarc` → `v=DMARC1; p=none; rua=mailto:questions@get-aether.de; fo=1`.
+      `p=none` blocks nothing; it starts the report flow so you can see who is sending as your
+      domain. You will get aggregate reports at `questions@get-aether.de` (they are XML — skim them
+      or filter them into a folder).
+- [x] **DNSSEC is enabled on Cloudflare** and is `pending` — the last step is at your registrar.
+- [ ] **Add the DS record at your registrar** to finish DNSSEC. Copy it exactly:
+
+  ```
+  get-aether.de. 3600 IN DS 2371 13 2 031AAD25DC73AEB6B8889DD733B7F4807785B40C9DBD04C188408438C5CFB6ED
+  ```
+
+  Registrar fields, if it asks for them separately: key tag `2371`, algorithm `13`
+  (ECDSAP256SHA256), digest type `2` (SHA-256), digest
+  `031AAD25DC73AEB6B8889DD733B7F4807785B40C9DBD04C188408438C5CFB6ED`.
+  Verify at <https://dnssec-analyzer.verisignlabs.com/get-aether.de>.
+  ⚠️ A **wrong** DS record makes the domain unresolvable for validating resolvers. If the site stops
+  resolving right after you add it, remove the DS record first and look it up again.
+
+- [ ] **Tighten DMARC later, in this order:** add the sending provider's SPF include **and** its DKIM
+      record → check the reports → change the policy to `p=quarantine` → then `p=reject`. Doing that
+      before the sending records exist would fail DMARC alignment on your own verification and
+      password-reset mail.
+
+## 5b. If you ever add a CDN, font or analytics script
+
+The pages now ship a Content-Security-Policy, which means an origin that is not on the allowlist is
+**blocked in the browser**. Adding one therefore takes two edits: the policy in
+`_security-headers.mjs` **and** the same value in the Cloudflare rule
+(`Rules → Overview → Aether response security headers`). `node _check-headers.mjs` fails the build if
+the page and the policy disagree, so you will find out before your visitors do.
+
+## 6. Optional, but it is the next real security step
 
 - [ ] Move the static site off GitHub Pages (Cloudflare Pages or a Worker with static assets). It is
       the prerequisite for **SSL/TLS `Full (strict)`**: with Pages as the origin it is impossible
@@ -118,25 +152,43 @@ Legend: `[ ]` = to do, `[x]` = done and verified.
 - [ ] Second edge rate-limit rule for `/api/program*` + `/api/conversations*` (the free plan allows
       one rule, and the existing one must not throttle `/api/ipn`).
 
-## 6. Reopening the site when you are done
+## 7. The two maintenance modes, and reopening the site
 
-- [ ] Cloudflare dashboard → zone `get-aether.de` → **Rules → Overview** → switch
-      **`Maintenance mode (site-wide, admin + beta exempt)`** off. Nothing is deleted; re-enabling
-      is instant. Then purge: **Caching → Configuration → Purge Everything** (browsers can hold a
-      page for up to 4 hours — that is `browser_cache_ttl: 14400`).
+Right now the **SOFT** rule is on: the shop and the marketing pages redirect to the notice, while
+your **account, orders, chats, password recovery and payment results stay open**, as do the admin
+panel and `/beta.html`. The notice itself says so and links to your account — it probes
+`/account.html` first, so it never offers a link that does not work.
+
+| Rule (Cloudflare → zone → **Rules → Overview**) | Meaning |
+| --- | --- |
+| `Maintenance (SOFT)…` | shop closed, customer area open — **currently ON** |
+| `Maintenance (HARD)…` | everything public closed, only admin/beta/assets/API reachable |
+
+- [ ] Switch between them (or turn both off) in that list. Nothing is deleted. Cloudflare can take
+      up to a minute to apply a rule change.
+- [ ] After **any** switch: **Caching → Configuration → Purge Everything** — a cached page can
+      otherwise keep sending people to the notice (and browsers hold pages for up to 4 hours).
 
   ```bash
-  # healthy = 4 × 200 and everything else 302
-  for u in / /shop.html /program.html /account.html /maintenance.html /admin.html /beta.html /api/health; do
+  # SOFT healthy state: these six answer 302 (closed) …
+  for u in / /shop.html /program.html /donate.html /contact.html /about.html; do
     printf '%-18s ' "$u"; curl -s -o /dev/null -w '%{http_code}\n' "https://get-aether.de${u}?cb=$RANDOM"
   done
+  # … and these ten answer 200 (open). The two that matter most are the last two.
+  for u in /account.html /forgot-password.html /reset-password.html /verify-email.html \
+           /payment-success.html /admin.html /beta.html /maintenance.html /public/checkout.js /api/health; do
+    printf '%-26s ' "$u"; curl -s -o /dev/null -w '%{http_code}\n' "https://get-aether.de${u}?cb=$RANDOM"
+  done
   ```
+
+  `/public/checkout.js` returning `200` with a JavaScript content type is the one people forget: if
+  the assets get redirected, every open page loads **without its scripts** while still looking fine.
 
   Details, live IDs and the two-switch explanation: `maintenance/README.md`.
 
 ---
 
-## 7. The prompt to paste into ChatGPT
+## 8. The prompt to paste into ChatGPT
 
 Copy everything inside the block. It is written to be pasted cold into a new ChatGPT chat, so it
 carries its own context and tells the assistant to ask you for the values it cannot know.
@@ -184,9 +236,20 @@ WHAT I WANT TO FINISH, IN THIS ORDER
    an anonymous request to /api/program still gets 403.
 4. Set up a NOWPayments donation link and put the URL into donateUrl in
    public/aether-config.js.
-5. Tell me how to turn maintenance mode off again when everything above works
-   (Cloudflare zone → Rules → Overview → the rule named "Maintenance mode
-   (site-wide, admin + beta exempt)") and how to purge the cache afterwards.
+5. Finish DNSSEC. Cloudflare already has it enabled and reports this DS record for my
+   domain:
+   get-aether.de. 3600 IN DS 2371 13 2 031AAD25DC73AEB6B8889DD733B7F4807785B40C9DBD04C188408438C5CFB6ED
+   Walk me through publishing it at my registrar (I will tell you which one), what to
+   paste in each field (key tag 2371, algorithm 13, digest type 2, and the digest), how to
+   verify it, and what to do immediately if the site stops resolving after I add it.
+6. Explain my DMARC setup: _dmarc currently reads
+   "v=DMARC1; p=none; rua=mailto:questions@get-aether.de; fo=1". Tell me how to read the
+   reports it sends to questions@get-aether.de, and give me the exact order of steps to
+   move it to p=quarantine and then p=reject without breaking my own password-reset and
+   verification emails.
+7. Show me how to switch between the two maintenance rules on Cloudflare (zone -> Rules
+   -> Overview -> "Maintenance (SOFT)..." and "Maintenance (HARD)..."), how to turn both
+   off, and how to purge the cache afterwards so nobody keeps seeing the notice.
 
 HOW I WANT TO WORK
 - One step at a time. Wait for me to paste the result before moving on.

@@ -1,8 +1,9 @@
 # Maintenance mode
 
-> **State on 2026-10-01: the rule is ON** (`enabled: true`) with the four exclusions below, so
-> every public page redirects to the notice while `/admin.html`, `/beta.html`, `/maintenance.html`
-> and `/api/*` stay reachable. Take the rule off to reopen the site.
+> **State on 2026-10-01: the SOFT rule is ON.** The shop, the marketing pages and every bookmark
+> redirect to the notice, while the account area, the password-recovery pages, payment results, the
+> admin panel, `/beta.html`, `/public/*` and `/api/*` all stay open. To close the site to everyone,
+> switch to the HARD rule; to reopen, switch both off.
 
 There are **two switches**, and either one is enough. They are independent on purpose: the
 Cloudflare rule is the fast one (seconds), the Pages branch is the one that works even if the
@@ -15,37 +16,66 @@ Cloudflare zone is ever changed by someone else.
 The page it serves is `maintenance.html` on `main`, which is live at
 <https://get-aether.de/maintenance.html>. That file is the source of truth.
 
-- **Turn on:** Cloudflare dashboard → your zone `get-aether.de` → **Rules → Overview** →
-  switch **`Maintenance mode (site-wide, admin + beta exempt)`** on.
-- **Turn off:** switch the same rule off. Nothing is deleted, so re-enabling is instant.
+There are **two rules, and exactly one of them should be on** — the ruleset evaluates top to bottom,
+so leaving both enabled is the same as leaving the HARD one on:
 
-Live identifiers, so you never have to go hunting for the rule:
+| Rule (by description) | What a visitor gets | Use it when |
+| --- | --- | --- |
+| `Maintenance (SOFT)…` | shop + marketing pages closed; **account, chats, password recovery and payment results stay open** | you are shipping and customers only need to be kept out of the shop |
+| `Maintenance (HARD)…` | everything public closed, only admin/beta/assets/API reachable | the database or the API itself must not be touched |
+
+- **Turn on:** Cloudflare dashboard → your zone `get-aether.de` → **Rules → Overview** → switch the
+  rule you want on and the other one off.
+- **Turn off:** switch both off. Nothing is deleted, so re-enabling is instant.
+
+Live identifiers, so you never have to go hunting for the rules:
 
 | Thing | Value |
 | --- | --- |
 | zone | `74675dbf0eec6c0cba4b9674a9cd7431` |
 | ruleset (phase `http_request_dynamic_redirect`) | `81830ab5c40740d5a71a5909da775079` |
-| rule | find it by its description — the whole ruleset is replaced on edit, so the rule id is reissued every time |
+| rule | find them by their descriptions — the whole ruleset is replaced on edit, so rule ids are reissued every time |
 
-The rule matches `get-aether.de` and `www.get-aether.de` only, and returns a **302**, not a 301,
-on purpose: a permanent redirect gets cached hard by browsers and would keep sending people to
-the notice after the site is back.
+Both rules match `get-aether.de` and `www.get-aether.de` only, and return a **302**, not a 301, on
+purpose: a permanent redirect gets cached hard by browsers and would keep sending people to the
+notice after the site is back. Cloudflare can take up to about a minute to pick up a rule change,
+so do not judge the switch by the first second.
 
 ### What stays reachable while the site is closed
 
-The expression is deliberately narrow, because a maintenance page that also takes down support or
-payments costs more than the outage it announces:
+The expressions are deliberately narrow, because a maintenance page that also takes the site's own
+assets, support or payments down with it costs more than the outage it announces:
 
-| Path | Behaviour | Why |
-| --- | --- | --- |
-| `/api/*` | untouched | the Worker, checkout, the payment IPN callback, `/api/beta/*` and the password-reset API all keep working |
-| `/admin.html` | untouched | the operator needs the panel to answer customers; it is linked from nowhere public, so it is reached by typing the URL |
-| `/beta.html` | untouched | testers keep their area |
-| `/maintenance.html` | untouched | without this exclusion the rule redirects to itself forever |
-| everything else | `302` → `/maintenance.html` | `/`, `/shop.html`, `/program.html`, `/account.html`, `/donate.html`, every bookmark |
+| Path | SOFT | HARD | Why |
+| --- | --- | --- | --- |
+| `/api/*` | open | open | the Worker, checkout, the payment IPN callback, `/api/beta/*` and the password-reset API keep working |
+| `/public/*` | open | open | **CSS, JS and images: without this the admin and beta pages load with no scripts at all** (the browser refuses an HTML page served as a script) |
+| `/admin.html` | open | open | the operator needs the panel; it is linked from nowhere public, so it is reached by typing the URL |
+| `/beta.html` | open | open | testers keep their area |
+| `/maintenance.html` | open | open | without this exclusion the rule redirects to itself forever |
+| `/robots.txt` | open | open | crawlers read it first; a redirect here reads as "robots.txt unavailable" |
+| `/account.html` | **open** | redirected | the account, orders, invoices and every chat thread |
+| `/forgot-password.html`, `/reset-password.html`, `/verify-email.html` | **open** | redirected | a reset link already sitting in somebody's inbox has to keep working |
+| `/payment-success.html`, `/payment-cancel.html` | **open** | redirected | someone who already paid must be able to see what happened |
+| everything else | `302` → notice | `302` → notice | `/`, `/shop.html`, `/program.html`, `/donate.html`, every bookmark |
 
-The Beta hostname (`betatester.get-aether.de`) is a different host and is not matched by this rule
+The Beta hostname (`betatester.get-aether.de`) is a different host and is not matched by either rule
 at all — it is never affected by maintenance mode.
+
+### What the notice page does on its own
+
+`maintenance.html` is self-contained (no fonts, no images, no API calls) and does four things:
+
+1. **A clock that survives a refresh.** "Down for" is stored per browser, so reloading no longer
+   starts it at zero again, and it keeps counting while a visitor waits.
+2. **A real countdown.** The next check is a point on the clock, not "30 seconds after this page
+   happened to load", so refreshing does not reset it to a full interval.
+3. **It reloads itself and returns on its own.** Every 30 seconds it asks the origin whether the
+   site is back and navigates there the moment it is; every 5 minutes it reloads itself so an
+   edited notice (or a switch from SOFT to HARD) is actually seen.
+4. **It tells the truth about the account area.** It probes `/account.html` once and shows
+   "Your account is still open" with a working link only when the server really serves that page —
+   under the HARD rule the probe lands back on the notice and the offer is never made.
 
 ## Switch B — GitHub Pages branch
 
@@ -91,16 +121,21 @@ curl -s -o /dev/null -w '%{http_code}\n' "https://get-aether.de/?cb=$(date +%s)"
 ### Checking the switch itself
 
 ```bash
-# On: the public paths answer 302 towards the notice; the exempt ones must NOT move.
-for u in / /shop.html /program.html /account.html /maintenance.html /admin.html /beta.html /api/health; do
-  printf '%-18s ' "$u"
-  curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' "https://get-aether.de${u}?cb=$RANDOM"
+# SOFT (current): closed = 302, open = 200.
+for u in / /shop.html /program.html /donate.html \
+         /account.html /forgot-password.html /reset-password.html /verify-email.html \
+         /payment-success.html /payment-cancel.html \
+         /admin.html /beta.html /maintenance.html /robots.txt \
+         /public/aether.css /public/checkout.js /api/health; do
+  printf '%-26s ' "$u"
+  curl -s -o /dev/null -w '%{http_code}\n' "https://get-aether.de${u}?cb=$RANDOM"
 done
 ```
 
-Five `302`s and four `200`s is the healthy state. `/api/health` returning `200` (not a `302`)
-proves the switch did not take the Worker, checkout or the payment IPN down with the site, and
-`/admin.html` returning `200` is what keeps the panel reachable during an outage.
+A healthy SOFT run is six `302`s and ten `200`s. Two of those lines matter more than the rest:
+`/api/health` returning `200` proves the switch did not take the Worker, checkout or the payment IPN
+down with the site, and `/public/checkout.js` returning `200` with a JavaScript content type proves
+the pages that stay open can still load their own scripts.
 
 ---
 

@@ -7,6 +7,7 @@
 // without touching production data.
 import { DatabaseSync } from "node:sqlite";
 import { createServer } from "node:http";
+import { PAGE_SECURITY_HEADERS } from "./_security-headers.mjs";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -111,7 +112,10 @@ async function serveStatic(pathname, res) {
     res.writeHead(200, {
       "content-type": MIME[extname(target).toLowerCase()] || "application/octet-stream",
       "cache-control": "no-store",
-      "x-content-type-options": "nosniff",
+      // The same policy the edge applies (a Cloudflare Response Header Transform rule sets these on
+      // get-aether.de and www, skipping /api/*). Serving them here means a policy that would break a
+      // page breaks it locally first, where it costs nothing to fix.
+      ...PAGE_SECURITY_HEADERS,
       // GitHub Pages announces the length of everything it serves, and the worker decides whether it
       // can verify a build from exactly that header - so the local server has to send it too, or the
       // verified path could never be exercised here.

@@ -142,6 +142,78 @@ The frontend talks to the API **same-origin** by default (`public/aether-config.
 * DDoS protection (L3/L4/L7) is always-on at Cloudflare. `security_level` is `medium`,
   `browser_check` is on.
 
+### 3b. Added 2026-10-01 (evening): page headers, email authentication, download integrity
+
+**Every page and asset now ships a Content-Security-Policy**, applied by a zone rule in the
+`http_response_headers_transform` phase (`Aether response security headers`, ruleset phase
+entrypoint `903fcfeaee7f47ab8aeb8d0b5f3da955`). It deliberately **excludes `/api/*`**, where the
+Worker sets its own stricter JSON-only policy. The six headers are:
+
+| Header | Value | Why it matters here |
+| --- | --- | --- |
+| `content-security-policy` | `default-src 'self'`, `object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'`, `form-action 'self'`, plus allowlisted font/Turnstile origins | blocks injected external JavaScript, exfiltration to an attacker host, `<object>`/`<embed>` payloads, `<base>` hijacking, form hijacking and clickjacking |
+| `x-frame-options` | `DENY` | the same for browsers that ignore `frame-ancestors` |
+| `x-content-type-options` | `nosniff` | a served file can never be reinterpreted as script |
+| `referrer-policy` | `strict-origin-when-cross-origin` | cross-origin requests leak the origin, never the path or query (the three secret-bearing pages set `no-referrer` in their own `<head>`, which wins) |
+| `permissions-policy` | camera/mic/geo/USB/payment… all denied | a page has to ask for a device deliberately |
+| `cross-origin-opener-policy` | `same-origin` | a page opened from elsewhere cannot reach back through `window.opener` (XS-Leak class) |
+
+The honest limit: the policy allows `'unsafe-inline'` for scripts and styles, because this site is
+built from inline `<script>` blocks. It can therefore be tightened further one day (nonces or
+hashes), but even today it removes the standard outcomes of a script-injection bug.
+
+* **Source of truth:** [`_security-headers.mjs`](_security-headers.mjs). The Cloudflare rule and
+  `_dev-server.mjs` both use these values, so the policy can be exercised locally before it is live.
+* **CI guard:** [`_check-headers.mjs`](_check-headers.mjs) fails the build if a page loads a resource
+  from an origin the policy does not permit, uses `eval()`/`new Function()` (blocked without
+  `'unsafe-eval'`), loads a `data:`/`blob:` script, or if anyone weakens the policy itself. Mutation
+  tested: five injected regressions, five caught.
+* **Operational notes:** a **cached** response is served without the headers until it expires, so
+  purge after changing the rule; and adding a CDN/font/analytics origin now takes two edits
+  (`_security-headers.mjs` **and** the Cloudflare rule) — the CI guard fails loudly if you forget.
+
+**Email authentication on `get-aether.de`** (this is what stops someone spoofing
+`questions@get-aether.de` to your own customers):
+
+| Record | Value | State |
+| --- | --- | --- |
+| SPF | `v=spf1 include:_spf.mx.cloudflare.net ~all` | existed |
+| DKIM | `cf2024-1._domainkey` (Cloudflare Email Routing) | existed |
+| DMARC | `_dmarc` → `v=DMARC1; p=none; rua=mailto:questions@get-aether.de; fo=1` | **added 2026-10-01** |
+
+`p=none` is monitoring only — it cannot break mail, and it starts the report flow so the account can
+see who is sending as this domain. **Order of operations before tightening:** add the sending
+provider's SPF include **and** its DKIM record first, then move to `p=quarantine`, then `p=reject`.
+Without that, the project's own verification and reset mail would fail DMARC alignment once the
+policy is enforced.
+
+**DNSSEC is enabled on the Cloudflare side and is `pending`** until the DS record is published at
+the registrar. Nothing breaks while it is pending (validating resolvers simply cannot prove the
+chain), and nothing is gained either — the registrar step is what completes it:
+
+```
+get-aether.de. 3600 IN DS 2371 13 2 031AAD25DC73AEB6B8889DD733B7F4807785B40C9DBD04C188408438C5CFB6ED
+```
+
+Add it exactly as shown (key tag `2371`, algorithm `13`, digest type `2`), then verify with
+`dig +dnssec get-aether.de` or <https://dnssec-analyzer.verisignlabs.com/get-aether.de>. A **wrong**
+DS record makes the domain unresolvable for every validating resolver — if the site disappears after
+adding it, delete the DS record first and investigate second.
+
+**The tester download** (see §2 for the endpoints) is now: a single-use ticket that travels as a
+path-narrowed `HttpOnly` cookie and never in a URL, bound to the session that minted it, over an
+`https`-only build source, with the artifact hashed against the published checksum **before** a byte
+is sent (`409 CHECKSUM_MISMATCH`, nothing delivered, audited), plus `x-content-verified`,
+`x-checksum-sha256`, `content-digest`, `no-store` and `noindex`. `PROGRAM_DISABLED=true` is the kill
+switch that stops every download instantly without touching `PROGRAM_URL`, including one already
+authorised a second earlier.
+
+**Maintenance modes** now come in two flavours — `Maintenance (SOFT)` keeps the account area, chats,
+password recovery and payment results open while the shop is closed; `Maintenance (HARD)` closes
+everything public. `maintenance/README.md` documents both, including the trap that caught this
+project once already: `/public/*` must stay open, or the admin and beta pages load **with no scripts
+at all** while *looking* fine.
+
 ## 4. Still to do manually in the Cloudflare dashboard
 
 1. **Turnstile — done 2026-10-01.** The widget "Aether signup + password reset (get-aether.de)"

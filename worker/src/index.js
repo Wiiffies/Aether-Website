@@ -682,6 +682,7 @@ function normalizePurchaseId(v){
 const PROGRAM_TICKET_COOKIE = "aether_dl";
 const PROGRAM_TICKET_SECONDS = 120;
 const PROGRAM_VERIFY_MAX_DEFAULT = 32 * 1024 * 1024;
+const PROGRAM_MINT_PER_ACCOUNT = 10;
 function programUrl(env){ return String(env.PROGRAM_URL || "").trim(); }
 // A build fetched over plain http can be rewritten by anyone on the path, and a checksum then only
 // describes the tampered file. Loopback stays available for local development, and only while
@@ -735,13 +736,20 @@ function programBuild(env){
 }
 function programReady(env){ return programConfigured(env) && !!programBuild(env).version; }
 function noBuildYet(){ return "No build has been published yet."; }
+// The kill switch, for the moment a build turns out to be bad and has to stop being handed out NOW:
+// one variable, no redeploy, and PROGRAM_URL never has to be touched or forgotten. It is checked on
+// every request - including the one that spends an already-minted ticket - so a download cannot
+// outlive the decision by even a second.
+function programPaused(env){ return String(env.PROGRAM_DISABLED || "").toLowerCase() === "true"; }
+function programPausedMsg(){ return "Downloads are paused right now - nothing is lost, check back shortly."; }
 // GET /api/program - what exists, for an allowed tester only. The metadata is read from the Worker's
 // own environment, so nobody can edit a version number or a checksum in the page that shows them.
 async function handleProgramInfo(request, env){
   const auth = await requireTester(request, env);
   if (!auth) return json({ error:"A program build requires a Tester account with a verified email." }, 403, env, request);
-  const ready = programReady(env);
-  return json({ ok:true, available:ready, build: ready ? programBuild(env) : null, reason: ready ? null : noBuildYet(), role: effectiveRole(env, auth.user), expiresIn: PROGRAM_TICKET_SECONDS }, 200, env, request);
+  const paused = programPaused(env);
+  const ready = programReady(env) && !paused;
+  return json({ ok:true, available:ready, build: ready ? programBuild(env) : null, reason: ready ? null : (paused ? programPausedMsg() : noBuildYet()), paused, role: effectiveRole(env, auth.user), expiresIn: PROGRAM_TICKET_SECONDS }, 200, env, request);
 }
 // POST /api/program/download - mint the single-use ticket that actually fetches the file.
 async function handleProgramDownload(request, env){
@@ -751,7 +759,12 @@ async function handleProgramDownload(request, env){
   // here is a cookie. When the browser is not sending the session cookie the ticket would be handed
   // out dead, so the honest answer names what to change instead of minting one that cannot work.
   if (!cookieValue(request, SESSION_COOKIE)) return json({ error:"This download needs the sign-in cookie your browser is not sending. Allow cookies for this site (a private window or a blocker can block them) and reload the page.", code:"COOKIE_REQUIRED" }, 400, env, request);
+  if (programPaused(env)) return json({ error: programPausedMsg(), code:"PROGRAM_PAUSED" }, 503, env, request);
   if (!programReady(env)) return json({ error: noBuildYet() }, 503, env, request);
+  // A per-account cap on top of the per-IP one: the IP limit cannot see one signed-in tester looping
+  // the mint, and every mint writes a token row and an audit line.
+  if (await hitRateLimit(env, "program-mint:" + auth.user.id, PROGRAM_MINT_PER_ACCOUNT, 3600000))
+    return json({ error:"Too many download requests from this account - wait a little and try again.", code:"TOO_MANY" }, 429, env, request);
   const build = programBuild(env);
   // One live ticket per account (issuing a new one deletes the old), single use, two minutes, and
   // bound to the hash of the session that minted it - so a ticket copied out of the browser is not
@@ -788,6 +801,9 @@ async function handleProgramFile(request, env){
   if (verificationRequired(env) && !isVerifiedUser(user)) return json({ error:"Verify your email before downloading a build." }, 403, env, request, spent);
   const role = effectiveRole(env, user);
   if (role !== ROLE_TESTER && role !== ROLE_ADMIN) return json({ error:"This account is not a Tester." }, 403, env, request, spent);
+  // Checked here too, after the ticket is spent: throwing the switch has to stop a download that was
+  // authorised a second earlier, not only the next one.
+  if (programPaused(env)) return json({ error: programPausedMsg(), code:"PROGRAM_PAUSED" }, 503, env, request, spent);
   const source = programSource(env);
   if (!source) return json({ error: noBuildYet() }, 503, env, request, spent);
   let upstream;

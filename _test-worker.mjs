@@ -796,6 +796,25 @@ r = await call("POST", "/api/program");
 check("POST on the info endpoint -> 405", r.status === 405, r.json);
 r = await call("POST", "/api/program/file");
 check("POST on the file endpoint -> 405", r.status === 405, r.json);
+// The kill switch and the per-account cap: both exist for the moment something has to stop fast.
+env.PROGRAM_DISABLED = "true";
+r = await call("GET", "/api/program", { token: freshSession });
+check("PROGRAM_DISABLED withholds the metadata as well -> available:false, paused:true, no build",
+  r.status === 200 && r.json.available === false && r.json.build === null && r.json.paused === true, r.json);
+r = await call("POST", "/api/program/download", { token: freshSession, cookie: programSessionCookie(freshSession) });
+check("and nothing can be minted while it is set -> 503 PROGRAM_PAUSED", r.status === 503 && r.json.code === "PROGRAM_PAUSED", r.json);
+delete env.PROGRAM_DISABLED;
+r = await call("POST", "/api/program/download", { token: freshSession, cookie: programSessionCookie(freshSession) });
+dlTicket = (/aether_dl=([0-9a-f]{64})/.exec(r.setCookie || "") || [])[1] || "";
+env.PROGRAM_DISABLED = "true";
+r = await call("GET", "/api/program/file", { cookie: "aether_dl=" + dlTicket + "; " + programSessionCookie(freshSession) });
+check("a ticket minted a second earlier cannot be spent once the switch is thrown -> 503",
+  r.status === 503 && r.json.code === "PROGRAM_PAUSED", r.json);
+delete env.PROGRAM_DISABLED;
+seedRateLimit("program-mint:" + memberRow.id, 10, 3600000);
+r = await call("POST", "/api/program/download", { token: freshSession, cookie: programSessionCookie(freshSession) });
+check("a per-account mint cap backs up the per-IP one -> 429", r.status === 429 && r.json.code === "TOO_MANY", r.json);
+env.DB.db.prepare("DELETE FROM rate_limits WHERE rl_key = ?").run("program-mint:" + memberRow.id);
 delete env.PROGRAM_URL; delete env.PROGRAM_VERSION; delete env.PROGRAM_PLATFORM;
 delete env.PROGRAM_SIZE; delete env.PROGRAM_SHA256; delete env.PROGRAM_NAME;
 r = await call("POST", "/api/program/download", { token: freshSession, cookie: programSessionCookie(freshSession) });

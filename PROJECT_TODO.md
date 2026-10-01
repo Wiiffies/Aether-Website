@@ -212,3 +212,38 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
       `/api/program` still answers 404 in production. Worked through step by step in `LAUNCH_BRIEF.md`
 - [ ] MANUAL: host the build privately, set `PROGRAM_*` on the Worker, then grant a Tester role
 - [ ] MANUAL: turn the maintenance rule back off and purge the cache when the work is done
+
+## 15. Security hardening pass (2026-10-01, late evening)
+
+- [x] **The pages finally have security headers.** A Cloudflare Response Header Transform rule sets
+      a Content-Security-Policy plus `X-Frame-Options: DENY`, `nosniff`,
+      `strict-origin-when-cross-origin`, a `Permissions-Policy` and
+      `Cross-Origin-Opener-Policy: same-origin` on every page and asset, excluding `/api/*` where the
+      Worker keeps its own stricter policy. Source of truth: `_security-headers.mjs`; the dev server
+      serves the identical values so the policy can be tested before it is live
+- [x] `_check-headers.mjs` (in all three workflows) fails the build if a page loads an origin the
+      policy does not allow, uses `eval()`/`new Function()`, loads a `data:`/`blob:` script, or if
+      anyone weakens the policy — 5 injected regressions, 5 caught
+- [x] DMARC added (`p=none`, reporting to `questions@get-aether.de`); SPF and DKIM already existed.
+      The ordering rule for tightening it (sender SPF/DKIM first, then quarantine, then reject) is
+      written down in `SECURITY.md` §3b and `LAUNCH_BRIEF.md` §5
+- [x] DNSSEC enabled on the Cloudflare side (`pending` the registrar step; the exact DS record is in
+      `LAUNCH_BRIEF.md` §5 and `SECURITY.md` §3b)
+- [x] Download kill switch (`PROGRAM_DISABLED=true`) that stops every download instantly, including a
+      ticket authorised a second earlier, without touching `PROGRAM_URL`
+- [x] A per-account cap on ticket minting (10/h) on top of the per-IP cap — one account can no longer
+      loop the mint and write token and audit rows
+- [x] 268 Worker checks (was 264)
+- [x] Maintenance now has **two modes**: `Maintenance (SOFT)` keeps the account area, chats, password
+      recovery and payment results open; `Maintenance (HARD)` closes everything public. SOFT is on
+- [x] **Fixed a real outage-grade bug found while verifying:** `/public/*` was being redirected too, so
+      `/admin.html` and `/beta.html` loaded **without any of their scripts** (the browser refused an
+      HTML page served as a script). Assets, `/robots.txt` and the notice are excluded in both modes
+- [x] The notice page was reworked: the "down for" clock survives a refresh (it used to reset to zero
+      on every load), the countdown runs on a fixed clock grid instead of restarting at 30 s, the page
+      reloads itself every 5 minutes and returns to the site on its own the moment it is up, and it
+      links to the account area only when the server really serves it
+- [x] `maintenance` branch rebuilt as a single root commit with the new notice (`c2f435a`, 6 files,
+      `index.html` byte-identical to `maintenance.html`)
+- [ ] MANUAL: publish the DNSSEC DS record at the registrar (see `LAUNCH_BRIEF.md` §5)
+- [ ] MANUAL: move DMARC to `p=quarantine` once every sender's SPF/DKIM is in place
