@@ -167,7 +167,7 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
 
 - [x] variable `CLOUDFLARE_ACCOUNT_ID` = `e83c68e5e26e3e9096542df702331096` (deploy-worker.yml reads it instead of a secret copy)
 - [x] variable `BETA_HOST` = `betatester.get-aether.de` (the beta workflow's documented host)
-- [x] secret `TURNSTILE_SECRET` (set 2026-10-01, mirrors the live Worker secret)
+- [x] secret `TURNSTILE_SECRET` (set 2026-10-01, mirrors the live Worker secret; Turnstile verified live the same day: health `turnstile:true`, 403 without a token on register/forgot, a real browser token accepted, full signup `200`, smoke account deleted)
 - [x] `deploy-worker.yml` gained an optional **secret sync**: `RESEND_API_KEY`, `TURNSTILE_SECRET`, `NOWPAYMENTS_API_KEY`, `NOWPAYMENTS_IPN_SECRET(_2)`, `DISCORD_WEBHOOK_URL` — only the names present in GitHub are pushed, so a blank copy can never blank a live value
 - [ ] MANUAL: secret `CLOUDFLARE_API_TOKEN` — Cloudflare refuses to mint tokens for our automation (`9109 Unauthorized`), so it has to be created in the dashboard with **Workers Scripts:Edit + Workers KV Storage:Edit + D1:Edit**. Until then `deploy-worker.yml` runs the checks and skips the deploy
 - [ ] MANUAL (optional): add `RESEND_API_KEY` to GitHub once Resend exists — the sync step then keeps the Worker and the repo in agreement
