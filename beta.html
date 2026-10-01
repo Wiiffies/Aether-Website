@@ -1,0 +1,140 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Aether Beta — tester area</title><link rel="icon" href="public/aether-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="public/aether.css?v=7"><link rel="stylesheet" href="public/pages.css?v=7"><link rel="stylesheet" href="public/portal.css?v=7"><link rel="stylesheet" href="public/ui.css?v=7">
+</head><body class="beta-body"><header class="site-header"><a class="brand" href="index.html"><img src="Aether%20Logo%20trasnparent%20new.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html">Home</a><a href="account.html">Account</a><a href="shop.html">Shop</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a></nav><a class="header-cta" href="account.html">Account <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header>
+<main class="page-main acc-wrap">
+  <div class="beta-ribbon" role="note"><span class="beta-chip">BETA</span> Testing area — experimental features. Data here is separate from production and may be reset.</div>
+  <span class="page-kicker">Tester environment</span>
+  <h1>Beta.<br><em>Access is checked by the server.</em></h1>
+  <p class="page-lead">This page is only rendered when <code>/api/beta/status</code> accepts your session. The obscure URL reduces accidental discovery only — access needs an account, a confirmed email address and the Tester role, all verified server-side.</p>
+
+  <section id="beta-denied" class="acc-card acc-hide">
+    <h2>Beta access required</h2>
+    <p class="sub" id="beta-denied-why">—</p>
+    <div class="acc-note">A normal customer account cannot open the Beta. A Tester flag is granted by an administrator in the admin panel — it can never be set from the browser.</div>
+    <div class="acc-row"><a class="acc-btn" href="account.html">Go to my account</a><a class="acc-btn ghost" href="index.html">Back to the site</a></div>
+    <div class="acc-msg" id="beta-denied-msg" role="alert"></div>
+  </section>
+
+  <section id="beta-dash" class="acc-hide">
+    <div class="acc-card">
+      <div class="acc-row" style="justify-content:space-between">
+        <div><h2 style="margin-bottom:2px">Signed in to the testing area</h2><p class="sub" style="margin:0" id="beta-who">—</p></div>
+        <div class="acc-row"><button class="acc-btn ghost mini" id="beta-refresh" type="button">Refresh</button><button class="acc-btn ghost mini" id="beta-logout" type="button">Sign out</button></div>
+      </div>
+      <div class="acc-msg" id="beta-msg" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="acc-card">
+      <h2>Feature flags</h2>
+      <p class="sub">Evaluated on the server from the Beta configuration. The browser only renders what the API reports — flipping something here in DevTools does nothing.</p>
+      <div class="beta-flags" id="beta-flags"><span class="acc-empty">Loading…</span></div>
+    </div>
+
+    <div class="acc-card">
+      <h2>Experimental tools</h2>
+      <p class="sub">Small, self-contained probes that are only reachable with the Tester role.</p>
+      <div class="acc-row">
+        <button class="acc-btn ghost" id="beta-ticket" type="button">Mint a beta session ticket</button>
+        <a class="acc-btn ghost" href="account.html#chat">Open the new chat</a>
+      </div>
+      <div class="acc-note" id="beta-ticket-note">A ticket is single-use, expires in 120 seconds, and can only be redeemed by the same Tester account. It exists so an independently deployed Beta host can start a session without sharing the production cookie.</div>
+    </div>
+
+    <div class="acc-card">
+      <h2>Beta feedback</h2>
+      <p class="sub">Stored in the Beta feedback table (<code>beta_feedback</code>), which production never reads.</p>
+      <form id="beta-feedback-form">
+        <div class="acc-field"><label for="beta-area">Area</label>
+          <select class="acc-input" id="beta-area"><option value="general">general</option><option value="chat">chat</option><option value="dashboard">dashboard</option><option value="tools">tools</option></select>
+        </div>
+        <div class="acc-field"><label for="beta-text">What should we look at?</label><textarea class="acc-input" id="beta-text" placeholder="Something felt off when…"></textarea></div>
+        <div class="acc-row"><button class="acc-btn" id="beta-send" type="submit">Send feedback →</button><span class="acc-msg" id="beta-feedback-msg" role="status" aria-live="polite"></span></div>
+      </form>
+    </div>
+
+    <div class="acc-card">
+      <h2>Environment</h2>
+      <dl class="acc-kv" id="beta-kv"></dl>
+    </div>
+  </section>
+</main>
+<footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether · Beta environment</span></footer>
+<script src="public/aether-config.js?v=7"></script>
+<script src="public/checkout.js?v=7"></script>
+<script src="public/aether.js" defer></script>
+<script>
+(() => {
+  const A = window.AetherCheckout;
+  if (!A) { alert("Checkout script failed to load — please refresh."); return; }
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => A.esc(s == null ? "" : s);
+  function show(el, on){ el.classList.toggle("acc-hide", !on); }
+  function msg(el, text, kind){ A.ui.setMsg(el, text, kind); }
+  function when(ts){
+    if (!ts && ts !== 0) return "—";
+    const d = new Date(typeof ts === "number" ? ts : String(ts));
+    return isNaN(d) ? String(ts) : d.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+  }
+
+  function renderFlags(flags){
+    const host = $("beta-flags");
+    const keys = Object.keys(flags || {});
+    if (!keys.length) { host.innerHTML = '<span class="acc-empty">No flags reported.</span>'; return; }
+    host.innerHTML = keys.map(k => `<span class="flag-chip ${flags[k] ? "on" : "off"}"><b>${esc(k)}</b></span>`).join("");
+  }
+
+  async function boot(){
+    let status;
+    try { status = await A.portal.betaStatus(); }
+    catch (err) {
+      show($("beta-denied"), true);
+      $("beta-denied-why").textContent = err && err.status === 401
+        ? "You are not signed in. Sign in with a Tester account first."
+        : (err && err.message) || "This account cannot open the Beta.";
+      return;
+    }
+    show($("beta-dash"), true);
+    $("beta-who").textContent = `${status.user.email} · role ${status.role} · ${status.beta.env} environment`;
+    renderFlags(status.flags);
+    $("beta-kv").innerHTML = [
+      ["Beta host", status.beta.host],
+      ["Beta path", status.beta.path],
+      ["Full Beta URL", status.beta.url],
+      ["Environment", status.beta.env],
+      ["Features reported", (status.features || []).join(", ") || "—"],
+      ["Feedback stored", String(status.feedback_count) + " item(s)"],
+    ].map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v == null || v === "" ? "—" : v)}</dd>`).join("");
+  }
+
+  $("beta-refresh").addEventListener("click", () => { msg($("beta-msg"), "Refreshing…"); boot().then(() => msg($("beta-msg"), "Updated.", "ok")).catch(e => msg($("beta-msg"), e.message, "err")); });
+  $("beta-logout").addEventListener("click", async () => { await A.auth.logout(); location.href = "account.html"; });
+
+  $("beta-ticket").addEventListener("click", async () => {
+    const btn = $("beta-ticket");
+    A.ui.loading(btn, true, "Minting…");
+    try {
+      const r = await A.portal.betaTicket();
+      $("beta-ticket-note").textContent = `Ticket minted: ${r.ticket.slice(0, 12)}… — single use, expires in ${r.expiresIn}s. Redeem it at POST /api/beta/redeem on the Beta host.`;
+      msg($("beta-msg"), "Ticket minted.", "ok");
+    } catch (err) { msg($("beta-msg"), err.message || "Could not mint a ticket", "err"); }
+    finally { A.ui.loading(btn, false); }
+  });
+
+  $("beta-feedback-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = $("beta-text").value.trim();
+    if (text.length < 2) { msg($("beta-feedback-msg"), "Write a little more first.", "err"); return; }
+    const btn = $("beta-send");
+    A.ui.loading(btn, true, "Sending…");
+    try {
+      await A.portal.betaFeedback($("beta-area").value, text);
+      $("beta-text").value = "";
+      msg($("beta-feedback-msg"), "Thanks — stored in the Beta feedback table.", "ok");
+      boot().catch(() => {});
+    } catch (err) { msg($("beta-feedback-msg"), err.message || "Could not send", "err"); }
+    finally { A.ui.loading(btn, false); }
+  });
+
+  A.markActiveNav();
+  boot();
+})();
+</script></body></html>

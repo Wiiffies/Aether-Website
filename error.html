@@ -1,0 +1,58 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Something went sideways — Aether</title><meta name="robots" content="noindex"><link rel="icon" href="public/aether-logo.svg" type="image/svg+xml"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="public/aether.css?v=6"><link rel="stylesheet" href="public/pages.css?v=6"><link rel="stylesheet" href="public/ui.css?v=6"></head><body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header"><a class="brand" href="index.html"><img src="Aether%20Logo%20trasnparent%20new.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="account.html">Account</a></nav><a class="header-cta" href="shop.html">Purchase <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header>
+
+<main class="page-main" id="main">
+  <span class="status-code" id="err-code">Error</span>
+  <h1 class="status-title" id="err-title">Something went<br><em>sideways.</em></h1>
+  <p class="status-body" id="err-body">Aether could not complete that request. Nothing was charged and no order was placed. Try again in a moment.</p>
+
+  <div class="status-actions">
+    <a class="button button-primary" id="err-primary" href="index.html">Back home <span>↗</span></a>
+    <a class="outline-button" href="shop.html">Visit the shop</a>
+    <a class="outline-button" href="account.html">Your account</a>
+    <a class="outline-button" href="contact.html">Contact us</a>
+  </div>
+
+  <p class="status-hint" id="err-hint">If this keeps happening, email questions@get-aether.de with what you were doing and roughly when it happened.</p>
+</main>
+
+<footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
+<script>
+(() => {
+  // Deliberately generic copy: no stack traces, no server details, no internal ids.
+  const MAP = {
+    "400": { title: "That request did not<br><em>make sense.</em>", body: "Something in the request was missing or malformed, so nothing happened. Reloading the page and trying again usually fixes it." },
+    "401": { title: "Please sign in<br><em>first.</em>", body: "This part of Aether is for account holders. Sign in with the email you order with and you will land right back here." , primary: { label: "Sign in", href: "account.html" } },
+    "403": { title: "Access<br><em>denied.</em>", body: "This request was blocked for security reasons. If you were signed in, your session may have expired — sign in again and retry." , primary: { label: "Sign in again", href: "account.html" } },
+    "404": { title: "We could not find<br><em>that page.</em>", body: "The link may be old or mistyped. The shop, your account and the contact form are all one click away." },
+    "429": { title: "Slow down for a<br><em>moment.</em>", body: "You have made a lot of requests in a short time, so Aether paused this one to protect the service. Wait a couple of minutes and try again — nothing was lost." , primary: { label: "Try again", reload: true } },
+    "500": { title: "That one is<br><em>on us.</em>", body: "Aether hit a temporary problem while handling your request. It has been logged and usually clears in a few minutes." },
+    "502": { title: "Temporarily<br><em>unavailable.</em>", body: "A service Aether depends on did not answer in time. Your data is safe — try again in a moment." },
+    "503": { title: "Temporarily<br><em>unavailable.</em>", body: "Aether is briefly unavailable, most likely for maintenance. Try again shortly; orders in progress are unaffected." }
+  };
+  const params = new URLSearchParams(location.search);
+  const code = String(params.get("code") || params.get("status") || "").replace(/\D/g, "");
+  const entry = MAP[code] || {};
+  if (entry.title) document.getElementById("err-title").innerHTML = entry.title;
+  if (entry.body) document.getElementById("err-body").textContent = entry.body;
+  if (code) document.getElementById("err-code").textContent = "Error " + code;
+  if (entry.primary) {
+    const p = document.getElementById("err-primary");
+    p.innerHTML = entry.primary.label + " <span>↗</span>";
+    if (entry.primary.reload) {
+      p.removeAttribute("href");
+      p.setAttribute("href", "#");
+      p.setAttribute("role", "button");
+      p.addEventListener("click", (e) => { e.preventDefault(); location.reload(); });
+    } else if (entry.primary.href) {
+      p.setAttribute("href", entry.primary.href);
+    }
+  }
+  const hint = document.getElementById("err-hint");
+  if (code === "429") hint.textContent = "Rate limits exist to keep the API available for everyone — they reset automatically.";
+  if (code === "401" || code === "403") hint.textContent = "Aether never asks for your password by email or Discord. Sign in only on get-aether.de.";
+})();
+</script>
+<script src="public/aether.js" defer></script>
+</body></html>

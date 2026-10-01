@@ -1,0 +1,52 @@
+name = "aether-api"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Custom domain — we will create this via API after deploy
+# If api.get-aether.de is already routed to this worker, this stays in sync
+routes = [
+  { pattern = "api.get-aether.de/*", zone_name = "get-aether.de" }
+]
+
+# D1 — authenticated orders + per-order chat (orders/messages stay here, email+Discord still fire)
+[[d1_databases]]
+binding = "DB"
+database_name = "aether-db"
+database_id = "201052a6-bed3-4c1c-a3ee-e16394aa36e4"
+
+[vars]
+# Inboxes — Cloudflare Email Routing (do NOT change MX)
+# questions@ — normal orders + contact
+# business@  — business opportunities only
+CONTACT_TO = "questions@get-aether.de,business@get-aether.de"
+# Resend FROM must be a verified sender on get-aether.de — use questions@ (never hello@ / orders@)
+CONTACT_FROM = "Aether <questions@get-aether.de>"
+
+# CORS — your live site origins (comma-separated)
+ALLOWED_ORIGIN = "*"
+
+# Where NOWPayments redirects the customer after pay / cancel
+SUCCESS_URL = "https://get-aether.de/payment-success.html"
+CANCEL_URL = "https://get-aether.de/payment-cancel.html"
+
+# Promo codes — JSON map CODE -> {type:"percent"|"fixed", value:number} or number/"10%" shorthand.
+# Set via Dashboard → Workers → aether-api → Settings → Variables → PROMO_CODES, or as a Worker Secret.
+# Example: {"WELCOME10":{"type":"percent","value":10},"SAVE5":{"type":"fixed","value":5}}
+# Until set, /api/promo returns {valid:false}.
+PROMO_CODES = ""
+
+# Admin accounts — comma-separated emails that unlock /api/admin/* and see every order + message.
+# Empty = nobody is admin (routes return 403). Example: "you@example.com,ops@example.com"
+ADMIN_EMAILS = ""
+
+# Optional overrides (leave empty to auto-derive from request)
+# NOWPAYMENTS_IPN_URL = "https://api.get-aether.de/api/ipn"
+
+# Secrets — NEVER put them here. Set them with:
+#   npx wrangler secret put RESEND_API_KEY
+#   npx wrangler secret put NOWPAYMENTS_API_KEY
+#   npx wrangler secret put NOWPAYMENTS_IPN_SECRET
+#   npx wrangler secret put DISCORD_WEBHOOK_URL
+#   npx wrangler secret put PROMO_CODES   (or set as plaintext var above)
+# The worker also works without them (mock mode) until you add them.

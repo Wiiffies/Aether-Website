@@ -1,0 +1,62 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Contact Aether</title><link rel="icon" href="public/aether-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="public/aether.css?v=6"><link rel="stylesheet" href="public/pages.css"><link rel="stylesheet" href="public/ui.css?v=6">
+</head><body><header class="site-header"><a class="brand" href="index.html"><img src="Aether%20Logo%20trasnparent%20new.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="account.html">Account</a></nav><a class="header-cta" href="shop.html">Purchase <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header>
+<main class="page-main"><span class="page-kicker">Contact</span><h1>Let’s make<br><em>something useful.</em></h1><p class="page-lead">Send us a message with what you want to build, your timeframe and anything else we should know. We reply from <b style="color:#fff">questions@get-aether.de</b> or <b style="color:#fff">business@get-aether.de</b>.</p>
+
+<div class="detail-list" style="margin-bottom:28px"><div><b>Questions?</b><span><a href="mailto:questions@get-aether.de" style="color:#fff">questions@get-aether.de</a></span></div><div><b>Business</b><span><a href="mailto:business@get-aether.de" style="color:#fff">business@get-aether.de</a></span></div><div><b>Payment</b><span>Bitcoin · Litecoin · Ethereum via NOWPayments</span></div><div><b>Reply time</b><span>Most likely within 3 days.</span></div></div>
+
+<section class="request" style="margin-top:8px">
+  <div class="request-head"><h2>Send a message</h2><p>This goes directly to our inbox + Discord. We’ll reply to your email.</p></div>
+  <div class="divider"></div>
+  <form class="request-body" id="contact-form" novalidate>
+    <div class="form-grid">
+      <div class="field"><label for="c-discord">Discord Username <span style="color:#7a7d82;font-weight:400">— leave blank if you don’t have Discord</span></label><input id="c-discord" placeholder="yourname — leave blank if you don’t have Discord" autocomplete="username"></div>
+      <div class="field"><label for="c-email">Email <span class="req">*</span></label><input id="c-email" type="email" placeholder="you@example.com" required autocomplete="email"></div>
+      <div class="field wide"><label for="c-subject">Subject</label><input id="c-subject" placeholder="What’s this about?"></div>
+      <div class="field wide"><label for="c-message">Message <span class="req">*</span></label><textarea id="c-message" placeholder="Tell us what you want to build, budget, timeline…" required></textarea></div>
+    </div>
+    <input type="text" name="website" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px;opacity:0;height:0;width:0" aria-hidden="true">
+    <div class="form-foot">
+      <button type="submit" class="tier-cta primary" style="width:auto;min-width:160px">Send Message <span>↗</span></button>
+      <span class="form-msg" id="c-msg">We’ll reply from questions@ or business@ — check spam if you don’t hear from us.</span>
+    </div>
+  </form>
+</section>
+
+<div class="page-actions" style="margin-top:22px"><a class="outline-button" href="shop.html">View shop</a><a class="outline-button" href="mailto:questions@get-aether.de">Email questions@</a><a class="outline-button" href="mailto:business@get-aether.de">Email business@</a></div>
+</main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
+<script src="public/aether-config.js?v=6"></script>
+<script src="public/checkout.js?v=6"></script>
+<script src="public/aether.js" defer></script>
+<script>
+(() => {
+  const C = window.AetherCheckout;
+  const form = document.getElementById('contact-form');
+  const msg = document.getElementById('c-msg');
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const discord = document.getElementById('c-discord').value.trim();
+    const email = document.getElementById('c-email').value.trim();
+    const subject = document.getElementById('c-subject').value.trim();
+    const message = document.getElementById('c-message').value.trim();
+    const honey = form.querySelector('[name="website"]')?.value;
+    if(honey){ msg.textContent='Thanks! We got your message.'; msg.className='form-msg ok'; return; }
+    if(!email || !message){ msg.textContent='Please fill Email and Message.'; msg.className='form-msg err'; return; }
+    if(!C.isEmail(email)){ msg.textContent='Please enter a valid email.'; msg.className='form-msg err'; return; }
+    msg.textContent='Sending…'; msg.className='form-msg';
+    const payload = { type:'contact', package:'Contact', discord: discord||'', email, description: (subject? `[${subject}]\\n\\n`:'') + message, meta:{ subject } };
+    try{
+      if(C.isConfigured()){
+        await C.submitOrder(payload);
+        msg.textContent='Sent! I most likely reply within 3 days to ' + email + ' — check spam if you don’t hear from us.';
+        msg.className='form-msg ok';
+        form.reset();
+      } else throw new Error('no worker');
+    } catch(err){
+      const body = `CONTACT MESSAGE\\n\\nFrom: ${discord||'—'} <${email}>\\nSubject: ${subject||'—'}\\n\\n${message}\\n`;
+      C.mailtoFallback({ subject: `[Contact] ${subject||'Message'} — ${discord||email}`, body });
+      msg.textContent='Worker not set up — opening your mail app. Email questions@get-aether.de if it didn’t open.';
+      msg.className='form-msg ok';
+    }
+  });
+})();
+</script></body></html>

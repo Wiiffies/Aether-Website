@@ -1,0 +1,517 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Aether — Admin</title><link rel="icon" href="public/aether-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="public/aether.css?v=6"><link rel="stylesheet" href="public/pages.css"><link rel="stylesheet" href="public/portal.css"><link rel="stylesheet" href="public/ui.css?v=6">
+</head><body><header class="site-header"><a class="brand" href="index.html"><img src="Aether%20Logo%20trasnparent%20new.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="account.html">Account</a><a href="admin.html" class="active">Admin</a></nav><a class="header-cta" href="account.html">Account <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header><main class="page-main acc-wrap">
+<span class="page-kicker">Aether control room</span>
+<h1>Everything.<br><em>In one place.</em></h1>
+<p class="page-lead">Every order, every account and every direct message — the support inbox without leaving the site. Only accounts listed in <code>ADMIN_EMAILS</code> can open this page.</p>
+
+<section id="ad-login" class="acc-card acc-hide">
+  <h2>Admin sign in</h2>
+  <p class="sub">Sign in with an account listed in <code>ADMIN_EMAILS</code>.</p>
+  <form id="ad-form">
+    <div class="acc-field"><label for="ad-email">Email</label><input class="acc-input" id="ad-email" type="email" placeholder="you@example.com" autocomplete="email" required></div>
+    <div class="acc-field"><label for="ad-pass">Password</label><input class="acc-input" id="ad-pass" type="password" placeholder="Your password" autocomplete="current-password" required></div>
+    <div class="acc-row"><button class="acc-btn" id="ad-submit" type="submit">Sign in →</button><a class="acc-btn ghost" href="account.html">Create / manage account</a></div>
+  </form>
+  <div class="acc-msg" id="ad-login-msg"></div>
+</section>
+
+<section id="ad-denied" class="acc-card acc-hide">
+  <h2>Not an admin account</h2>
+  <p class="sub" id="ad-denied-who">—</p>
+  <div class="acc-note">Add this email to the <code>ADMIN_EMAILS</code> variable on the <code>aether-api</code> Worker (Settings → Variables), then reload. Comma-separated for several admins.</div>
+  <div class="acc-row"><button class="acc-btn ghost" id="ad-signout" type="button">Sign out</button><a class="acc-btn ghost" href="account.html">My orders</a></div>
+  <div class="acc-msg" id="ad-denied-msg"></div>
+</section>
+
+<section id="ad-dash" class="acc-hide">
+  <div class="acc-card">
+    <div class="acc-row" style="justify-content:space-between">
+      <div><h2 style="margin-bottom:2px" id="ad-stats">Loading…</h2><p class="sub" style="margin:0" id="ad-who">—</p></div>
+      <div class="acc-row"><button class="acc-btn ghost mini" id="ad-refresh" type="button">Refresh</button><a class="acc-btn ghost mini" href="account.html">My orders</a><button class="acc-btn ghost mini" id="ad-logout" type="button">Sign out</button></div>
+    </div>
+    <div class="acc-msg" id="ad-msg"></div>
+  </div>
+
+  <div class="acc-tabs">
+    <button type="button" class="acc-tab active" data-tab="orders">Orders</button>
+    <button type="button" class="acc-tab" data-tab="users">Accounts</button>
+    <button type="button" class="acc-tab" data-tab="messages">Direct messages</button>
+    <button type="button" class="acc-tab" data-tab="convos">Conversations</button>
+    <button type="button" class="acc-tab" data-tab="beta">Beta</button>
+  </div>
+
+  <!-- orders -->
+  <div id="ad-tab-orders">
+    <div class="acc-card">
+      <div class="acc-row" style="justify-content:space-between;margin-bottom:14px">
+        <h2 style="margin:0">All orders</h2>
+        <div class="acc-row">
+          <input class="acc-input" id="ad-search" placeholder="Filter by order id, email, item…" style="min-width:240px">
+          <select class="acc-input" id="ad-status" style="min-width:150px"><option value="">All statuses</option><option value="pending">pending</option><option value="waiting">waiting</option><option value="confirming">confirming</option><option value="finished">finished</option><option value="confirmed">confirmed</option><option value="partially_paid">partially_paid</option><option value="failed">failed</option><option value="expired">expired</option></select>
+        </div>
+      </div>
+      <div class="acc-scroll"><table class="acc-table" id="ad-orders"><thead><tr><th>Order</th><th>Customer</th><th>Item</th><th>Amount</th><th>Status</th><th>Promo</th><th>Placed</th></tr></thead><tbody><tr><td colspan="7" class="acc-empty">Loading…</td></tr></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- users -->
+  <div id="ad-tab-users" class="acc-hide">
+    <div class="acc-card">
+      <h2>Accounts</h2>
+      <p class="sub" id="ad-users-sub">Every registered account with its role, email verification and counts. Tester access is granted here and enforced by the Worker; the Admin role itself comes from <code>ADMIN_EMAILS</code> and can never be granted through this panel.</p>
+      <div class="acc-scroll"><table class="acc-table plain" id="ad-users"><thead><tr><th>#</th><th>Email</th><th>Discord</th><th>Email verified</th><th>Role</th><th>Joined</th><th>Orders</th><th>Paid</th><th>Msgs</th><th></th></tr></thead><tbody><tr><td colspan="10" class="acc-empty">Loading…</td></tr></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- messages -->
+  <div id="ad-tab-messages" class="acc-hide">
+    <div class="acc-card">
+      <h2>Direct messages</h2>
+      <p class="sub">Every customer message, newest first — with a jump into the order chat to reply.</p>
+      <div class="acc-scroll"><table class="acc-table plain" id="ad-messages"><thead><tr><th>When</th><th>From</th><th>Order</th><th>Message</th><th></th></tr></thead><tbody><tr><td colspan="5" class="acc-empty">Loading…</td></tr></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- conversations -->
+  <div id="ad-tab-convos" class="acc-hide">
+    <div class="acc-card">
+      <h2>Customer conversations</h2>
+      <p class="sub">Every authenticated chat thread, newest first. Ownership is enforced by the API: this view is the only way to read someone else's thread.</p>
+      <div class="acc-scroll"><table class="acc-table plain" id="ad-convos"><thead><tr><th>Conversation</th><th>Customer</th><th>Purchase</th><th>Status</th><th>Last message</th><th></th></tr></thead><tbody><tr><td colspan="6" class="acc-empty">Loading…</td></tr></tbody></table></div>
+    </div>
+    <div id="ad-conv-detail" class="acc-card acc-hide">
+      <div class="acc-row" style="justify-content:space-between;margin-bottom:14px">
+        <div><h2 style="margin:0" id="ad-conv-title">Conversation</h2><p class="sub" style="margin:0" id="ad-conv-meta">—</p></div>
+        <div class="acc-row"><button class="acc-btn ghost mini" id="ad-conv-close-status" type="button">Mark closed</button><button class="acc-btn ghost mini" id="ad-conv-back" type="button">← Back</button></div>
+      </div>
+      <div class="acc-chat" id="ad-conv-chat"></div>
+      <form id="ad-conv-form" style="margin-top:14px">
+        <div class="acc-field"><label for="ad-conv-reply">Reply as Aether <span style="color:#7a7d82;font-weight:400;text-transform:none;letter-spacing:0">— the customer sees it in their history and gets it by email</span></label><textarea class="acc-input" id="ad-conv-reply" placeholder="Thanks for the details — here is what happens next…"></textarea></div>
+        <div class="acc-row"><button class="acc-btn" id="ad-conv-send" type="submit">Send reply →</button><span class="acc-msg" id="ad-conv-msg" style="margin:0" role="status" aria-live="polite"></span></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- beta -->
+  <div id="ad-tab-beta" class="acc-hide">
+    <div class="acc-card">
+      <h2>Beta environment</h2>
+      <p class="sub">The Beta hostname/path lives in server-side configuration (D1 <code>settings</code>), so it can change without editing source. Changing it is sensitive: it needs your admin password now <em>and</em> a confirmation link with an expiring, single-use token.</p>
+      <dl class="acc-kv" id="ad-beta-kv"></dl>
+      <div class="acc-note" id="ad-beta-pending">No pending change.</div>
+    </div>
+    <div class="acc-card">
+      <h2>Request a Beta domain change</h2>
+      <form id="ad-beta-form">
+        <div class="acc-field"><label for="ad-beta-host">Beta host <span style="color:#7a7d82;font-weight:400;text-transform:none;letter-spacing:0">— must stay under get-aether.de</span></label><input class="acc-input" id="ad-beta-host" placeholder="betatester.get-aether.de" autocomplete="off"></div>
+        <div class="acc-field"><label for="ad-beta-path">Beta path</label><input class="acc-input" id="ad-beta-path" placeholder="/yesthisistheofficaldomainanditssolongsopeopledontaccidentlyfindthis" autocomplete="off"></div>
+        <div class="acc-field"><label for="ad-beta-pass">Your admin password <span style="color:#7a7d82;font-weight:400;text-transform:none;letter-spacing:0">— re-authentication for a sensitive change</span></label><input class="acc-input" id="ad-beta-pass" type="password" autocomplete="current-password" placeholder="Your password"></div>
+        <div class="acc-row"><button class="acc-btn" id="ad-beta-submit" type="submit">Request change →</button><span class="acc-msg" id="ad-beta-msg" style="margin:0" role="status" aria-live="polite"></span></div>
+      </form>
+    </div>
+    <div class="acc-card">
+      <h2>Confirm a pending change</h2>
+      <p class="sub">Paste the token from the confirmation email (or from the link shown here when email delivery is not configured). This applies the change and writes an audit entry.</p>
+      <form id="ad-beta-confirm-form">
+        <div class="acc-field"><label for="ad-beta-token">Confirmation token</label><input class="acc-input" id="ad-beta-token" placeholder="64-character token" autocomplete="off"></div>
+        <div class="acc-row"><button class="acc-btn" id="ad-beta-confirm" type="submit">Confirm change →</button><span class="acc-msg" id="ad-beta-confirm-msg" style="margin:0" role="status" aria-live="polite"></span></div>
+      </form>
+    </div>
+    <div class="acc-card">
+      <h2>Beta feature flags</h2>
+      <p class="sub">Evaluated on the server; the Beta API reports these values and the frontend only renders them.</p>
+      <div class="acc-row"><label class="ad-flag"><input type="checkbox" id="ad-flag-betaNewChat"> betaNewChat</label><label class="ad-flag"><input type="checkbox" id="ad-flag-betaDashboard"> betaDashboard</label><label class="ad-flag"><input type="checkbox" id="ad-flag-betaTools"> betaTools</label><button class="acc-btn ghost mini" id="ad-flags-save" type="button">Save flags</button></div>
+      <div class="acc-msg" id="ad-flags-msg" role="status" aria-live="polite"></div>
+    </div>
+    <div class="acc-card">
+      <h2>Audit trail</h2>
+      <p class="sub">Administrative actions recorded server-side (who, what, when).</p>
+      <div class="acc-scroll"><table class="acc-table plain" id="ad-audit"><thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th><th>Detail</th></tr></thead><tbody><tr><td colspan="5" class="acc-empty">Loading…</td></tr></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- order detail -->
+  <div id="ad-detail" class="acc-card acc-hide">
+    <div class="acc-row" style="justify-content:space-between;margin-bottom:14px">
+      <h2 style="margin:0" id="ad-detail-title">Order</h2>
+      <div class="acc-row"><button class="acc-btn ghost mini" id="ad-reload" type="button">Reload</button><button class="acc-btn ghost mini" id="ad-close" type="button">← Back to list</button></div>
+    </div>
+    <dl class="acc-kv" id="ad-detail-kv"></dl>
+    <h3>Chat</h3>
+    <div class="acc-chat" id="ad-chat"></div>
+    <form id="ad-reply-form" style="margin-top:14px">
+      <div class="acc-field"><label for="ad-reply">Reply as Aether <span style="color:#7a7d82;font-weight:400;text-transform:none;letter-spacing:0">— the customer sees it here and gets it by email</span></label><textarea class="acc-input" id="ad-reply" placeholder="Thanks for the order — here's what happens next…"></textarea></div>
+      <div class="acc-row"><button class="acc-btn" id="ad-reply-btn" type="submit">Send reply →</button><span class="acc-msg" id="ad-reply-msg" style="margin:0"></span></div>
+    </form>
+  </div>
+</section>
+</main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
+<script src="public/aether-config.js?v=6"></script>
+<script src="public/checkout.js?v=6"></script>
+<script src="public/aether.js" defer></script>
+<script>
+(() => {
+  const A = window.AetherCheckout;
+  if (!A) { alert("Checkout script failed to load — please refresh the page."); return; }
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => A.esc(s == null ? "" : s);
+  let allOrders = [], openOrder = null;
+
+  function show(el, on){ el.classList.toggle("acc-hide", !on); }
+  function msg(el, text, kind){ el.className = "acc-msg" + (kind ? " " + kind : ""); el.textContent = text || ""; }
+  function money(a, c){ return "€" + Number(a || 0).toFixed(0) + " " + String(c || "eur").toUpperCase(); }
+  function statusClass(s){
+    const v = String(s || "").toLowerCase();
+    if (["finished","confirmed","sending","paid"].includes(v)) return "paid";
+    if (["failed","expired","refunded"].includes(v)) return "failed";
+    return "pending";
+  }
+  function when(ts){
+    if (!ts && ts !== 0) return "—";
+    const d = new Date(typeof ts === "number" ? ts : String(ts));
+    return isNaN(d) ? String(ts) : d.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+  }
+  function item(o){ return String(o.type || "order").replace(/_/g, " ") + (o.package ? " · " + o.package : ""); }
+
+  // ---------- tabs ----------
+  const TABS = ["orders","users","messages","convos","beta"];
+  document.querySelectorAll("[data-tab]").forEach(t => t.addEventListener("click", () => {
+    document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("active", b === t));
+    TABS.forEach(n => show($("ad-tab-" + n), n === t.dataset.tab));
+  }));
+
+  // ---------- orders ----------
+  function renderOrders(){
+    const q = $("ad-search").value.trim().toLowerCase();
+    const st = $("ad-status").value;
+    const rows = allOrders.filter(o => {
+      if (st && String(o.status || "").toLowerCase() !== st) return false;
+      if (!q) return true;
+      return [o.order_id, o.user_email, o.type, o.package, o.status, o.amount, o.promo_code].join(" ").toLowerCase().includes(q);
+    });
+    const body = $("ad-orders").querySelector("tbody");
+    if (!rows.length) { body.innerHTML = '<tr><td colspan="7" class="acc-empty">No orders match.</td></tr>'; return; }
+    body.innerHTML = rows.map(o => `<tr data-order="${esc(o.order_id)}">
+      <td class="mono">${esc(o.order_id)}</td>
+      <td>${esc(o.user_email || (o.user_id ? "#" + o.user_id : "guest"))}</td>
+      <td>${esc(item(o))}</td>
+      <td>${esc(money(o.amount, o.currency))}${o.discount ? ` <span class="mono">−€${esc(Number(o.discount).toFixed(0))}</span>` : ""}</td>
+      <td><span class="acc-badge ${statusClass(o.status)}">${esc(o.status || "pending")}</span></td>
+      <td class="mono">${esc(o.promo_code || "—")}</td>
+      <td class="mono">${esc(when(o.created_at))}</td>
+    </tr>`).join("");
+    body.querySelectorAll("tr[data-order]").forEach(tr => tr.addEventListener("click", () => openOrderDetail(tr.dataset.order)));
+  }
+  $("ad-search").addEventListener("input", renderOrders);
+  $("ad-status").addEventListener("change", renderOrders);
+
+  function renderChat(messages){
+    const chat = $("ad-chat");
+    if (!messages.length) { chat.innerHTML = '<div class="acc-empty">No messages on this order yet.</div>'; return; }
+    chat.innerHTML = messages.map(m => {
+      const admin = m.sender === "admin";
+      return `<div class="acc-bubble ${admin ? "admin" : "customer"}"><span class="who">${admin ? "Aether (you)" : "Customer"}</span>${esc(m.body)}<span class="meta">${esc(when(m.created_at))}</span></div>`;
+    }).join("");
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  async function loadOrderDetail(orderId, first){
+    const r = await A.admin.order(orderId);
+    const o = r.order || {};
+    if (first) {
+      $("ad-detail-title").textContent = o.order_id || orderId;
+      $("ad-detail-kv").innerHTML = [
+        ["Order ID", o.order_id], ["Status", o.status], ["Customer", o.user_email || (o.user_id ? "#" + o.user_id : "guest checkout")],
+        ["Amount", money(o.amount, o.currency)], ["Package", o.package || "Custom"],
+        ["Promo", o.promo_code ? o.promo_code + (o.discount ? " (−€" + Number(o.discount).toFixed(0) + ")" : "") : "—"],
+        ["Payment ID", o.payment_id || "—"], ["Description", o.description || "—"], ["Placed", when(o.created_at)],
+      ].map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v == null || v === "" ? "—" : v)}</dd>`).join("");
+    }
+    renderChat(r.messages || []);
+    return r;
+  }
+  function openOrderDetail(orderId){
+    openOrder = orderId;
+    show($("ad-tab-orders"), true); show($("ad-detail"), true);
+    ["users","messages"].forEach(n => show($("ad-tab-" + n), false));
+    $("ad-detail").scrollIntoView({ behavior:"smooth", block:"start" });
+    loadOrderDetail(orderId, true).catch(e => msg($("ad-reply-msg"), e.message || "Could not load order", "err"));
+  }
+  $("ad-close").addEventListener("click", () => { openOrder = null; show($("ad-detail"), false); });
+  $("ad-reload").addEventListener("click", () => { if (openOrder) loadOrderDetail(openOrder, false).catch(() => {}); });
+
+  $("ad-reply-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = $("ad-reply").value.trim();
+    if (!openOrder) { msg($("ad-reply-msg"), "Open an order first.", "err"); return; }
+    if (text.length < 2) { msg($("ad-reply-msg"), "Write a slightly longer reply.", "err"); return; }
+    const btn = $("ad-reply-btn"); btn.disabled = true;
+    msg($("ad-reply-msg"), "Sending…");
+    try {
+      const r = await A.admin.reply(openOrder, text);
+      $("ad-reply").value = "";
+      renderChat(r.messages || []);
+      msg($("ad-reply-msg"), "Reply sent — customer emailed.", "ok");
+    } catch (err) { msg($("ad-reply-msg"), err.message || "Could not send", "err"); }
+    finally { btn.disabled = false; }
+  });
+
+  // ---------- users ----------
+  function countFor(list, id, key){
+    const hit = list.find(x => Number(x.user_id) === Number(id));
+    return hit ? Number(hit[key]) : 0;
+  }
+  async function loadUsers(){
+    const body = $("ad-users").querySelector("tbody");
+    try {
+      const r = await A.admin.users();
+      const users = r.users || [];
+      $("ad-users-sub").textContent = `${users.length} registered account${users.length === 1 ? "" : "s"}. Deleting removes the login and detaches their orders (kept for records).`;
+      if (!users.length) { body.innerHTML = '<tr><td colspan="8" class="acc-empty">No accounts yet.</td></tr>'; return; }
+      body.innerHTML = users.map(u => {
+        const isAdminRow = u.role === "admin";
+        const roleBtn = isAdminRow
+          ? '<span class="role-chip admin">config</span>'
+          : (u.role === "tester"
+            ? `<button class="acc-btn ghost mini" data-role="user" data-id="${esc(u.id)}" data-email="${esc(u.email)}" type="button">Remove Tester</button>`
+            : `<button class="acc-btn ghost mini" data-role="tester" data-id="${esc(u.id)}" data-email="${esc(u.email)}" type="button">Grant Tester</button>`);
+        const verified = u.emailVerified ? '<span class="acc-badge paid">verified</span>' : '<span class="acc-badge pending">unverified</span>';
+        return `<tr>
+        <td class="mono">${esc(u.id)}</td>
+        <td>${esc(u.email)}</td>
+        <td class="mono">${esc(u.discord || "—")}</td>
+        <td>${verified}</td>
+        <td><span class="role-chip ${esc(u.role)}">${esc(u.role)}</span></td>
+        <td class="mono">${esc(when(u.created_at))}</td>
+        <td class="mono">${esc(countFor(r.stats || [], u.id, "orders"))}</td>
+        <td class="mono">${esc(countFor(r.stats || [], u.id, "paid"))}</td>
+        <td class="mono">${esc(countFor(r.messageStats || [], u.id, "messages"))}</td>
+        <td class="acc-row">${roleBtn}<button class="acc-btn danger mini" data-del="${esc(u.id)}" data-email="${esc(u.email)}" type="button">Remove</button></td>
+      </tr>`; }).join("");
+      body.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => removeUser(b.dataset.del, b.dataset.email)));
+      body.querySelectorAll("[data-role]").forEach(b => b.addEventListener("click", () => setRole(b.dataset.id, b.dataset.email, b.dataset.role)));
+    } catch (err) {
+      body.innerHTML = `<tr><td colspan="10" class="acc-empty">${esc(err.message || "Could not load accounts")}</td></tr>`;
+    }
+  }
+  // Tester permission is stored and enforced server-side; this only asks the API to change it.
+  async function setRole(id, email, role){
+    const label = role === "tester" ? "Grant Tester access to" : "Remove Tester access from";
+    if (!confirm(`${label} ${email}?\n\nThe Worker enforces the role on every Beta request.`)) return;
+    msg($("ad-msg"), `${label} ${email}…`);
+    try {
+      const r = await A.admin.setRole(id, role);
+      msg($("ad-msg"), `${email} is now role ${r.role}.`, "ok");
+      await loadUsers();
+      await loadBeta();
+    } catch (err) { msg($("ad-msg"), err.message || "Role change failed", "err"); }
+  }
+
+  // ---------- conversations (support) ----------
+  let openConv = null;
+  function renderConvChat(messages){
+    const chat = $("ad-conv-chat");
+    if (!messages.length) { chat.innerHTML = '<div class="acc-empty">No messages yet.</div>'; return; }
+    chat.innerHTML = messages.map(m => {
+      const admin = m.sender === "admin";
+      return `<div class="acc-bubble ${admin ? "admin" : "customer"}"><span class="who">${admin ? "Aether (you)" : "Customer"}</span>${esc(m.body)}<span class="meta">${esc(when(m.created_at))}</span></div>`;
+    }).join("");
+    chat.scrollTop = chat.scrollHeight;
+  }
+  async function loadConvos(){
+    const body = $("ad-convos").querySelector("tbody");
+    try {
+      const r = await A.admin.conversations();
+      const list = r.conversations || [];
+      if (!list.length) { body.innerHTML = '<tr><td colspan="6" class="acc-empty">No conversations yet.</td></tr>'; return; }
+      body.innerHTML = list.map(c => `<tr>
+        <td>${esc(c.subject || "Conversation")}<br><span class="mono">${esc(String(c.conversation_id).slice(0, 18))}</span></td>
+        <td>${esc(c.user_email || "—")}</td>
+        <td class="mono">${esc(c.purchase_id || "—")}</td>
+        <td><span class="acc-badge ${c.status === "closed" ? "failed" : c.status === "answered" ? "paid" : "pending"}">${esc(c.status)}</span></td>
+        <td style="max-width:320px">${esc(String(c.last_body || "").slice(0, 140))}</td>
+        <td><button class="acc-btn ghost mini" data-conv="${esc(c.conversation_id)}" type="button">Open ↗</button></td>
+      </tr>`).join("");
+      body.querySelectorAll("[data-conv]").forEach(b => b.addEventListener("click", () => openConvDetail(b.dataset.conv)));
+    } catch (err) {
+      body.innerHTML = `<tr><td colspan="6" class="acc-empty">${esc(err.message || "Could not load conversations")}</td></tr>`;
+    }
+  }
+  async function loadConvDetail(id){
+    const r = await A.admin.conversation(id);
+    const c = r.conversation || {};
+    $("ad-conv-title").textContent = c.subject || "Conversation";
+    $("ad-conv-meta").textContent = `${c.user_email || "—"} · ${c.status} · ${c.purchase_id ? "Purchase " + c.purchase_id : "no purchase"} · updated ${when(c.updated_at)}`;
+    renderConvChat(r.messages || []);
+  }
+  function openConvDetail(id){
+    openConv = id;
+    show($("ad-tab-convos"), true);
+    show($("ad-conv-detail"), true);
+    $("ad-conv-detail").scrollIntoView({ behavior:"smooth", block:"start" });
+    loadConvDetail(id).catch(e => msg($("ad-conv-msg"), e.message || "Could not load", "err"));
+  }
+  $("ad-conv-back").addEventListener("click", () => { openConv = null; show($("ad-conv-detail"), false); loadConvos(); });
+  $("ad-conv-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = $("ad-conv-reply").value.trim();
+    if (!openConv) { msg($("ad-conv-msg"), "Open a conversation first.", "err"); return; }
+    if (text.length < 2) { msg($("ad-conv-msg"), "Write a slightly longer reply.", "err"); return; }
+    const btn = $("ad-conv-send"); A.ui.loading(btn, true, "Sending…");
+    try {
+      const r = await A.admin.conversationReply(openConv, text);
+      $("ad-conv-reply").value = "";
+      renderConvChat(r.messages || []);
+      msg($("ad-conv-msg"), "Reply sent — the customer is emailed and sees it in their history.", "ok");
+      loadConvos().catch(() => {});
+    } catch (err) { msg($("ad-conv-msg"), err.message || "Could not send", "err"); }
+    finally { A.ui.loading(btn, false); }
+  });
+  $("ad-conv-close-status").addEventListener("click", async () => {
+    if (!openConv) return;
+    try { await A.admin.conversationStatus(openConv, "closed"); await loadConvDetail(openConv); msg($("ad-conv-msg"), "Marked closed.", "ok"); loadConvos().catch(() => {}); }
+    catch (err) { msg($("ad-conv-msg"), err.message || "Could not update", "err"); }
+  });
+
+  // ---------- beta configuration ----------
+  async function loadBeta(){
+    const host = $("ad-beta-host"), path = $("ad-beta-path");
+    try {
+      const r = await A.admin.beta();
+      const b = r.beta || {};
+      $("ad-beta-kv").innerHTML = [
+        ["Current Beta URL", b.url], ["Host", b.host], ["Path", b.path], ["Environment", b.env],
+        ["Admin email verified", r.admin_email_verified ? "yes" : "no"],
+        ["Email delivery configured", r.email_configured ? "yes" : "no (confirmation link is shown instead of mailed)"],
+      ].map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v == null || v === "" ? "—" : v)}</dd>`).join("");
+      if (!host.value) host.value = b.host || "";
+      if (!path.value) path.value = b.path || "";
+      $("ad-beta-pending").textContent = r.pending
+        ? `Pending change from ${r.pending.requested_by || "an admin"}: https://${r.pending.host}${r.pending.path} — expires ${when(r.pending.expires_at)}.`
+        : "No pending change.";
+      const flags = b.flags || {};
+      ["betaNewChat","betaDashboard","betaTools"].forEach(k => { const el = $("ad-flag-" + k); if (el) el.checked = !!flags[k]; });
+      const audit = r.audit || [];
+      const abody = $("ad-audit").querySelector("tbody");
+      abody.innerHTML = audit.length ? audit.map(a => `<tr><td class="mono">${esc(when(a.created_at))}</td><td>${esc(a.actor_email || "—")}</td><td class="mono">${esc(a.action)}</td><td>${esc(a.target || "—")}</td><td style="max-width:360px">${esc(String(a.detail || "").slice(0, 160))}</td></tr>`).join("") : '<tr><td colspan="5" class="acc-empty">No admin actions logged yet.</td></tr>';
+    } catch (err) {
+      msg($("ad-beta-msg"), err.message || "Could not load the Beta configuration", "err");
+    }
+  }
+  $("ad-beta-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("ad-beta-submit"); A.ui.loading(btn, true, "Requesting…");
+    try {
+      const r = await A.admin.requestBetaDomain($("ad-beta-host").value.trim(), $("ad-beta-path").value.trim(), $("ad-beta-pass").value);
+      $("ad-beta-pass").value = "";
+      if (r.confirm_url) {
+        const m = String(r.confirm_url).match(/betaToken=([a-f0-9]{64})/);
+        if (m) $("ad-beta-token").value = m[1];
+      }
+      msg($("ad-beta-msg"), (r.emailed ? "Confirmation email sent. " : (r.warning ? r.warning + " " : "")) + (r.note || ""), r.emailed ? "ok" : "info");
+      await loadBeta();
+    } catch (err) { msg($("ad-beta-msg"), err.message || "Could not request the change", "err"); }
+    finally { A.ui.loading(btn, false); }
+  });
+  $("ad-beta-confirm-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("ad-beta-confirm"); A.ui.loading(btn, true, "Confirming…");
+    try {
+      const r = await A.admin.confirmBetaDomain($("ad-beta-token").value.trim());
+      $("ad-beta-token").value = "";
+      msg($("ad-beta-confirm-msg"), "Beta domain updated to " + r.beta.url, "ok");
+      await loadBeta();
+    } catch (err) { msg($("ad-beta-confirm-msg"), err.message || "Could not confirm", "err"); }
+    finally { A.ui.loading(btn, false); }
+  });
+  $("ad-flags-save").addEventListener("click", async () => {
+    const btn = $("ad-flags-save"); A.ui.loading(btn, true, "Saving…");
+    try {
+      const flags = {};
+      ["betaNewChat","betaDashboard","betaTools"].forEach(k => { flags[k] = !!$("ad-flag-" + k).checked; });
+      const r = await A.admin.setBetaFlags(flags);
+      msg($("ad-flags-msg"), "Flags saved: " + JSON.stringify(r.flags), "ok");
+    } catch (err) { msg($("ad-flags-msg"), err.message || "Could not save flags", "err"); }
+    finally { A.ui.loading(btn, false); }
+  });
+  async function removeUser(id, email){
+    if (!confirm(`Remove the account ${email}?\n\nTheir login is deleted and their orders are kept but detached. This cannot be undone.`)) return;
+    msg($("ad-msg"), `Removing ${email}…`);
+    try { await A.admin.deleteUser(id); msg($("ad-msg"), `Removed ${email}.`, "ok"); await loadUsers(); }
+    catch (err) { msg($("ad-msg"), err.message || "Remove failed", "err"); }
+  }
+
+  // ---------- messages ----------
+  async function loadMessages(){
+    const body = $("ad-messages").querySelector("tbody");
+    try {
+      const r = await A.admin.messages();
+      const list = r.messages || [];
+      if (!list.length) { body.innerHTML = '<tr><td colspan="5" class="acc-empty">No messages yet.</td></tr>'; return; }
+      body.innerHTML = list.map(m => `<tr>
+        <td class="mono">${esc(when(m.created_at))}</td>
+        <td>${esc(m.user_email || "guest")}<br><span class="mono">${esc(m.sender)}</span></td>
+        <td class="mono">${esc(m.order_id)}</td>
+        <td style="max-width:420px">${esc(String(m.body || "").slice(0, 400))}${String(m.body || "").length > 400 ? "…" : ""}</td>
+        <td><button class="acc-btn ghost mini" data-open="${esc(m.order_id)}" type="button">Open ↗</button></td>
+      </tr>`).join("");
+      body.querySelectorAll("[data-open]").forEach(b => b.addEventListener("click", () => {
+        document.querySelector('[data-tab="orders"]').click();
+        openOrderDetail(b.dataset.open);
+      }));
+    } catch (err) {
+      body.innerHTML = `<tr><td colspan="5" class="acc-empty">${esc(err.message || "Could not load messages")}</td></tr>`;
+    }
+  }
+
+  // ---------- boot ----------
+  async function loadAll(){
+    const [o, u, m] = await Promise.all([
+      A.admin.orders(), A.admin.users(), A.admin.messages(),
+    ]);
+    loadConvos().catch(() => {});
+    loadBeta().catch(() => {});
+    allOrders = o.orders || [];
+    const paid = allOrders.filter(x => ["finished","confirmed","sending","paid"].includes(String(x.status || "").toLowerCase())).length;
+    $("ad-stats").textContent = `${allOrders.length} orders · ${paid} paid · ${(u.users || []).length} accounts · ${(m.messages || []).length} messages`;
+    renderOrders();
+    await loadUsers();
+    await loadMessages();
+  }
+
+  $("ad-refresh").addEventListener("click", () => { msg($("ad-msg"), "Refreshing…"); loadAll().then(() => msg($("ad-msg"), "Updated.", "ok")).catch(e => msg($("ad-msg"), e.message, "err")); });
+  $("ad-logout").addEventListener("click", async () => { await A.auth.logout(); location.reload(); });
+  $("ad-signout").addEventListener("click", async () => { await A.auth.logout(); location.reload(); });
+
+  $("ad-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("ad-submit"); btn.disabled = true;
+    msg($("ad-login-msg"), "Signing in…");
+    try { await A.auth.login($("ad-email").value.trim(), $("ad-pass").value); location.reload(); }
+    catch (err) { msg($("ad-login-msg"), err.message || "Sign in failed", "err"); }
+    finally { btn.disabled = false; }
+  });
+
+  async function boot(){
+    let me;
+    try { me = await A.auth.me(); }
+    catch { A.setToken(""); show($("ad-login"), true); return; }
+    if (!me.isAdmin) {
+      show($("ad-denied"), true);
+      $("ad-denied-who").textContent = `Signed in as ${me.user.email} — this account is not in ADMIN_EMAILS.`;
+      return;
+    }
+    show($("ad-dash"), true);
+    $("ad-who").textContent = `Signed in as ${me.user.email} · role ${me.role || "admin"}${me.emailVerified ? " · email verified" : (me.emailVerificationRequired ? " · EMAIL NOT VERIFIED" : "")}`;
+    loadAll().catch(e => msg($("ad-msg"), e.message || "Could not load admin data", "err"));
+    // A confirmation email lands the admin back here with ?betaToken=… — prefill and confirm.
+    const betaToken = new URLSearchParams(location.search).get("betaToken");
+    if (betaToken) {
+      $("ad-beta-token").value = betaToken;
+      document.querySelector('[data-tab="beta"]').click();
+      msg($("ad-beta-confirm-msg"), "Confirmation token loaded from your link — press Confirm change to apply it.", "info");
+    }
+  }
+  boot();
+})();
+</script></body></html>

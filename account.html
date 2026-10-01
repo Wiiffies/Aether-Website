@@ -1,0 +1,473 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Aether — Your account</title><link rel="icon" href="public/aether-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="public/aether.css?v=6"><link rel="stylesheet" href="public/pages.css?v=6"><link rel="stylesheet" href="public/portal.css?v=6"><link rel="stylesheet" href="public/ui.css?v=6">
+</head><body><header class="site-header"><a class="brand" href="index.html"><img src="Aether%20Logo%20trasnparent%20new.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="account.html" class="active">Account</a><a href="beta.html" id="nav-beta" class="acc-hide">Beta</a></nav><a class="header-cta" href="shop.html">Shop <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header><main class="page-main acc-wrap">
+<span class="page-kicker">Aether account</span>
+<h1>Your orders.<br><em>Your chat.</em></h1>
+<p class="page-lead">Sign in to see every order you placed, chat with us about it in one place, and manage your account. Guest checkout still works — but when you check out with the same email you signed up with, the order is filed to your account automatically.</p>
+
+<!-- ---------- auth ---------- -->
+<section id="acc-auth" class="acc-card acc-hide">
+  <div class="acc-tabs">
+    <button type="button" class="acc-tab active" data-mode="login">Sign in</button>
+    <button type="button" class="acc-tab" data-mode="register">Create account</button>
+  </div>
+  <h2 id="acc-auth-title">Welcome back</h2>
+  <p class="sub" id="acc-auth-sub">Sign in with the email you used at checkout to see your orders and chat.</p>
+  <form id="acc-form" autocomplete="on">
+    <div class="acc-field"><label for="acc-email">Email</label><input class="acc-input" id="acc-email" type="email" placeholder="you@example.com" autocomplete="email" required></div>
+    <div class="acc-field"><label for="acc-pass">Password</label><input class="acc-input" id="acc-pass" type="password" placeholder="At least 8 characters" autocomplete="current-password" required></div>
+    <div class="acc-field acc-hide" id="acc-discord-wrap"><label for="acc-discord">Discord username <span style="color:#7a7d82;font-weight:400;text-transform:none;letter-spacing:0">— optional</span></label><input class="acc-input" id="acc-discord" placeholder="yourname"></div>
+    <div class="acc-row"><button class="acc-btn" id="acc-submit" type="submit">Sign in →</button></div>
+  </form>
+  <div class="acc-msg" id="acc-auth-msg"></div>
+  <div class="acc-msg" style="color:#6f7277">Requires an account? Create one with the email you ordered with and your past orders appear automatically. We only store your email, a password hash, your optional Discord name, your orders and this chat.</div>
+</section>
+
+<!-- ---------- dashboard ---------- -->
+<section id="acc-dash" class="acc-hide">
+  <div class="acc-card">
+    <div class="acc-row" style="justify-content:space-between">
+      <div>
+        <h2 style="margin-bottom:2px">Signed in <span class="role-chip" id="acc-role-chip">user</span></h2>
+        <p class="sub" style="margin:0" id="acc-who">—</p>
+      </div>
+      <div class="acc-row">
+        <a class="acc-btn ghost acc-hide" id="acc-admin-link" href="admin.html">Admin ↗</a>
+        <button class="acc-btn ghost" id="acc-logout" type="button">Sign out</button>
+        <button class="acc-btn danger" id="acc-delete" type="button">Delete my account</button>
+      </div>
+    </div>
+    <div class="acc-msg" id="acc-dash-msg"></div>
+  </div>
+
+  <div class="acc-card acc-hide" id="acc-verify-card">
+    <h2>Confirm your email address</h2>
+    <p class="sub">Protected customer functionality — purchases, chat and the Beta — stays locked until your email address is confirmed. We sent a confirmation link to <span id="acc-verify-email">your inbox</span>.</p>
+    <div class="acc-row"><button class="acc-btn" id="acc-resend" type="button">Resend confirmation email →</button><a class="acc-btn ghost" href="verify-email.html">I have a link</a></div>
+    <div class="acc-msg" id="acc-resend-msg" role="status" aria-live="polite"></div>
+  </div>
+
+  <div id="acc-list-card" class="acc-card">
+    <h2>Your purchases</h2>
+    <p class="sub">Newest first, each with its Purchase ID (<code>AETH-YYYY-XXXXXXXX</code>) — quote it to support and we can find the order immediately. Click a purchase to open its chat thread. Checkout uses this account's email and Discord, so you never have to type them again.</p>
+    <div class="acc-scroll"><table class="acc-table" id="acc-orders"><thead><tr><th>Purchase ID</th><th>Item</th><th>Amount</th><th>Status</th><th>Placed</th></tr></thead><tbody><tr><td colspan="5" class="acc-empty">Loading…</td></tr></tbody></table></div>
+  </div>
+
+  <div id="acc-detail-card" class="acc-card acc-hide">
+    <div class="acc-row" style="justify-content:space-between;margin-bottom:14px">
+      <h2 style="margin:0" id="acc-detail-title">Order</h2>
+      <button class="acc-btn ghost mini" id="acc-back" type="button">← All orders</button>
+    </div>
+    <dl class="acc-kv" id="acc-detail-kv"></dl>
+    <h3>Messages</h3>
+    <div class="acc-chat" id="acc-chat"></div>
+    <form id="acc-chat-form" style="margin-top:14px">
+      <div class="acc-field"><label for="acc-chat-text">Send a message about this order</label><textarea class="acc-input" id="acc-chat-text" placeholder="Add details, ask for a change, or check progress…"></textarea></div>
+      <div class="acc-row"><button class="acc-btn" id="acc-send" type="submit">Send message →</button><span class="acc-msg" id="acc-chat-msg" style="margin:0"></span></div>
+    </form>
+  </div>
+  <div class="acc-card" id="acc-chats-card">
+    <div class="acc-row" style="justify-content:space-between;margin-bottom:10px">
+      <div><h2 style="margin:0">Your conversations</h2><p class="sub" style="margin:0">Logged-in chat only. Every thread is tied to your account server-side, so nobody else can open it — not even by changing the link.</p></div>
+      <button class="acc-btn ghost mini" id="acc-new-chat" type="button">New conversation</button>
+    </div>
+    <div class="acc-scroll"><table class="acc-table" id="acc-convs"><thead><tr><th>Conversation</th><th>Purchase</th><th>Status</th><th>Last message</th><th>Updated</th></tr></thead><tbody><tr><td colspan="5" class="acc-empty">Loading…</td></tr></tbody></table></div>
+  </div>
+
+  <div class="acc-card acc-hide" id="acc-new-chat-card">
+    <div class="acc-row" style="justify-content:space-between;margin-bottom:10px">
+      <h2 style="margin:0">New conversation</h2>
+      <button class="acc-btn ghost mini" id="acc-new-chat-cancel" type="button">Cancel</button>
+    </div>
+    <form id="acc-new-chat-form">
+      <div class="acc-field"><label for="acc-conv-purchase">Related purchase <span style="color:#7a7d82;font-weight:400;text-transform:none;letter-spacing:0">— optional, use the Purchase ID</span></label>
+        <select class="acc-input" id="acc-conv-purchase"><option value="">No specific purchase</option></select>
+      </div>
+      <div class="acc-field"><label for="acc-conv-subject">Subject</label><input class="acc-input" id="acc-conv-subject" placeholder="What is this about?" maxlength="120"></div>
+      <div class="acc-field"><label for="acc-conv-text">Message</label><textarea class="acc-input" id="acc-conv-text" placeholder="Tell us what you need and we reply here (and by email)."></textarea></div>
+      <div class="acc-row"><button class="acc-btn" id="acc-conv-send" type="submit">Start conversation →</button><span class="acc-msg" id="acc-conv-msg" role="status" aria-live="polite"></span></div>
+    </form>
+  </div>
+
+  <div class="acc-card acc-hide" id="acc-thread-card">
+    <div class="acc-row" style="justify-content:space-between;margin-bottom:14px">
+      <div><h2 style="margin:0" id="acc-thread-title">Conversation</h2><p class="sub" style="margin:0" id="acc-thread-meta">—</p></div>
+      <div class="acc-row"><button class="acc-btn ghost mini" id="acc-thread-close" type="button">Close conversation</button><button class="acc-btn ghost mini" id="acc-thread-back" type="button">← All conversations</button></div>
+    </div>
+    <div class="acc-chat" id="acc-thread-chat"></div>
+    <form id="acc-thread-form" style="margin-top:14px">
+      <div class="acc-field"><label for="acc-thread-text">Reply</label><textarea class="acc-input" id="acc-thread-text" placeholder="Add details or ask for an update…"></textarea></div>
+      <div class="acc-row"><button class="acc-btn" id="acc-thread-send" type="submit">Send message →</button><span class="acc-msg" id="acc-thread-msg" role="status" aria-live="polite"></span></div>
+    </form>
+  </div>
+
+  <div class="acc-card acc-hide" id="acc-beta-card">
+    <h2>Beta testing area <span class="beta-chip">BETA</span></h2>
+    <p class="sub">Your account has the Tester role, so the Beta environment is open to you. Access is re-checked by the server on every request — the link below is not the security boundary.</p>
+    <div class="acc-row"><a class="acc-btn" id="acc-beta-link" href="beta.html">Open the Beta →</a></div>
+    <div class="acc-note" id="acc-beta-note">Loading the current Beta address…</div>
+  </div>
+
+  <div class="acc-card" id="acc-security">
+    <h2>Security &amp; settings</h2>
+    <p class="sub">Change your password here. Changing it signs out every other device and keeps this one signed in.</p>
+    <div class="acc-note" id="acc-verify-note">Checking your email confirmation…</div>
+    <form id="acc-pass-form" autocomplete="on" style="margin-top:14px">
+      <div class="acc-field"><label for="acc-cur">Current password</label><input class="acc-input" id="acc-cur" type="password" autocomplete="current-password" placeholder="Your current password" required></div>
+      <div class="acc-field"><label for="acc-new">New password</label><input class="acc-input" id="acc-new" type="password" autocomplete="new-password" placeholder="At least 8 characters, with a number" required><div class="pw-meter" id="acc-pw-meter" aria-hidden="true"><span></span></div></div>
+      <div class="acc-field"><label for="acc-new2">Repeat new password</label><input class="acc-input" id="acc-new2" type="password" autocomplete="new-password" placeholder="Type it again" required></div>
+      <div class="acc-row"><button class="acc-btn" id="acc-pass-submit" type="submit">Update password →</button><span class="acc-msg" id="acc-pass-msg" role="status" aria-live="polite"></span></div>
+    </form>
+    <p class="sub" style="margin-top:14px">Forgot the current one? Sign out and use <a href="forgot-password.html" style="color:#fff">forgot password</a> — we email a single-use link.</p>
+  </div>
+
+</section>
+</main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
+<script src="public/aether-config.js?v=6"></script>
+<script src="public/checkout.js?v=6"></script>
+<script src="public/aether.js" defer></script>
+<script>
+(() => {
+  const A = window.AetherCheckout;
+  if (!A) { alert("Checkout script failed to load — please refresh the page."); return; }
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => A.esc(s == null ? "" : s);
+  const authCard = $("acc-auth"), dash = $("acc-dash"), listCard = $("acc-list-card"), detailCard = $("acc-detail-card");
+  let mode = "login";
+  let openOrder = null, poll = null;
+
+  function show(el, on){ el.classList.toggle("acc-hide", !on); }
+  function msg(el, text, kind){ el.className = "acc-msg" + (kind ? " " + kind : ""); el.textContent = text || ""; }
+  function money(amount, currency){ return "€" + Number(amount || 0).toFixed(0) + " " + String(currency || "eur").toUpperCase(); }
+  function statusClass(s){
+    const v = String(s || "").toLowerCase();
+    if (["finished","confirmed","sending","paid"].includes(v)) return "paid";
+    if (["failed","expired","refunded"].includes(v)) return "failed";
+    return "pending";
+  }
+  function when(ts){
+    if (!ts) return "—";
+    const d = new Date(typeof ts === "number" ? ts : String(ts));
+    return isNaN(d) ? String(ts) : d.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+  }
+
+  // ---------- auth UI ----------
+  document.querySelectorAll("[data-mode]").forEach(btn => btn.addEventListener("click", () => {
+    mode = btn.dataset.mode;
+    document.querySelectorAll("[data-mode]").forEach(b => b.classList.toggle("active", b === btn));
+    const reg = mode === "register";
+    show($("acc-discord-wrap"), reg);
+    $("acc-auth-title").textContent = reg ? "Create your account" : "Welcome back";
+    $("acc-auth-sub").textContent = reg ? "Use the same email you order with so your orders land in your account." : "Sign in with the email you used at checkout to see your orders and chat.";
+    $("acc-submit").textContent = reg ? "Create account →" : "Sign in →";
+    $("acc-pass").setAttribute("autocomplete", reg ? "new-password" : "current-password");
+    msg($("acc-auth-msg"), "");
+  }));
+
+  $("acc-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("acc-email").value.trim(), password = $("acc-pass").value, discord = $("acc-discord").value.trim();
+    const btn = $("acc-submit"); btn.disabled = true;
+    msg($("acc-auth-msg"), mode === "register" ? "Creating your account…" : "Signing in…");
+    try {
+      if (mode === "register") await A.auth.register(email, password, discord);
+      else await A.auth.login(email, password);
+      A.turnstile.reset();
+      msg($("acc-auth-msg"), "");
+      await boot();
+    } catch (err) {
+      msg($("acc-auth-msg"), err.message || "Something went wrong", "err");
+    } finally { btn.disabled = false; }
+  });
+
+  $("acc-logout").addEventListener("click", async () => {
+    await A.auth.logout();
+    stopPoll(); openOrder = null;
+    show(dash, false); show(detailCard, false); show(listCard, true);
+    show(authCard, true);
+    msg($("acc-auth-msg"), "Signed out.", "ok");
+  });
+
+  $("acc-delete").addEventListener("click", async () => {
+    if (!confirm("Delete your account?\n\nYour orders and chat history stay with Aether for our records, but you lose access and your login is removed permanently. This cannot be undone.")) return;
+    const typed = prompt('Type DELETE to confirm removing your account permanently:');
+    if (String(typed || "").trim().toUpperCase() !== "DELETE") { msg($("acc-dash-msg"), "Cancelled — nothing was deleted."); return; }
+    msg($("acc-dash-msg"), "Deleting…");
+    try {
+      await A.auth.deleteAccount();
+      A.setToken("");
+      if (A.setAccount) A.setAccount(null);
+      stopPoll();
+      show(dash, false); show(authCard, true);
+      msg($("acc-auth-msg"), "Your account has been deleted.", "ok");
+    } catch (err) { msg($("acc-dash-msg"), err.message || "Delete failed", "err"); }
+  });
+
+  // ---------- purchases (Purchase IDs) ----------
+  let purchases = [];
+  async function loadOrders(){
+    const body = $("acc-orders").querySelector("tbody");
+    try {
+      const r = await A.portal.purchases();
+      purchases = r.orders || [];
+      if (!purchases.length) { body.innerHTML = '<tr><td colspan="5" class="acc-empty">No purchases yet — <a href="shop.html" style="color:#fff">browse the shop</a>. Purchases you pay for with this email show up here.</td></tr>'; return; }
+      body.innerHTML = purchases.map(o => `<tr data-order="${esc(o.order_id)}">
+        <td class="mono">${esc(o.purchase_id || o.order_id)}</td>
+        <td>${esc(String(o.type || "order").replace(/_/g, " "))} <span class="mono">${esc(o.package || "")}</span></td>
+        <td>${esc(money(o.amount, o.currency))}${o.discount ? ` <span class="mono">−€${esc(Number(o.discount).toFixed(0))}</span>` : ""}</td>
+        <td><span class="acc-badge ${statusClass(o.status)}">${esc(o.status || "pending")}</span></td>
+        <td class="mono">${esc(when(o.created_at))}</td>
+      </tr>`).join("");
+      body.querySelectorAll("tr[data-order]").forEach(tr => tr.addEventListener("click", () => openDetail(tr.dataset.order)));
+      fillPurchaseSelect();
+    } catch (err) {
+      body.innerHTML = `<tr><td colspan="5" class="acc-empty">${esc(err.message || "Could not load purchases")}</td></tr>`;
+    }
+  }
+  function fillPurchaseSelect(){
+    const sel = $("acc-conv-purchase");
+    if (!sel) return;
+    sel.innerHTML = '<option value="">No specific purchase</option>' + purchases
+      .filter(p => p.purchase_id)
+      .map(p => `<option value="${esc(p.purchase_id)}">${esc(p.purchase_id)} — ${esc(String(p.type || "order").replace(/_/g, " "))} ${esc(p.package || "")}</option>`)
+      .join("");
+  }
+
+  // ---------- conversations (chat history) ----------
+  let openConv = null, convPoll = null;
+  function convStatusClass(s){
+    const v = String(s || "open").toLowerCase();
+    if (v === "closed") return "failed";
+    if (v === "answered") return "paid";
+    return "pending";
+  }
+  async function loadConversations(){
+    const body = $("acc-convs").querySelector("tbody");
+    try {
+      const r = await A.portal.conversations();
+      const list = r.conversations || [];
+      if (!list.length) { body.innerHTML = '<tr><td colspan="5" class="acc-empty">No conversations yet. Start one with the button above — you must be signed in, which is the whole point.</td></tr>'; return; }
+      body.innerHTML = list.map(c => `<tr data-conv="${esc(c.conversation_id)}">
+        <td>${esc(c.subject || "Conversation")}<br><span class="mono">${esc(String(c.conversation_id).slice(0, 18))}</span></td>
+        <td class="mono">${esc(c.purchase_id || "—")}</td>
+        <td><span class="acc-badge ${convStatusClass(c.status)}">${esc(c.status)}</span></td>
+        <td style="max-width:320px">${esc(String(c.last_body || "").slice(0, 120))}</td>
+        <td class="mono">${esc(when(c.last_at || c.updated_at))}</td>
+      </tr>`).join("");
+      body.querySelectorAll("tr[data-conv]").forEach(tr => tr.addEventListener("click", () => openThread(tr.dataset.conv)));
+    } catch (err) {
+      body.innerHTML = `<tr><td colspan="5" class="acc-empty">${esc(err.message || "Could not load conversations")}</td></tr>`;
+    }
+  }
+  function renderThread(messages){
+    const chat = $("acc-thread-chat");
+    if (!messages.length) { chat.innerHTML = '<div class="acc-empty">No messages yet.</div>'; return; }
+    chat.innerHTML = messages.map(m => {
+      const mine = m.sender !== "admin";
+      return `<div class="acc-bubble ${mine ? "customer" : "admin"}"><span class="who">${mine ? "You" : "Aether"}</span>${esc(m.body)}<span class="meta">${esc(when(m.created_at))}</span></div>`;
+    }).join("");
+    chat.scrollTop = chat.scrollHeight;
+  }
+  async function loadThread(id, first){
+    const r = await A.portal.conversation(id);
+    const c = r.conversation || {};
+    if (first) {
+      $("acc-thread-title").textContent = c.subject || "Conversation";
+      $("acc-thread-meta").textContent = `${c.status} · ${c.purchase_id ? "Purchase " + c.purchase_id : "no purchase linked"} · started ${when(c.created_at)}`;
+    }
+    renderThread(r.messages || []);
+    return c;
+  }
+  function stopConvPoll(){ if (convPoll) { clearInterval(convPoll); convPoll = null; } }
+  function openThread(id){
+    openConv = id;
+    show($("acc-chats-card"), false); show($("acc-new-chat-card"), false); show($("acc-thread-card"), true);
+    history.replaceState(null, "", "?conversation=" + encodeURIComponent(id));
+    loadThread(id, true).catch(err => msg($("acc-thread-msg"), err.message || "Could not load conversation", "err"));
+    stopConvPoll();
+    convPoll = setInterval(() => { if (openConv) loadThread(openConv, false).catch(() => {}); }, 12000);
+  }
+  $("acc-thread-back").addEventListener("click", () => {
+    stopConvPoll(); openConv = null;
+    show($("acc-thread-card"), false); show($("acc-chats-card"), true);
+    history.replaceState(null, "", location.pathname);
+    loadConversations();
+  });
+  $("acc-thread-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = $("acc-thread-text").value.trim();
+    if (text.length < 2) { msg($("acc-thread-msg"), "Write a slightly longer message.", "err"); return; }
+    const btn = $("acc-thread-send"); A.ui.loading(btn, true, "Sending…");
+    try {
+      const r = await A.portal.sendMessage(openConv, text);
+      $("acc-thread-text").value = "";
+      renderThread(r.messages || []);
+      msg($("acc-thread-msg"), "Sent — we reply here and by email.", "ok");
+    } catch (err) { msg($("acc-thread-msg"), err.message || "Could not send", "err"); }
+    finally { A.ui.loading(btn, false); }
+  });
+  $("acc-thread-close").addEventListener("click", async () => {
+    if (!openConv) return;
+    if (!confirm("Close this conversation? You can always start a new one.")) return;
+    try { await A.portal.setStatus(openConv, "closed"); await loadThread(openConv, true); msg($("acc-thread-msg"), "Conversation closed.", "ok"); }
+    catch (err) { msg($("acc-thread-msg"), err.message || "Could not close it", "err"); }
+  });
+  $("acc-new-chat").addEventListener("click", () => { show($("acc-new-chat-card"), true); $("acc-conv-text").focus(); });
+  $("acc-new-chat-cancel").addEventListener("click", () => show($("acc-new-chat-card"), false));
+  $("acc-new-chat-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = $("acc-conv-text").value.trim();
+    if (text.length < 2) { msg($("acc-conv-msg"), "Write a slightly longer first message.", "err"); return; }
+    const btn = $("acc-conv-send"); A.ui.loading(btn, true, "Starting…");
+    try {
+      const r = await A.portal.newConversation({ subject: $("acc-conv-subject").value.trim(), message: text, purchaseId: $("acc-conv-purchase").value });
+      msg($("acc-conv-msg"), "", "");
+      e.target.reset();
+      show($("acc-new-chat-card"), false);
+      await loadConversations();
+      openThread(r.conversation.conversation_id);
+    } catch (err) { msg($("acc-conv-msg"), err.message || "Could not start the conversation", "err"); }
+    finally { A.ui.loading(btn, false); }
+  });
+  $("acc-resend").addEventListener("click", async () => {
+    const btn = $("acc-resend"); A.ui.loading(btn, true, "Sending…");
+    try { const r = await A.auth.resendVerification(); msg($("acc-resend-msg"), (r && r.message) || "Confirmation email sent.", "ok"); }
+    catch (err) { msg($("acc-resend-msg"), err.message || "Could not send the confirmation email", "err"); }
+    finally { A.ui.loading(btn, false); }
+  });
+
+  function renderChat(messages){
+    const chat = $("acc-chat");
+    if (!messages.length) { chat.innerHTML = '<div class="acc-empty">No messages yet. Say hello or add details about your order.</div>'; return; }
+    chat.innerHTML = messages.map(m => {
+      const mine = m.sender === "customer";
+      return `<div class="acc-bubble ${mine ? "customer" : "admin"}"><span class="who">${mine ? "You" : "Aether"}</span>${esc(m.body)}<span class="meta">${esc(when(m.created_at))}</span></div>`;
+    }).join("");
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  async function loadDetail(orderId, first){
+    const r = await A.auth.order(orderId);
+    const o = r.order || {};
+    if (first) {
+      $("acc-detail-title").textContent = String(o.type || "Order").replace(/_/g, " ") + " — " + (o.order_id || orderId);
+      $("acc-detail-kv").innerHTML = [
+        ["Order ID", o.order_id], ["Status", o.status], ["Amount", money(o.amount, o.currency)],
+        ["Package", o.package || "Custom"], ["Promo", o.promo_code ? o.promo_code + (o.discount ? " (−€" + Number(o.discount).toFixed(0) + ")" : "") : "—"],
+        ["Description", o.description || "—"], ["Placed", when(o.created_at)],
+      ].map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v == null || v === "" ? "—" : v)}</dd>`).join("");
+    }
+    renderChat(r.messages || []);
+  }
+
+  function openDetail(orderId){
+    openOrder = orderId;
+    show(listCard, false); show(detailCard, true);
+    history.replaceState(null, "", "?order=" + encodeURIComponent(orderId));
+    loadDetail(orderId, true).catch(err => msg($("acc-chat-msg"), err.message || "Could not load order", "err"));
+    stopPoll();
+    poll = setInterval(() => { if (openOrder) loadDetail(openOrder, false).catch(() => {}); }, 10000);
+  }
+  function stopPoll(){ if (poll) { clearInterval(poll); poll = null; } }
+
+  $("acc-back").addEventListener("click", () => {
+    stopPoll(); openOrder = null;
+    show(detailCard, false); show(listCard, true);
+    history.replaceState(null, "", location.pathname);
+    loadOrders();
+  });
+
+  $("acc-chat-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = $("acc-chat-text").value.trim();
+    if (text.length < 2) { msg($("acc-chat-msg"), "Write a slightly longer message.", "err"); return; }
+    const btn = $("acc-send"); btn.disabled = true;
+    msg($("acc-chat-msg"), "Sending…");
+    try {
+      const r = await A.auth.sendMessage(openOrder, text);
+      $("acc-chat-text").value = "";
+      renderChat(r.messages || []);
+      msg($("acc-chat-msg"), "Sent — we reply by email and here.", "ok");
+    } catch (err) { msg($("acc-chat-msg"), err.message || "Could not send", "err"); }
+    finally { btn.disabled = false; }
+  });
+
+  // ---------- security: change password ----------
+  const pwMeter = $("acc-pw-meter");
+  $("acc-new").addEventListener("input", () => {
+    const v = $("acc-new").value;
+    let s = 0;
+    if (v.length >= 8) s++;
+    if (/[A-Za-z]/.test(v) && /[0-9]/.test(v)) s++;
+    if (/[^A-Za-z0-9]/.test(v) && v.length >= 12) s++;
+    pwMeter.className = "pw-meter" + (v ? " lvl-" + Math.max(1, s) : "");
+  });
+  $("acc-pass-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const cur = $("acc-cur").value, next = $("acc-new").value, again = $("acc-new2").value;
+    const btn = $("acc-pass-submit");
+    if (!cur) { msg($("acc-pass-msg"), "Enter your current password.", "err"); $("acc-cur").focus(); return; }
+    if (next.length < 8 || !/[A-Za-z]/.test(next) || !/[0-9]/.test(next)) { msg($("acc-pass-msg"), "Use at least 8 characters with a letter and a number.", "err"); $("acc-new").focus(); return; }
+    if (next !== again) { msg($("acc-pass-msg"), "The new passwords do not match.", "err"); $("acc-new2").focus(); return; }
+    A.ui.loading(btn, true, "Updating…");
+    msg($("acc-pass-msg"), "", "");
+    try {
+      const r = await A.auth.changePassword(cur, next);
+      msg($("acc-pass-msg"), (r && r.message) || "Password updated.", "ok");
+      e.target.reset();
+      pwMeter.className = "pw-meter";
+    } catch (err) { msg($("acc-pass-msg"), err.message || "Could not update the password", "err"); }
+    finally { A.ui.loading(btn, false); }
+  });
+
+  // ---------- boot ----------
+  async function boot(){
+    let me;
+    try { me = await A.auth.me(); }
+    catch (err) {
+      const hadToken = !!A.getToken();
+      A.setToken("");
+      show(authCard, true); show(dash, false);
+      if (hadToken) msg($("acc-auth-msg"), "Your session expired — sign in again.", "err");
+      return;
+    }
+    show(authCard, false); show(dash, true);
+    $("acc-who").textContent = `${me.user.email}${me.user.discord ? " · " + me.user.discord : ""} · joined ${when(me.user.created_at)}`;
+    const adminLink = $("acc-admin-link");
+    if (me.isAdmin) adminLink.classList.remove("acc-hide"); else adminLink.classList.add("acc-hide");
+    const vNote = $("acc-verify-note");
+    const gate = !!me.emailVerificationRequired && !me.emailVerified;
+    if (vNote) {
+      if (me.emailVerified) { vNote.className = "acc-note ok"; vNote.textContent = "Email confirmed — order updates reach " + me.user.email + "."; }
+      else if (me.emailVerificationRequired) { vNote.className = "acc-note"; vNote.textContent = "Email not confirmed yet. Open the confirmation link we sent to " + me.user.email + " to confirm it."; }
+      else { vNote.className = "acc-note"; vNote.textContent = "Email delivery is not configured on this deployment, so confirmation is not being enforced. Your purchases and chat are still tied to this account."; }
+    }
+    $("acc-role-chip").textContent = me.role || "user";
+    $("acc-role-chip").className = "role-chip" + (me.role === "admin" ? " admin" : me.role === "tester" ? " tester" : "");
+    show($("acc-verify-card"), gate);
+    $("acc-verify-email").textContent = me.user.email;
+    show($("acc-list-card"), !gate);
+    show($("acc-chats-card"), !gate);
+    A.ui.setMsg($("acc-auth-msg"), "", "");
+    if (!gate) { await loadOrders(); await loadConversations(); }
+    // Beta entry: the server decides. A hidden button is never the security boundary.
+    try {
+      const access = await A.portal.betaAccess();
+      if (access.allowed) {
+        show($("acc-beta-card"), true);
+        show($("nav-beta"), true);
+        const url = (access.beta && access.beta.url) || "beta.html";
+        const localBeta = /betatester\./i.test(location.hostname) || /beta\.html$/i.test(location.pathname);
+        $("acc-beta-link").href = localBeta ? "beta.html" : url;
+        $("acc-beta-note").textContent = localBeta ? "You are on the Beta deployment." : "Current Beta address: " + url;
+      } else { show($("acc-beta-card"), false); show($("nav-beta"), false); }
+    } catch { /* not signed in far enough for the beta probe — the card stays hidden */ }
+    const params = new URLSearchParams(location.search);
+    const wanted = params.get("order");
+    const wantedConv = params.get("conversation");
+    if (!gate && wanted) openDetail(wanted);
+    else if (!gate && wantedConv) openThread(wantedConv);
+  }
+
+  boot();
+})();
+</script></body></html>

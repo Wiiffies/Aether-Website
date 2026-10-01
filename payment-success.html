@@ -1,0 +1,120 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Payment — Aether</title><link rel="icon" href="public/aether-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="public/aether.css?v=6"><link rel="stylesheet" href="public/pages.css"><link rel="stylesheet" href="public/ui.css?v=6">
+</head><body><header class="site-header"><a class="brand" href="index.html"><img src="Aether%20Logo%20trasnparent%20new.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="account.html">Account</a></nav><a class="header-cta" href="shop.html">Shop <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header>
+<main class="page-main">
+  <span class="page-kicker">Payment</span>
+  <h1 id="success-title">Verifying<br><em>payment…</em></h1>
+  <p class="page-lead" id="success-lead">Checking your payment with NOWPayments — please wait.</p>
+  <div id="verify-box" style="margin-top:22px;padding:16px 18px;border:1px solid #2a2e33;border-radius:8px;background:rgba(255,255,255,.02);font-size:12px;line-height:1.7;color:#c8c9cc">
+    <div style="display:flex;align-items:center;gap:10px"><div style="width:14px;height:14px;border:2px solid #555;border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite"></div><span id="verify-text">Verifying payment_id…</span></div>
+    <div id="verify-details" style="margin-top:10px;font:10px 'DM Mono',monospace;color:#7a7d82;word-break:break-all"></div>
+    <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+  </div>
+  <div class="important" style="margin-top:28px">
+    <h3>What happens now</h3>
+    <ul>
+      <li>Success page is only shown <b style="color:#8ee0a0">after</b> verified payment — if status is waiting, keep this page open and we'll redirect when confirmed.</li>
+      <li>We email you with next steps, timeline and what we need from you (usually within 3 days).</li>
+      <li>Source code is delivered after completion — you host it yourself.</li>
+      <li>No hosting / domain / database included — see your package.</li>
+    </ul>
+  </div>
+  <div class="detail-list" style="margin-top:22px"><div><b>Order ID</b><span id="order-id">—</span></div><div><b>Payment ID</b><span id="payment-id">—</span></div><div><b>Amount</b><span id="order-amount">—</span></div><div><b>Status</b><span id="order-status">Verifying…</span></div></div>
+  <div class="page-actions" style="flex-wrap:wrap"><a class="purchase-button" href="shop.html">Back to shop <span>↗</span></a><a class="outline-button" href="mailto:questions@get-aether.de">Email us</a><button id="recheck-btn" type="button" class="outline-button" style="background:#111214;color:#fff;border:1px solid #333">Check status again</button></div>
+  <a class="back-link" href="index.html">← Home</a>
+</main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
+<script src="public/aether-config.js?v=6"></script>
+<script src="public/aether.js" defer></script>
+<script>
+(function(){
+  var CFG=window.AETHER_CONFIG||{}; var API=(CFG.apiBase||"https://api.get-aether.de").replace(/\/+$/,"");
+  var p=new URLSearchParams(location.search);
+  var oid=p.get("order_id")||p.get("orderId")||"";
+  var pid=p.get("payment_id")||p.get("paymentId")||p.get("payment")||p.get("id")||"";
+  // some old links only have order_id + pay/amount — if no payment_id we can't verify — show error
+  var amt=p.get("amount")||p.get("price_amount")||"";
+  var pay=p.get("pay")||p.get("pay_currency")||"";
+  var statusHint=p.get("status")||"";
+  var titleEl=document.getElementById("success-title");
+  var leadEl=document.getElementById("success-lead");
+  var verifyText=document.getElementById("verify-text");
+  var verifyDetails=document.getElementById("verify-details");
+  var verifyBox=document.getElementById("verify-box");
+  var orderIdEl=document.getElementById("order-id");
+  var paymentIdEl=document.getElementById("payment-id");
+  var amountEl=document.getElementById("order-amount");
+  var statusEl=document.getElementById("order-status");
+  var recheckBtn=document.getElementById("recheck-btn");
+  if(oid) orderIdEl.textContent=oid;
+  if(pid) paymentIdEl.textContent=pid;
+  if(amt) amountEl.textContent=(pay? pay.toUpperCase()+" ":"")+"— €"+amt+" / "+amt+" "+(pay?pay.toUpperCase():"");
+  else if(oid) amountEl.textContent="— (see email)";
+  function setStatus(t,c){ statusEl.textContent=t; statusEl.style.color=c||"#c8c9cc"; }
+  function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+
+  if(!pid){
+    // No payment_id — cannot verify — don't claim "received"
+    titleEl.innerHTML='No payment<br><em>to verify.</em>';
+    leadEl.innerHTML='This link has no <code style="color:#fff">payment_id</code> — we can\'t verify a payment. If you just paid, open the success link from the checkout modal (it includes payment_id) or check your email.<br><br><span style="font-size:11px;color:#9aa0a6">Order: <b style="color:#fff">'+esc(oid||"—")+'</b> · Amount: <b style="color:#fff">'+esc(amt||"—")+'</b></span>';
+    verifyBox.style.borderColor="#442"; verifyBox.style.background="#1a1510";
+    verifyText.textContent="No payment_id in URL — cannot verify.";
+    verifyDetails.textContent="Open http://127.0.0.1:5501/discord-bot.html or shop.html → Pay with Crypto again to get a payment_id, or check your Discord/email for the pending payment. Direct opening of payment-success.html without paying is blocked.";
+    verifyBox.innerHTML='<div style="color:#c9a87a">⚠️ No payment to verify — success is only shown after verified payment.</div><div style="margin-top:8px;font:10px \'DM Mono\',monospace;color:#7a7d82">'+verifyDetails.textContent+'</div>';
+    setStatus("No payment_id — not verified","#c9a87a");
+    recheckBtn.style.display="none";
+    return;
+  }
+
+  var checks=0; var timer=null;
+  async function verify(){
+    checks++;
+    verifyText.textContent="Verifying… (check "+checks+")";
+    verifyDetails.textContent="payment_id: "+pid+" · order_id: "+(oid||"—")+" · amount: "+(amt||"—");
+    try{
+      var url=API+"/api/payment/"+encodeURIComponent(pid);
+      var res=await fetch(url,{headers:{"accept":"application/json"}});
+      var t=await res.text(); var j; try{ j=JSON.parse(t);}catch{ j={raw:t};}
+      if(!res.ok) throw new Error(j.error||"Status "+res.status);
+      var s=String(j.status||"").toLowerCase();
+      var payAmt=j.pay_amount||j.payAmount||amt;
+      var payCur=(j.pay_currency||j.payCurrency||pay||"").toString().toUpperCase();
+      var orderId=j.order_id||j.orderId||oid;
+      if(orderId) orderIdEl.textContent=orderId;
+      if(pid) paymentIdEl.textContent=pid;
+      if(payAmt) amountEl.textContent=payCur+" "+payAmt+" — €"+(j.price_amount||amt||"?");
+      setStatus(s, j.isPaid?"#8ee0a0": j.isFailed?"#ff8a8a": "#ffcc00");
+      if(j.isPaid){
+        titleEl.innerHTML='Payment<br><em>verified ✓</em>';
+        leadEl.innerHTML='Thanks — your payment is <b style="color:#8ee0a0">'+esc(s)+'</b> and verified via NOWPayments. Your order <b style="color:#fff">'+esc(orderId)+'</b> is now queued. We\'ll reply from <b style="color:#fff">questions@get-aether.de</b> within 3 days.';
+        verifyBox.style.borderColor="#2a7a3a"; verifyBox.style.background="rgba(46,160,67,.08)";
+        verifyBox.innerHTML='<div style="color:#8ee0a0">✅ Payment verified — <b>'+esc(s)+'</b> · '+esc(String(payAmt))+' '+esc(payCur)+' · Order '+esc(orderId)+' · Payment '+esc(pid)+'</div><div style="margin-top:8px;font:10px \'DM Mono\',monospace;color:#7a7d82">Keep this page for your records. You\'ll also get email + Discord confirmation.</div>';
+        clearInterval(timer); verifyDetails.textContent="";
+        recheckBtn.textContent="Verified ✓"; recheckBtn.disabled=true;
+        return;
+      } else if(j.isFailed){
+        titleEl.innerHTML='Payment<br><em>failed.</em>';
+        leadEl.innerHTML='Your payment status is <b style="color:#ff8a8a">'+esc(s)+'</b> — not charged. Try again or contact us.';
+        verifyBox.style.borderColor="#7a2a2a"; verifyBox.style.background="rgba(122,42,42,.12)";
+        verifyBox.innerHTML='<div style="color:#ff8a8a">❌ Payment '+esc(s)+' — failed/expired</div><div style="margin-top:8px;font:10px \'DM Mono\',monospace;color:#9aa0a6">Order '+esc(orderId)+' · Payment '+esc(pid)+' · <a href="shop.html" style="color:#fff">Back to shop</a> · <a href="payment-cancel.html?order_id='+encodeURIComponent(orderId)+'&payment_id='+encodeURIComponent(pid)+'" style="color:#fff">Cancel page</a></div>';
+        clearInterval(timer);
+        recheckBtn.textContent="Check again"; recheckBtn.disabled=false;
+        return;
+      } else {
+        // pending: waiting/confirming/sending
+        titleEl.innerHTML='Payment<br><em>pending…</em>';
+        leadEl.innerHTML='Payment status: <b style="color:#ffcc00">'+esc(s||"waiting")+'</b> — still confirming on-chain. Keep this page open — we\'ll update when it\'s <b style="color:#8ee0a0">finished/confirmed</b>. Order <b style="color:#fff">'+esc(orderId)+'</b> · '+esc(String(payAmt))+' '+esc(payCur);
+        verifyBox.style.borderColor="#2a2e33"; verifyBox.style.background="#111214";
+        verifyBox.innerHTML='<div style="color:#ffcc00">⏳ Status: '+esc(s||"waiting")+' — waiting for confirmations… (check '+checks+')</div><div style="margin-top:6px;font:10px \'DM Mono\',monospace;color:#7a7d82">Auto-checks every 8s · Order '+esc(orderId)+' · Payment '+esc(pid)+' — don\'t close this tab until verified.</div>';
+        recheckBtn.textContent="Check status now"; recheckBtn.disabled=false;
+      }
+    }catch(e){
+      verifyBox.style.borderColor="#442"; verifyBox.style.background="#1a1510";
+      verifyBox.innerHTML='<div style="color:#c9a87a">⚠️ Verify failed: '+esc(e.message)+'</div><div style="margin-top:6px;font:10px \'DM Mono\',monospace;color:#7a7d82">Will retry automatically · payment_id '+esc(pid)+'</div>';
+      setStatus("Verify error: "+e.message,"#c9a87a");
+      recheckBtn.textContent="Retry now"; recheckBtn.disabled=false;
+    }
+  }
+  recheckBtn.addEventListener("click", verify);
+  verify();
+  timer=setInterval(verify, 8000);
+})();
+</script></body></html>

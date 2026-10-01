@@ -1,0 +1,72 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Support Aether — Donate</title><meta name="description" content="Support Aether's open work: templates, tooling and maintenance for small communities."><link rel="icon" href="public/aether-logo.svg" type="image/svg+xml"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="public/aether.css?v=6"><link rel="stylesheet" href="public/pages.css?v=6"><link rel="stylesheet" href="public/ui.css?v=6"></head><body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header"><a class="brand" href="index.html"><img src="Aether%20Logo%20trasnparent%20new.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html" class="is-active" aria-current="page">Donate</a><a href="account.html">Account</a></nav><a class="header-cta" href="shop.html">Purchase <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header>
+
+<main class="page-main" id="main">
+  <span class="page-kicker">Support</span>
+  <h1>Keep the lights<br><em>on around here.</em></h1>
+  <p class="page-lead">Aether is a small studio: websites and Discord bots built carefully, one project at a time. Donations are never required — but if something here saved you time, you can put something back into it.</p>
+
+  <div class="donate-head" style="margin-top:26px">
+    <a class="button button-primary btn-donate" id="donate-cta" href="">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.7-4.35-9.2-8.03C.9 10.1 2.3 6.6 5.6 5.8c2-.48 3.9.5 5 2.1 1.1-1.6 3-2.58 5-2.1 3.3.8 4.7 4.3 2.8 7.17C18.7 16.65 12 21 12 21z"/></svg>
+      Donate <span>↗</span>
+    </a>
+    <span class="form-msg" id="donate-state" role="status"></span>
+  </div>
+
+  <div class="donate-grid">
+    <div class="donate-card">
+      <h3>Where it goes</h3>
+      <p>Domain and DNS, Cloudflare, the payment provider's fees, and the time spent on maintenance, security reviews and reply-within-3-days support.</p>
+    </div>
+    <div class="donate-card">
+      <h3>What it does not change</h3>
+      <p>Nothing here is pay-to-win. Donations do not buy priority over paid orders, and they never unlock anything a customer would otherwise pay for.</p>
+    </div>
+    <div class="donate-card">
+      <h3>No account needed</h3>
+      <p>Donating is optional and separate from your Aether account. You do not need to sign in, and no order is created for a donation.</p>
+    </div>
+  </div>
+
+  <div class="donate-note" id="donate-setup">
+    <b style="color:#fff">Donation destination not configured yet.</b><br>
+    This page is wired to a single configuration value — no payment credentials or private addresses are ever placed in frontend code. To switch donations on, the site owner sets <code>donateUrl</code> in <code>public/aether-config.js</code> to a donation page they own (for example a Ko-fi, GitHub Sponsors, or a donation link created in the payment dashboard). Until then this button stays inert instead of pointing at an invented address.
+  </div>
+
+  <div class="page-actions">
+    <a class="outline-button" href="shop.html">Browse the shop</a>
+    <a class="outline-button" href="contact.html">Contact us</a>
+    <a class="outline-button" href="account.html">Your account</a>
+  </div>
+</main>
+
+<footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
+<script src="public/aether-config.js?v=6"></script>
+<script src="public/checkout.js?v=6"></script>
+<script>
+(() => {
+  const C = window.AetherCheckout;
+  const cfg = window.AETHER_CONFIG || {};
+  const url = String(cfg.donateUrl || "").trim();
+  const btn = document.getElementById("donate-cta");
+  const state = document.getElementById("donate-state");
+  const setup = document.getElementById("donate-setup");
+  if (url) {
+    btn.href = url;
+    btn.target = "_blank";
+    btn.rel = "noopener noreferrer";
+    C.ui.setMsg(state, "Opens the donation page in a new tab.", "ok");
+    if (setup) setup.hidden = true;
+  } else {
+    btn.removeAttribute("href");
+    btn.setAttribute("aria-disabled", "true");
+    btn.classList.add("is-inert");
+    C.ui.setMsg(state, "Donations are not switched on yet — check back soon.", "");
+  }
+  if (C && C.markActiveNav) C.markActiveNav();
+})();
+</script>
+<script src="public/aether.js" defer></script>
+</body></html>

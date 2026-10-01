@@ -1,0 +1,64 @@
+# ---------------------------------------------------------------------------
+# Aether — files that must never reach the (public) repository.
+# Remember: this repository is public, so anything committed here is world
+# readable forever. Secrets live in Cloudflare Worker Secrets, never in git.
+# ---------------------------------------------------------------------------
+
+# Secrets and local configuration (real values)
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+wrangler.toml.local
+*.pem
+*.key
+*.p12
+
+# Cloudflare / tooling local state
+.wrangler/
+.mcp.json
+cloudflare-token.txt
+
+# Generated deploy relay artifacts (_build_chunks.mjs writes these)
+_gz2_*.txt
+_gz_*.txt
+*_b64.txt
+part*.b64
+kv_b64_part_*.txt
+deploy-payload.json
+payload.json
+
+# Local development + logs
+*.log
+_dev-server.log
+serve.log
+py-serve.log
+nohup.out
+
+# Dependencies / bundler output (the site itself is plain static files)
+node_modules/
+dist/
+build/
+.cache/
+
+# Local databases / dumps
+*.sqlite
+*.sqlite3
+*.db
+d1-export.json
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+.idea/
+.vscode/
+!.vscode/settings.example.json
+
+# Local upload staging (see _build_chunks.mjs)
+_stage/
+
+# Editor/agent tooling metadata
+.freebuff/

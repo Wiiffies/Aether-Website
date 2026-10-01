@@ -1,0 +1,22 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Payment cancelled — Aether</title><link rel="icon" href="public/aether-logo.svg" type="image/svg+xml"><link rel="stylesheet" href="public/aether.css?v=6"><link rel="stylesheet" href="public/pages.css"><link rel="stylesheet" href="public/ui.css?v=6">
+</head><body><header class="site-header"><a class="brand" href="index.html"><img src="Aether%20Logo%20trasnparent%20new.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="account.html">Account</a></nav><a class="header-cta" href="shop.html">Shop <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header>
+<main class="page-main">
+  <span class="page-kicker">Payment</span>
+  <h1>Payment<br><em>cancelled.</em></h1>
+  <p class="page-lead">No worries — nothing was charged. Your request is still saved on our side if you submitted the form. You can try again or contact us directly.</p>
+  <div class="page-actions"><a class="purchase-button" href="shop.html">Back to shop <span>↗</span></a><a class="outline-button" href="contact.html">Contact us</a></div>
+  <div class="detail-list" style="margin-top:32px"><div><b>Need help?</b><span>Email questions@get-aether.de or reach us on Discord. We can also send a manual crypto address if NOWPayments isn’t working for you.</span></div><div><b>Payment</b><span>Bitcoin · Litecoin · Ethereum via NOWPayments.</span></div></div>
+  <a class="back-link" href="index.html">← Home</a>
+</main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer><script src="public/aether.js" defer></script>
+<script>
+(function(){
+  var p=new URLSearchParams(location.search);
+  var oid=p.get("order_id")||p.get("orderId")||"";
+  if(oid){
+    var el=document.createElement("div");
+    el.style.cssText="margin-top:18px;font:11px 'DM Mono',monospace;color:#7a7d82";
+    el.textContent="Order "+oid+" — cancelled. You can restart checkout from the shop.";
+    document.querySelector(".page-lead").appendChild(el);
+  }
+})();
+</script></body></html>

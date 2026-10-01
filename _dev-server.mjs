@@ -1,0 +1,145 @@
+// Local development server — NOT deployed, contains no secrets.
+//   node _dev-server.mjs   ->  http://127.0.0.1:5501
+//
+// It serves the static site exactly like GitHub Pages does and routes /api/* through the
+// real worker (worker/src/index.js) against an in-memory SQLite database. That means the
+// same-origin cookie flow, CORS rules, rate limits and validation can all be tested locally
+// without touching production data.
+import { DatabaseSync } from "node:sqlite";
+import { createServer } from "node:http";
+import { readFile, stat } from "node:fs/promises";
+import { extname, join, normalize, resolve } from "node:path";
+import { randomBytes } from "node:crypto";
+
+const ROOT = resolve(process.cwd());
+// Some shells export an empty PORT var — only accept a sane explicit value.
+const PORT = (() => {
+  const raw = Number(process.env.DEV_PORT || process.env.PORT);
+  return Number.isInteger(raw) && raw > 1023 && raw < 65536 ? raw : 5501;
+})();
+
+// ---------- D1-compatible stub (same shape as _test-worker.mjs) ----------
+const norm = (a) => a.map(v => (v === undefined ? null : typeof v === "boolean" ? (v ? 1 : 0) : v));
+class Stmt {
+  constructor(db, sql, args) { this.db = db; this.sql = sql; this.args = args || []; }
+  bind(...args) { return new Stmt(this.db, this.sql, args); }
+  async first() { const r = this.db.prepare(this.sql).get(...norm(this.args)); return r === undefined ? null : r; }
+  async all() { return { results: this.db.prepare(this.sql).all(...norm(this.args)), success: true }; }
+  async run() {
+    const r = this.db.prepare(this.sql).run(...norm(this.args));
+    return { success: true, meta: { last_row_id: Number(r.lastInsertRowid), changes: Number(r.changes) } };
+  }
+}
+class DB {
+  constructor() {
+    this.db = new DatabaseSync(":memory:");
+    this.db.exec(`
+      CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, discord TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), email_verified INTEGER DEFAULT 0, role TEXT DEFAULT 'user');
+      CREATE TABLE sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), expires_at INTEGER NOT NULL);
+      CREATE TABLE auth_tokens (token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL, purpose TEXT NOT NULL, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, payload TEXT);
+      CREATE TABLE rate_limits (rl_key TEXT PRIMARY KEY, count INTEGER NOT NULL, window_start INTEGER NOT NULL);
+      CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, order_id TEXT NOT NULL UNIQUE, purchase_id TEXT, payment_id TEXT, amount REAL, currency TEXT DEFAULT 'eur', type TEXT, package TEXT, description TEXT, status TEXT DEFAULT 'pending', promo_code TEXT, discount REAL DEFAULT 0, meta TEXT, extra TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), email TEXT);
+      CREATE UNIQUE INDEX idx_orders_purchase_id_dev ON orders(purchase_id);
+      CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id TEXT NOT NULL, conversation_id TEXT, user_id INTEGER, sender TEXT NOT NULL DEFAULT 'customer', body TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+      CREATE TABLE conversations (id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id TEXT NOT NULL UNIQUE, user_id INTEGER, order_id TEXT, purchase_id TEXT, subject TEXT, status TEXT DEFAULT 'open', assigned_admin TEXT, created_at TEXT, updated_at TEXT);
+      CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);
+      CREATE TABLE audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, actor_user_id INTEGER, actor_email TEXT, action TEXT, target TEXT, detail TEXT, created_at TEXT);
+      CREATE TABLE beta_feedback (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, email TEXT, area TEXT, body TEXT, created_at TEXT);
+    `);
+  }
+  prepare(sql) { return new Stmt(this.db, sql); }
+}
+
+const adminEmail = process.env.DEV_ADMIN_EMAIL || "admin@local.test";
+const adminPassword = randomBytes(9).toString("base64url") + "1a";
+
+const env = {
+  DB: new DB(),
+  CONTACT_TO: "questions@get-aether.de,business@get-aether.de",
+  CONTACT_FROM: "Aether <questions@get-aether.de>",
+  // No ALLOWED_ORIGIN here on purpose: the worker then falls back to the real allowlist.
+  ALLOW_DEV_ORIGIN: "true",
+  SITE_URL: `http://127.0.0.1:${PORT}`,
+  PROMO_CODES: '{"WELCOME10":{"type":"percent","value":10}}',
+  ADMIN_EMAILS: adminEmail,
+};
+
+const worker = (await import("./worker/src/index.js")).default;
+
+// A demo admin account so /admin.html can be exercised locally.
+{
+  const res = await worker.fetch(new Request(`http://127.0.0.1:${PORT}/api/auth/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: `http://127.0.0.1:${PORT}`, "cf-connecting-ip": "127.0.0.1" },
+    body: JSON.stringify({ email: adminEmail, password: adminPassword, discord: "localdev" }),
+  }), env, {});
+  if (res.status !== 200) console.error("Could not create the local admin account:", res.status, await res.text());
+}
+
+// ---------- static files ----------
+const MIME = {
+  ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
+  ".jpg": "image/jpeg", ".webp": "image/webp", ".ico": "image/x-icon", ".txt": "text/plain; charset=utf-8",
+  ".woff2": "font/woff2", ".map": "application/json; charset=utf-8",
+};
+
+async function serveStatic(pathname, res) {
+  let rel = decodeURIComponent(pathname);
+  if (rel === "/" || rel === "") rel = "/index.html";
+  const target = resolve(join(ROOT, normalize(rel).replace(/^(\.\.[/\\])+/, "")));
+  if (!target.startsWith(ROOT)) { res.writeHead(403).end("Forbidden"); return; }
+  try {
+    const info = await stat(target);
+    if (info.isDirectory()) { res.writeHead(404).end("Not found"); return; }
+    const body = await readFile(target);
+    res.writeHead(200, {
+      "content-type": MIME[extname(target).toLowerCase()] || "application/octet-stream",
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+    });
+    res.end(body);
+  } catch {
+    // GitHub Pages serves 404.html for unknown paths — mirror that here.
+    try {
+      const body = await readFile(join(ROOT, "404.html"));
+      res.writeHead(404, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+      res.end(body);
+    } catch { res.writeHead(404).end("Not found"); }
+  }
+}
+
+// ---------- server ----------
+createServer(async (req, res) => {
+  const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
+  if (url.pathname.startsWith("/api/") || url.pathname === "/api") {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const body = chunks.length ? Buffer.concat(chunks) : undefined;
+    const headers = { ...req.headers };
+    if (!headers["cf-connecting-ip"]) headers["cf-connecting-ip"] = req.socket.remoteAddress || "127.0.0.1";
+    const request = new Request(url.toString(), { method: req.method, headers, body, duplex: "half" });
+    try {
+      const started = Date.now();
+      const out = await worker.fetch(request, env, { waitUntil() {}, passThroughOnException() {} });
+      const text = await out.text();
+      const outHeaders = {};
+      out.headers.forEach((v, k) => { outHeaders[k] = v; });
+      const cookies = out.headers.getSetCookie ? out.headers.getSetCookie() : [];
+      if (cookies.length) outHeaders["set-cookie"] = cookies;
+      res.writeHead(out.status, outHeaders);
+      res.end(text);
+      console.log(`${req.method} ${url.pathname}${url.search} -> ${out.status} (${Date.now() - started}ms)`);
+    } catch (e) {
+      console.error("worker error", e);
+      res.writeHead(500, { "content-type": "application/json" }).end(JSON.stringify({ error: "dev worker crashed" }));
+    }
+    return;
+  }
+  await serveStatic(url.pathname, res);
+}).listen(PORT, "127.0.0.1", () => {
+  console.log(`\nAether dev server: http://127.0.0.1:${PORT}`);
+  console.log(`  admin account (in-memory only): ${adminEmail} / ${adminPassword}`);
+  console.log(`  API is served same-origin at /api/* through the real worker\n`);
+});
