@@ -193,7 +193,7 @@
     if (!rows.length) { body.innerHTML = '<tr><td colspan="7" class="acc-empty">No orders match.</td></tr>'; return; }
     body.innerHTML = rows.map(o => `<tr data-order="${esc(o.order_id)}">
       <td class="mono">${esc(o.order_id)}</td>
-      <td>${esc(o.user_email || (o.user_id ? "#" + o.user_id : "guest"))}</td>
+      <td>${esc(o.user_email || (o.user_id ? "#" + o.user_id : "legacy order — no account"))}</td>
       <td>${esc(item(o))}</td>
       <td>${esc(money(o.amount, o.currency))}${o.discount ? ` <span class="mono">−€${esc(Number(o.discount).toFixed(0))}</span>` : ""}</td>
       <td><span class="acc-badge ${statusClass(o.status)}">${esc(o.status || "pending")}</span></td>
@@ -450,7 +450,7 @@
       if (!list.length) { body.innerHTML = '<tr><td colspan="5" class="acc-empty">No messages yet.</td></tr>'; return; }
       body.innerHTML = list.map(m => `<tr>
         <td class="mono">${esc(when(m.created_at))}</td>
-        <td>${esc(m.user_email || "guest")}<br><span class="mono">${esc(m.sender)}</span></td>
+        <td>${esc(m.user_email || "legacy — no account")}<br><span class="mono">${esc(m.sender)}</span></td>
         <td class="mono">${esc(m.order_id)}</td>
         <td style="max-width:420px">${esc(String(m.body || "").slice(0, 400))}${String(m.body || "").length > 400 ? "…" : ""}</td>
         <td><button class="acc-btn ghost mini" data-open="${esc(m.order_id)}" type="button">Open ↗</button></td>
