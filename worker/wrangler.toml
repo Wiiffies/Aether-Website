@@ -3,10 +3,12 @@ main = "src/index.js"
 compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Custom domain — we will create this via API after deploy
-# If api.get-aether.de is already routed to this worker, this stays in sync
+# Routes (live): the API is served from the same origin as the site, so the session cookie stays
+# first-party. `api.get-aether.de/*` is kept for legacy links and the NOWPayments IPN callback.
 routes = [
-  { pattern = "api.get-aether.de/*", zone_name = "get-aether.de" }
+  { pattern = "get-aether.de/api/*", zone_name = "get-aether.de" },
+  { pattern = "www.get-aether.de/api/*", zone_name = "get-aether.de" },
+  { pattern = "api.get-aether.de/*", zone_name = "get-aether.de" },
 ]
 
 # D1 — authenticated orders + per-order chat (orders/messages stay here, email+Discord still fire)
@@ -23,8 +25,8 @@ CONTACT_TO = "questions@get-aether.de,business@get-aether.de"
 # Resend FROM must be a verified sender on get-aether.de — use questions@ (never hello@ / orders@)
 CONTACT_FROM = "Aether <questions@get-aether.de>"
 
-# CORS — your live site origins (comma-separated)
-ALLOWED_ORIGIN = "*"
+# CORS — explicit allowlist (comma-separated). A literal "*" is ignored by the Worker on purpose.
+ALLOWED_ORIGIN = "https://get-aether.de,https://www.get-aether.de,https://api.get-aether.de"
 
 # Where NOWPayments redirects the customer after pay / cancel
 SUCCESS_URL = "https://get-aether.de/payment-success.html"
@@ -36,17 +38,32 @@ CANCEL_URL = "https://get-aether.de/payment-cancel.html"
 # Until set, /api/promo returns {valid:false}.
 PROMO_CODES = ""
 
-# Admin accounts — comma-separated emails that unlock /api/admin/* and see every order + message.
-# Empty = nobody is admin (routes return 403). Example: "you@example.com,ops@example.com"
+# Admin accounts — the ONLY source of admin rights (never a database column, never the frontend).
+# `ADMIN_EMAIL` takes a single address, `ADMIN_EMAILS` a comma-separated list; both are read and
+# unioned. Empty = nobody is admin (every /api/admin/* route returns 403).
+ADMIN_EMAIL = ""
 ADMIN_EMAILS = ""
+
+# Optional behaviour switches — all have safe code defaults, all can also be set in the dashboard.
+# SITE_URL = "https://get-aether.de"                 # links in verification/reset emails
+# REQUIRE_EMAIL_VERIFICATION = "true"               # force the verified-email gate without a mail provider
+# BETA_HOST = "betatester.get-aether.de"            # Beta hostname (admin panel can override)
+# BETA_PATH = "/yesthisistheofficaldomainanditssolong..."   # Beta path (long on purpose — obscurity only)
+# BETA_FLAGS = '{"betaNewChat":true,"betaDashboard":true,"betaTools":true}'
+# AETHER_ENV = "production"                         # reported by /api/beta/status
+# TURNSTILE_LOGIN = "false"                         # captcha on login too, once TURNSTILE_SECRET exists
 
 # Optional overrides (leave empty to auto-derive from request)
 # NOWPAYMENTS_IPN_URL = "https://api.get-aether.de/api/ipn"
 
-# Secrets — NEVER put them here. Set them with:
+# Secrets — NEVER put them here, and never in any file in this repository. Set them with:
 #   npx wrangler secret put RESEND_API_KEY
 #   npx wrangler secret put NOWPAYMENTS_API_KEY
 #   npx wrangler secret put NOWPAYMENTS_IPN_SECRET
+#   npx wrangler secret put NOWPAYMENTS_IPN_SECRET_2
 #   npx wrangler secret put DISCORD_WEBHOOK_URL
-#   npx wrangler secret put PROMO_CODES   (or set as plaintext var above)
-# The worker also works without them (mock mode) until you add them.
+#   npx wrangler secret put TURNSTILE_SECRET
+# A `wrangler deploy` must keep the existing bindings: use `--keep-vars` (the CI workflow does),
+# and the API-relay deploy recipe always sends
+# keep_bindings:["plain_text","secret_text","d1","kv_namespace"].
+# Without the secrets the Worker still runs: payments/IPN/mail report as unconfigured, health says so.

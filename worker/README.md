@@ -1,99 +1,63 @@
-# Aether — Cloudflare Worker + NOWPayments
+# Aether API — Cloudflare Worker
 
-Real email delivery + Discord + crypto checkout. `mailto:` is fallback only.
+The whole backend of get-aether.de is this one Worker (`aether-api`, source `worker/src/index.js`,
+routed at `get-aether.de/api/*` and `www.get-aether.de/api/*`). It serves the customer portal, the
+private Beta, the admin panel, the checkout, the NOWPayments IPN and every email/Discord
+notification. There is no other service and no other secret store.
 
-## Endpoints
+Full endpoint list, database schema, variables and the exact deploy recipe live in
+[`../MASTER_PROMPT.md`](../MASTER_PROMPT.md). This file is the short version for people working in
+this directory.
 
-| Route | Purpose |
-|---|---|
-| `POST /api/order` | Custom builders + contact form → email + Discord + customer auto-reply |
-| `POST /api/invoice` | Tier / builder Pay with Crypto → pending email + Discord, creates NOWPayments invoice, returns `invoice_url` |
-| `POST /api/ipn` | NOWPayments HMAC-verified callback → PAID/FAILED email + Discord |
-| `GET /api/health` | Shows which secrets/vars are configured (no values leaked) |
+## Bindings and secrets
 
-Frontend hits `https://api.get-aether.de/api/*` (via `public/aether-config.js → apiBase`).
+| Binding | Type | Notes |
+| --- | --- | --- |
+| `DB` | D1 `aether-db` | users, sessions, tokens, rate limits, orders, messages, conversations, settings, audit log, beta feedback |
+| `RESEND_API_KEY` | secret | outgoing mail; when absent every response reports `email:false` and the verification gate stands down honestly |
+| `NOWPAYMENTS_API_KEY` | secret | Payment API (never the Invoice API) |
+| `NOWPAYMENTS_IPN_SECRET`, `NOWPAYMENTS_IPN_SECRET_2` | secret | both are checked against the `x-nowpayments-sig` HMAC |
+| `DISCORD_WEBHOOK_URL` | secret | order/chat notifications |
+| `TURNSTILE_SECRET` | secret (optional) | captcha hook; set it together with the site key or leave both unset |
+| `CONTACT_TO`, `CONTACT_FROM`, `SUCCESS_URL`, `CANCEL_URL`, `SITE_URL` | vars | mail routing and link building |
+| `ADMIN_EMAIL` / `ADMIN_EMAILS` | vars | the only source of admin rights — `admin` is **never** a database value |
+| `NEW: ALLOWED_ORIGIN`, `PROMO_CODES`, `REQUIRE_EMAIL_VERIFICATION`, `BETA_HOST`, `BETA_PATH`, `BETA_FLAGS`, `AETHER_ENV` | vars | see MASTER_PROMPT.md |
 
-## Inboxes — DO NOT change
+**Never put a secret in `wrangler.toml`.** Secrets exist only as Worker secrets.
 
-`questions@get-aether.de` — normal orders + questions
-`business@get-aether.de` — business opportunities only
+## Rules that must not be broken
 
-Both are **Cloudflare Email Routing** forwards — the Worker never touches MX.
-Outgoing mail (Resend) only sends *from* a verified address — `questions@get-aether.de`.
+- **ASCII only.** Write every non-ASCII character as `\uXXXX`; `../_build_chunks.mjs` aborts if it
+  finds a byte above 127, and a single non-ASCII byte once turned the Discord embeds into `?`.
+- **PBKDF2 ≤ 100 000 iterations** — workerd rejects higher counts with a bare `1101`.
+- **Deploys must preserve bindings**: any upload includes
+  `keep_bindings:["plain_text","secret_text","d1","kv_namespace"]` (or `wrangler deploy --keep-vars`).
+- **Inboxes**: `questions@get-aether.de` for orders/questions, `business@get-aether.de` for business
+  only. `CONTACT_FROM` stays `Aether <questions@get-aether.de>`. Never touch MX or Email Routing.
+- **Authorisation stays server-side**: no route may trust a role, an owner id or a Purchase ID sent
+  by the browser.
 
-## 1) Resend — outgoing email
-
-1. Resend → API Keys → create key.
-2. Domains → Add `get-aether.de` → add the DNS records Resend shows you in **Cloudflare DNS**:
-   - Typically 1–2 `TXT` for SPF/DKIM + optionally an `MX` for Resend inbound (do NOT delete the 3 `route*.mx.cloudflare.net` MX records — Email Routing stays).
-3. Domain = Verified → you can send from `Aether <questions@get-aether.de>` (set in `wrangler.toml → CONTACT_FROM`).
-
-If Resend still shows `Domain not verified`, check `TXT` propagation (`dig txt get-aether.de` and `dig txt send.get-aether.de` etc. — exact hostnames are shown in Resend).
-
-## 2) NOWPayments — crypto
-
-1. nowpayments.io → **Settings → API Keys** → Generate key.
-2. **Settings → IPN Settings** → generate **IPN Secret**, set callback to `https://api.get-aether.de/api/ipn`.
-3. Payment settings → enable BTC, LTC, ETH, XMR (minimum).
-
-## 3) Deploy
-
-```bash
-cd worker
-npm install
-npx wrangler login
-npx wrangler secret put RESEND_API_KEY
-npx wrangler secret put NOWPAYMENTS_API_KEY
-npx wrangler secret put NOWPAYMENTS_IPN_SECRET
-npx wrangler secret put DISCORD_WEBHOOK_URL
-npx wrangler deploy
-curl https://api.get-aether.de/api/health
-# {"ok":true,"resend":true,"nowpayments":true,"ipnSecret":true,"discord":true,...}
-```
-
-`api.get-aether.de` is already bound as a Worker custom domain (`AAAA 100::` proxied) — `wrangler deploy` attaches to it via `routes` in `wrangler.toml`.
-
-## 4) Vars (wrangler.toml)
-
-```
-CONTACT_TO   = "questions@get-aether.de,business@get-aether.de"  # used as defaults; Worker routes per-type
-CONTACT_FROM = "Aether <questions@get-aether.de>"
-ALLOWED_ORIGIN = "https://get-aether.de,https://www.get-aether.de,https://wiiffies.github.io"
-SUCCESS_URL  = "https://get-aether.de/payment-success.html"
-CANCEL_URL   = "https://get-aether.de/payment-cancel.html"
-# NOWPAYMENTS_IPN_URL = "https://api.get-aether.de/api/ipn"  # optional override
-```
-
-## 5) Frontend
-
-`public/aether-config.js`:
-
-```js
-window.AETHER_CONFIG = { apiBase: "https://api.get-aether.de", currency: "eur" };
-```
-
-Empty `apiBase` → forms fall back to `mailto:questions@get-aether.de`.
-
-## 6) Test locally
+## Test and run locally
 
 ```bash
-npx wrangler dev  # http://localhost:8787
-
-curl -X POST http://localhost:8787/api/order -H "content-type: application/json" -d '{
-  "type":"discord_bot","package":"Custom","amount":55,
-  "discord":"test_user","email":"you@example.com",
-  "description":"Test bot please","meta":{"language":"Python","commands":12}
-}'
-
-curl -X POST http://localhost:8787/api/invoice -H "content-type: application/json" -d '{
-  "amount":15,"currency":"eur","type":"discord_bot","package":"BASIC",
-  "discord":"test_user","email":"you@example.com","description":"Aether BASIC bot — test"
-}'
+node ../_test-worker.mjs     # 177 checks against an in-memory D1 stub — run before every deploy
+node ../_dev-server.mjs      # static site + this Worker on http://127.0.0.1:5501
 ```
 
-## Troubleshooting
+## Deploy
 
-- `503 NOWPayments not configured` → missing `NOWPAYMENTS_API_KEY`.
-- Resend `403` → `CONTACT_FROM` domain not verified in Resend.
-- `401 Bad signature` → IPN secret mismatch.
-- No Discord ping → missing `DISCORD_WEBHOOK_URL`; Worker still returns 200.
+Two supported paths:
+
+1. **CI (preferred once a token exists):** add `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
+   as repository secrets; `.github/workflows/deploy-worker.yml` then runs the checks and deploys on
+   every push that touches `worker/**`.
+2. **KV relay (used until then):** the checksum-verified recipe in
+   [`../MASTER_PROMPT.md`](../MASTER_PROMPT.md) §DEPLOY — build chunks, verify sha256, upload to
+   both `aether-api` and `aether-payments`.
+
+After deploying, always verify:
+
+```bash
+curl https://get-aether.de/api/health          # {"ok":true,...,"db":true}
+curl -i https://get-aether.de/api/conversations # 401 for anonymous callers
+```

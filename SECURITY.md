@@ -69,6 +69,42 @@ The frontend talks to the API **same-origin** by default (`public/aether-config.
   routes filter by `user_id`, so one customer cannot read another's order (IDOR-safe).
 * **Payment status endpoint**: returns status + amounts only — no provider payload, no
   customer PII, no pay address.
+* **Roles (User / Tester / Admin)**: stored in `users.role` and resolved on every request.
+  `admin` can be derived **only** from the server-side `ADMIN_EMAILS` / `ADMIN_EMAIL`
+  configuration — `POST /api/admin/users/:id/role` accepts `user` or `tester` and rejects
+  `admin`, so neither a forged request nor a database row can escalate an account. No hidden
+  or hardcoded admin account exists, and admin accounts cannot be demoted or deleted through
+  the API.
+* **Email verification gate**: protected customer data (purchases, conversations, Beta) is
+  refused with `403 EMAIL_UNVERIFIED` until the address is confirmed. The gate is computed
+  server-side and switches on automatically as soon as email delivery is configured (forced
+  with `REQUIRE_EMAIL_VERIFICATION`); when no provider exists it stands down rather than
+  locking every account out of its own data, and `/api/me` reports that honestly.
+* **Purchase IDs** (`AETH-YYYY-XXXXXXXX`): generated server-side from a CSPRNG, unique
+  (unique index + collision retry), ambiguity-free alphabet, lazily backfilled for older
+  orders. A Purchase ID is an identifier, not a credential: `GET /api/purchases/:id` still
+  filters by the session account, so knowing (or guessing) someone else's ID reveals nothing.
+* **Conversations**: the owner is always taken from the session, never from the request.
+  Reading, posting, closing or attaching a Purchase ID to another account's thread returns
+  `404`; customers cannot reach each other's threads even with a correct conversation id, and
+  the admin/support path is a separate `/api/admin/conversations/*` route behind
+  `requireAdmin`.
+* **Chat input**: control characters stripped, 4000-character hard cap (server-side), rate
+  limited per route, stored as plain text and escaped at render time — no HTML is executed.
+* **Legacy order chat**: pre-existing per-order threads (messages keyed only by `order_id`)
+  are surfaced inside the account's own conversation history; the ownership filter is applied
+  in the same query, so the bridge cannot leak another account's messages.
+* **Beta access**: `/api/beta/*` requires a session + verified email + Tester/Admin role on
+  every call. `/api/beta/access` answers `allowed: false` and returns **no URL** to everyone
+  else, and the obscure Beta path is treated as obscurity only. Cross-host sessions use a
+  single-use, 120-second, hashed ticket.
+* **Beta configuration changes**: admin session + verified email + password re-entry, then a
+  64-hex single-use token (30 min, stored hashed, payload in `auth_tokens.payload`) emailed to
+  the admin. The confirmation re-checks that the account is still an admin before the setting
+  is written, and both steps are audit-logged. A browser request alone cannot change it.
+* **Audit log**: `tester.grant`, `tester.revoke`, `conversation.*`, `beta.domain.request`,
+  `beta.domain.confirm`, `beta.flags`, `beta.ticket`, `beta.redeem` are recorded with actor,
+  target, detail and timestamp; readable only through `/api/admin/audit`.
 
 ## 3. Enforced by Cloudflare (already applied by API)
 
@@ -112,6 +148,22 @@ The frontend talks to the API **same-origin** by default (`public/aether-config.
    in favour of the built-in allowlist. Set it explicitly to
    `https://get-aether.de,https://www.get-aether.de,https://api.get-aether.de` so the
    dashboard reflects reality.
+9. **Admin email variable**: dashboard `ADMIN_EMAILS` currently holds a guessed address.
+   Set `ADMIN_EMAIL=alex.real.apple@gmail.com` (and clear/replace `ADMIN_EMAILS`) so admin
+   authorization matches the real owner. The value must never appear in frontend code.
+10. **Beta hostname**: create the DNS record for `betatester.get-aether.de`, route
+    `betatester.get-aether.de/api/*` to the Beta Worker, and serve the Beta branch build at
+    the configured long path. The admin panel's Beta tab writes `settings.beta_host` /
+    `settings.beta_path`, but DNS and routing are dashboard work.
+11. **Beta data isolation**: give the Beta its own Worker, KV namespace and D1 database
+    (with the same schema), and its own secrets. Never copy payment/email/webhook secrets from
+    production into it. Set `AETHER_ENV=beta` there.
+12. **Edge rate limit for chat + Beta** (free plan allows a single rule, currently used by the
+    auth/forms rule): on a paid plan add a second rule for `/api/conversations*`,
+    `/api/beta/*` and `/api/admin/*`. Until then the Worker's own per-route limits apply.
+13. **Email verification**: once `RESEND_API_KEY` is set the verification gate turns on by
+    itself. Confirm the sending domain in Resend first, then register a test account and walk
+    the flow end to end (register → email → confirm → purchases unlock).
 
 ## 5. Secret handling
 
@@ -123,6 +175,12 @@ The frontend talks to the API **same-origin** by default (`public/aether-config.
   `MASTER_PROMPT.md`.
 * Never "hide" a secret with base64, minification or obfuscation — those are not security
   mechanisms and the repo is public.
+* The Beta deployment is a **separate** environment: it gets its own Worker/KV/D1 and its own
+  secrets. Production credentials are never exposed to it, and Beta-only data lives in
+  Beta-only tables (`beta_feedback`) so experimentation cannot corrupt production rows.
+* `ADMIN_EMAIL` / `ADMIN_EMAILS` are configuration, not credentials: knowing the admin email
+  address grants nothing, because authorization is resolved from the authenticated account's
+  role plus that configuration on the server.
 
 ## 6. Reporting a problem
 

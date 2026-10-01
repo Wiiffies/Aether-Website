@@ -107,24 +107,31 @@ Single source of truth for the customer-portal / Beta work. Status legend:
 - [x] Beta entry shown only to testers (server-provided), `beta.html` area with indicators
 - [x] Admin UI: roles, verification status, conversations, Beta config
 - [x] Shared styling for chat lists, badges, status pills, empty/loading/error states
+- [x] Every page uses the 436-byte `public/aether-logo.svg` (was a 1.2 MB PNG on 17 pages); the raster is kept only for the Discord embed thumbnail, which cannot render SVG
+- [x] `README.md` written for the public repository (architecture, layout, local dev, deployment, security posture, docs index)
 
 ## 10. Testing / audit
 
 - [x] 177 automated checks (`node _test-worker.mjs`) incl. IDOR, privilege escalation, Beta gating
-- [x] Secret scan (repo + `public/` contain no keys, tokens, or credentials)
-- [x] Worker stays ASCII-only; `_build_chunks.mjs` ASCII guard passes
-- [x] Live verification after deployment
+- [x] Secret scan (repo + `public/` contain no keys, tokens, or credentials — only `.env.example` placeholders)
+- [x] Worker stays ASCII-only; `_build_chunks.mjs` ASCII guard passes (0 non-ASCII bytes)
+- [x] Worker rebuilt + redeployed live 2026-10-01: sha256 `1a1c22b74b282b96efb3739c9be233237ee4601b417c9e33e35f10e56a14fee7`, 135 027 bytes, 22 chunks, uploaded to `aether-api` **and** `aether-payments` (200/ok)
+- [x] Live verification after deployment: `/api/health` → `{ok:true,email:false,payments:true,ipnSignature:true,discord:true,db:true}`; anonymous `/api/conversations`, `/api/purchases/…`, `/api/beta/access` and `/api/me` all 401
+- [x] Browser-verified locally: portal dashboard (purchase + conversation history), tester `beta.html`, admin tabs (Conversations, Beta config + audit) incl. the whole Beta-domain request/confirm flow
 
 ## 11. Git + independent Beta deployment
 
 - [x] Real git repository initialized in the working copy (`main`)
 - [x] `beta` branch created and independently deployable (separate workflow + separate Beta config)
-- [x] Production/Alpha deploy workflow only triggers from `main`; Beta workflow only from `beta`
-- [ ] MANUAL: add the GitHub remote + push both branches (no remote exists in this checkout)
-- [ ] MANUAL: point GitHub Pages at the repository and enable the Beta deployment target
+- [x] Production checks run only on `main`/PRs; the Beta workflow only on `beta`, and it never falls back to the production Pages site
+- [x] Remote added and both branches pushed: `https://github.com/Wiiffies/Aether-Website` (public)
+- [x] GitHub Pages publishes `main` through its branch build, custom domain `get-aether.de` kept by the committed `CNAME`, artifact trimmed by `_config.yml`
+- [ ] MANUAL: set the `beta` environment's `BETA_TARGET` + `BETA_DEPLOY_TOKEN`, then wire the transfer step in `deploy-beta.yml`
 
 ## 12. Remaining / blocked
 
-- [ ] MANUAL: DNS record + worker route for the Beta hostname
-- [ ] MANUAL: separate Beta D1/KV (data isolation) before real Beta testing
-- [ ] MANUAL: `PROMO_CODES`, `TURNSTILE_*`, `RESEND_API_KEY` dashboard values (still unset)
+- [ ] MANUAL: DNS record + worker route for the Beta hostname (`betatester.get-aether.de` + the long path)
+- [ ] MANUAL: separate Beta Worker with its own D1/KV/secrets (data isolation) before real Beta testing — today isolation is configuration, not a hard boundary
+- [ ] MANUAL: DNS record + route if the portal should live on its own `Customer.get-aether.de` hostname (today it is same-origin on get-aether.de)
+- [ ] MANUAL: `PROMO_CODES`, `TURNSTILE_*`, `RESEND_API_KEY`, `ADMIN_EMAIL` dashboard values
+- [ ] MANUAL: SSL mode → Full (strict), explicit `ALLOWED_ORIGIN`, second edge rate-limit rule for chat/Beta/admin (free plan allows one)

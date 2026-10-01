@@ -1,12 +1,16 @@
-name: Deploy Beta (beta branch only)
+name: Beta (beta branch only)
 
 # The Beta is a REAL, separately deployable environment: this workflow is the only one that
-# publishes it, it runs ONLY from the `beta` branch, and it targets its own environment and
-# hostname. It never touches the production deployment, and production never touches Beta.
+# publishes it, it runs ONLY from the `beta` branch, and it targets its own environment, its own
+# hostname and — before real testers — its own Worker, KV namespace and D1 database.
 #
 # The obscure Beta URL only reduces accidental discovery. Access is enforced by the Worker
-# (session + verified email + Tester role) - never by the URL, the branch name or a hidden
-# button.
+# (session + verified email + Tester role) — never by the URL, the branch name or a hidden button.
+#
+# This workflow deliberately does **not** fall back to this repository's Pages site: that site is
+# production, and a `beta` push must never be able to overwrite it. Set the `beta` environment's
+# `BETA_TARGET` variable (and `BETA_DEPLOY_TOKEN` secret) and wire the transfer step at the bottom;
+# until then the publish job skips and only the checks run.
 on:
   push:
     branches: [beta]
@@ -19,16 +23,14 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages-beta
+  group: beta
   cancel-in-progress: true
 
 jobs:
   checks:
-    name: Static checks
+    name: Static checks + Worker suite
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,44 +44,43 @@ jobs:
           fi
       - name: Inline JavaScript parses
         run: node _check-inline-js.mjs *.html
+      - name: Worker is ASCII-only and compiles
+        run: |
+          node --check worker/src/index.js
+          node -e "const s=require('fs').readFileSync('worker/src/index.js');let n=0;for(const b of s)if(b>127)n++;if(n){console.error('non-ASCII bytes: '+n);process.exit(1)}"
       - name: Worker test suite (D1 stub)
         run: node _test-worker.mjs
+      - name: Beta build is identifiable
+        run: |
+          # The Beta branch must carry its own marker so a Beta build can never be mistaken for
+          # production (see BETA_BRANCH.md).
+          grep -q "betaDeployment" public/aether-config.js \
+            && echo "Beta marker present." \
+            || { echo "::error::public/aether-config.js is missing the betaDeployment marker."; exit 1; }
 
   deploy:
     name: Publish Beta build
     needs: checks
+    if: ${{ vars.BETA_TARGET != '' }}
     runs-on: ubuntu-latest
     environment:
       name: beta # separate environment -> separate secrets/vars from production
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      # BETA_TARGET is a repository/environment variable holding the Beta deployment target
-      # (its own Pages project, or a bucket/host). Falling back to Pages keeps the workflow
-      # runnable before the target is configured.
-      - name: Show Beta target
+      - name: Require the Beta deploy token
         env:
-          BETA_TARGET: ${{ vars.BETA_TARGET }}
-          BETA_HOST: ${{ inputs.beta_host || vars.BETA_HOST }}
+          BETA_DEPLOY_TOKEN: ${{ secrets.BETA_DEPLOY_TOKEN }}
         run: |
-          echo "Beta target: ${BETA_TARGET:-<unset - defaults to this repository's Pages site>}"
-          echo "Beta host  : ${BETA_HOST:-<unset - see the admin panel: settings.beta_host>}"
-      - uses: actions/configure-pages@v5
-        if: ${{ vars.BETA_TARGET == '' }}
-      - uses: actions/upload-pages-artifact@v3
-        if: ${{ vars.BETA_TARGET == '' }}
-        with:
-          path: .
-      - id: deployment
-        if: ${{ vars.BETA_TARGET == '' }}
-        uses: actions/deploy-pages@v4
-      - name: Deploy to a dedicated Beta target
-        if: ${{ vars.BETA_TARGET != '' }}
+          test -n "$BETA_DEPLOY_TOKEN" || { echo "::error::BETA_DEPLOY_TOKEN is not set for the beta environment."; exit 1; }
+          echo "Token present."
+      - name: Deploy to the Beta target
         env:
           BETA_TARGET: ${{ vars.BETA_TARGET }}
           BETA_DEPLOY_TOKEN: ${{ secrets.BETA_DEPLOY_TOKEN }}
+          BETA_HOST: ${{ inputs.beta_host || vars.BETA_HOST }}
         run: |
-          echo "Configure the actual transfer for your target here (rsync/S3/wrangler), using"
-          echo "BETA_DEPLOY_TOKEN and the BETA_TARGET variable. Nothing is published without it."
-          echo "Target: $BETA_TARGET"
-          test -n "$BETA_DEPLOY_TOKEN" || { echo "::error::BETA_DEPLOY_TOKEN secret is not set for the beta environment."; exit 1; }
+          echo "Target : $BETA_TARGET"
+          echo "Host   : ${BETA_HOST:-<unset — the Worker's settings.beta_host decides>}"
+          echo "::error::Wire the transfer for this target here (for example 'wrangler pages deploy .' "
+          echo "to a Beta Pages project, or rsync/S3 with BETA_DEPLOY_TOKEN). Nothing was published."
+          exit 1

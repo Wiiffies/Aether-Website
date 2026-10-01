@@ -1,24 +1,43 @@
-name: Deploy production (main)
+name: Production checks (main)
 
-# Production/Alpha deploy. Only `main` may deploy the live site: a change that only
-# exists on the `beta` branch can never overwrite production through this workflow.
+# How production is published: **GitHub Pages branch build** — Settings → Pages → Deploy from a
+# branch → `main` / `/`. That pipeline needs no credentials and cannot be broken by a workflow,
+# which is why it is still the live publisher for get-aether.de.
+#
+# This workflow therefore runs the checks a deploy would gate on — on every push to `main` and on
+# every pull request — so a red run is visible immediately. Treat a failing run as "do not merge" /
+# "roll forward with a fix", because the branch build has already published the commit.
+#
+# Want checks to actually gate publishing? Switch Pages to "GitHub Actions" as its source
+# (Settings → Pages, or `PUT /repos/{owner}/{repo}/pages {"build_type":"workflow"}`), restore the
+# `deploy` job below, and make sure the Beta workflow keeps its own target so it can never publish
+# over production:
+#
+#   deploy:
+#     needs: checks
+#     environment: github-pages
+#     steps:
+#       - uses: actions/checkout@v4
+#       - uses: actions/configure-pages@v5
+#       - uses: actions/upload-pages-artifact@v3
+#         with: { path: . }
+#       - uses: actions/deploy-pages@v4
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages-production
+  group: checks-production
   cancel-in-progress: true
 
 jobs:
   checks:
-    name: Static checks
+    name: Static checks + Worker suite
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,19 +54,17 @@ jobs:
           node -e "const s=require('fs').readFileSync('worker/src/index.js');let n=0;for(const b of s)if(b>127)n++;if(n){console.error('non-ASCII bytes: '+n);process.exit(1)}console.log('worker ASCII-only, '+s.length+' bytes')"
       - name: Worker test suite (D1 stub, 177 checks)
         run: node _test-worker.mjs
-
-  deploy:
-    name: Publish to GitHub Pages
-    needs: checks
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: .
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: No secrets committed
+        run: |
+          if git ls-files -z | xargs -0 grep -nIE '(re_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY|AKIA[0-9A-Z]{16})' | grep -v '^\.env\.example:'; then
+            echo "::error::A credential-looking value is committed. Remove it and rotate the key."
+            exit 1
+          fi
+          echo "Secret scan clean (environment placeholders only)."
+      - name: References to the placeholder site are gone
+        run: |
+          if grep -rIl "Under construction" --include="*.html" . ; then
+            echo "::error::A page still ships the old placeholder copy."
+            exit 1
+          fi
+          echo "All pages are real pages."
