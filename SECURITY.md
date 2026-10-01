@@ -43,7 +43,9 @@ The frontend talks to the API **same-origin** by default (`public/aether-config.
   authenticated by HMAC signature instead. Combined with `SameSite=Lax` this closes
   classic cross-site request forgery.
 * **CORS**: explicit origin allowlist, never a wildcard, never a reflected unknown origin.
-  `ALLOWED_ORIGIN="*"` is intentionally **ignored** in favour of built-in defaults.
+  `ALLOWED_ORIGIN` is now set explicitly to `https://get-aether.de,https://www.get-aether.de,https://api.get-aether.de`
+  (a literal `*` is still intentionally **ignored** in favour of built-in defaults, so a bad
+  dashboard edit can never turn the API into a wildcard).
 * **Rate limiting** (two layers): per-isolate burst counter + D1 fixed-window counters
   shared by every isolate. Login 12/15 min, register 6/h, forgot 6/h, reset 12/h,
   password change 10/h, verify-email 30/h, order 40/h, contact 20/h, invoice 40/h,
@@ -80,6 +82,13 @@ The frontend talks to the API **same-origin** by default (`public/aether-config.
   server-side and switches on automatically as soon as email delivery is configured (forced
   with `REQUIRE_EMAIL_VERIFICATION`); when no provider exists it stands down rather than
   locking every account out of its own data, and `/api/me` reports that honestly.
+* **Account-only checkout**: `POST /api/invoice` requires a session — a signed-out buyer gets
+  `401 {"code":"ACCOUNT_REQUIRED"}` and **no order row is written**. The order is owned by the
+  session account (`user_id` comes from the session, never from the body) and the account's own
+  email is the one invoices and updates go to; a posted `email` is only a fallback for an account
+  row with no usable address. `/api/order` (the free inquiry form) never creates an order, so there
+  is no email-only path into the order table. Legacy rows written by the old guest checkout are
+  claimed when that email registers — they are not deletable from the frontend.
 * **Purchase IDs** (`AETH-YYYY-XXXXXXXX`): generated server-side from a CSPRNG, unique
   (unique index + collision retry), ambiguity-free alphabet, lazily backfilled for older
   orders. A Purchase ID is an identifier, not a credential: `GET /api/purchases/:id` still
@@ -131,10 +140,10 @@ The frontend talks to the API **same-origin** by default (`public/aether-config.
 2. **Resend**: create the API key and set `RESEND_API_KEY` as a Worker secret. Until then
    password reset answers with an honest 503, no verification email is sent, and order
    emails stay in mock mode.
-3. **SSL/TLS mode**: currently `Flexible/Full` without strict validation. Switch to
-   **Full (strict)** once you have confirmed GitHub Pages serves a valid certificate for
-   `get-aether.de` — `Full (strict)` was not enabled automatically because a mismatch there
-   would take the whole site down.
+3. **SSL/TLS mode — done (2026-10-01): `ssl = "strict"` (Full (strict))**. Verified live: the
+   zone setting reads `strict` and `get-aether.de` still answers 200 over HTTPS against the
+   GitHub Pages certificate. If a certificate ever mismatches, the site fails closed — that is
+   the intended behaviour, and Pages renews its Let's Encrypt certificate automatically.
 4. **Cache rules**: `browser_cache_ttl` is 4 h. Consider a "Cache Everything" rule for
    `/public/*`, `*.css`, `*.js`, images only, and confirm that `/api/*` is never cached
    (the Worker already sends `cache-control: no-store`).
@@ -144,13 +153,17 @@ The frontend talks to the API **same-origin** by default (`public/aether-config.
 6. **Bot Fight Mode / Super Bot Fight Mode**: only enable if you first exclude
    `/api/ipn` and any server-to-server path (not possible on the free plan — hence off).
 7. **Alerts**: enable notifications for WAF/rate-limit spikes and Worker error rates.
-8. **`ALLOWED_ORIGIN` variable**: currently `*` in the Worker vars, which the code ignores
-   in favour of the built-in allowlist. Set it explicitly to
-   `https://get-aether.de,https://www.get-aether.de,https://api.get-aether.de` so the
-   dashboard reflects reality.
-9. **Admin email variable**: dashboard `ADMIN_EMAILS` currently holds a guessed address.
-   Set `ADMIN_EMAIL=alex.real.apple@gmail.com` (and clear/replace `ADMIN_EMAILS`) so admin
-   authorization matches the real owner. The value must never appear in frontend code.
+8. **`ALLOWED_ORIGIN` variable — done (2026-10-01)**: set explicitly to
+   `https://get-aether.de,https://www.get-aether.de,https://api.get-aether.de`. A wildcard is
+   still ignored by code, so a future dashboard accident cannot open the API up.
+9. **Admin email variable — done (2026-10-01)**: `ADMIN_EMAIL=alex.real.apple@gmail.com` is set
+   and the guessed `ADMIN_EMAILS=Wispz@outlook.de` was **emptied**, so the only admin identity is
+   the real owner. The value must never appear in frontend code. How it was changed without
+   losing anything: the bindings were re-sent as a multipart metadata `bindings` list together
+   with `keep_bindings:["secret_text"]`, which preserved all four Worker secrets and the D1
+   binding — proven by `/api/health` still reporting `payments:true`, `ipnSignature:true`,
+   `discord:true`, `db:true` afterwards. (Do **not** try to change these with a bare
+   `PATCH /settings` call: that endpoint insists on multipart.)
 10. **Beta hostname**: create the DNS record for `betatester.get-aether.de`, route
     `betatester.get-aether.de/api/*` to the Beta Worker, and serve the Beta branch build at
     the configured long path. The admin panel's Beta tab writes `settings.beta_host` /

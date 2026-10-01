@@ -221,7 +221,7 @@
     if (first) {
       $("ad-detail-title").textContent = o.order_id || orderId;
       $("ad-detail-kv").innerHTML = [
-        ["Order ID", o.order_id], ["Status", o.status], ["Customer", o.user_email || (o.user_id ? "#" + o.user_id : "guest checkout")],
+        ["Order ID", o.order_id], ["Status", o.status], ["Customer", o.user_email || (o.user_id ? "#" + o.user_id : "legacy order \u2014 no account")],
         ["Amount", money(o.amount, o.currency)], ["Package", o.package || "Custom"],
         ["Promo", o.promo_code ? o.promo_code + (o.discount ? " (−€" + Number(o.discount).toFixed(0) + ")" : "") : "—"],
         ["Payment ID", o.payment_id || "—"], ["Description", o.description || "—"], ["Placed", when(o.created_at)],

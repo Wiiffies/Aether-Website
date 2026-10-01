@@ -16,8 +16,10 @@ the admin panel and the single Cloudflare Worker that powers all of it.
 
 ## What's in the box
 
-- **Accounts are required for everything customer-facing.** There is no anonymous chat and no guest
-  lookup: purchases, conversations and Beta access all require a session.
+- **Accounts are required for everything customer-facing.** There is no guest checkout and no
+  anonymous chat: buying, conversations and Beta access all require a session, and `/api/invoice`
+  answers `401 ACCOUNT_REQUIRED` to anyone signed out. Every order belongs to the account that
+  placed it, and that account's email is where invoices and order updates go.
 - **Email verification** with single-use, hashed, expiring tokens and a session-bound resend
   endpoint. Protected features return `403 EMAIL_UNVERIFIED` while an account is unverified.
 - **Purchase IDs** (`AETH-2026-XXXXXXXX`) generated server-side, unique, owner-only lookups. An ID
@@ -68,7 +70,7 @@ who is allowed to do anything — every authorisation decision happens in the Wo
 | `Aether Logo trasnparent new.png` | The original 1.2 MB brand asset: still the Discord embed thumbnail, and the source `_make-logo.mjs` crops from |
 | `worker/src/index.js` | The entire API: auth, orders, invoices, IPN, chat, roles, Beta, admin |
 | `worker/wrangler.toml` | Bindings and defaults for a `wrangler`-based deploy |
-| `_test-worker.mjs` | 177-check test suite (runs the real Worker against an in-memory D1) |
+| `_test-worker.mjs` | 183-check test suite (runs the real Worker against an in-memory D1) |
 | `_dev-server.mjs` | Local full stack: static site + Worker + in-memory D1 |
 | `_build_chunks.mjs` | ASCII guard + gzip/base64 chunker used by the deploy recipe |
 | `_check-inline-js.mjs`, `_check-email-regex.mjs` | Small static checks that have already caught real bugs |
@@ -78,7 +80,7 @@ who is allowed to do anything — every authorisation decision happens in the Wo
 
 ```bash
 node _dev-server.mjs      # http://127.0.0.1:5501 — static site AND /api/* through the real Worker
-node _test-worker.mjs     # 177 checks, no credentials needed
+node _test-worker.mjs     # 183 checks, no credentials needed
 node _check-inline-js.mjs *.html
 node _check-email-regex.mjs
 ```

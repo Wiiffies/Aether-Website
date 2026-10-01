@@ -59,6 +59,18 @@ Single source of truth for the customer-portal / Beta work. Status legend:
 - [x] Legacy per-order chats are surfaced in the same history (idempotent bridge)
 - [x] Admin support replies land in the same thread (and email the customer)
 
+## 4b. Checkout / orders — account-only (2026-10-01)
+
+- [x] `POST /api/invoice` requires a session: anonymous or junk-token requests get `401 {"code":"ACCOUNT_REQUIRED"}` and **no order is written**
+- [x] The order always belongs to the session account (`user_id` comes from the session, never from the request body)
+- [x] The account email wins over any posted email; a posted email is only a fallback for an account row with no usable address
+- [x] The verified-email gate still runs before payment for signed-in accounts
+- [x] Frontend: the pay modal hides the email field, states that an account is required and routes "Sign in to buy" / "Switch account" to `account.html?next=<page>`
+- [x] `account.html` honours `?next=` (same-site relative paths only, never itself) and returns a signed-in buyer to the page they came from
+- [x] Public copy cleaned up (`account.html`, `admin.html`, README, MASTER_PROMPT) — no "guest checkout still works" left anywhere
+- [x] `/api/order` (the free inquiry/quote form) never writes an order — it stays an email/Discord notification path only
+- [x] Legacy rows written by the old guest checkout are still claimed when that email registers (tested)
+
 ## 5. Tester / Beta
 
 - [x] Server-side roles; `admin` cannot be granted through the API (configuration only)
@@ -96,8 +108,9 @@ Single source of truth for the customer-portal / Beta work. Status legend:
 - [x] DDoS protection via Cloudflare proxy (always-on, automatic)
 - [ ] MANUAL: add edge rate-limit rules for `/api/conversations*` + `/api/beta/*` (free plan allows 1 rule)
 - [ ] MANUAL: deploy Turnstile widget + secrets (`TURNSTILE_SECRET`, `turnstileSiteKey`)
-- [ ] MANUAL: set SSL/TLS mode to Full (strict)
-- [ ] MANUAL: replace the guessed `ADMIN_EMAILS` dashboard var with `ADMIN_EMAIL=alex.real.apple@gmail.com`
+- [x] SSL/TLS mode → **Full (strict)** (2026-10-01, zone setting verified as `strict`, site still 200 over HTTPS)
+- [x] `ADMIN_EMAIL=alex.real.apple@gmail.com` set and the guessed `ADMIN_EMAILS=Wispz@outlook.de` emptied (bindings re-sent with `keep_bindings:["secret_text"]`; all four secrets + D1 survived, proven by `/api/health`)
+- [x] `ALLOWED_ORIGIN` set explicitly to `https://get-aether.de,https://www.get-aether.de,https://api.get-aether.de` (wildcards are still ignored by code)
 - [ ] MANUAL: set `RESEND_API_KEY` so verification/reset emails really send
 
 ## 9. Frontend / UI
@@ -112,10 +125,12 @@ Single source of truth for the customer-portal / Beta work. Status legend:
 
 ## 10. Testing / audit
 
-- [x] 177 automated checks (`node _test-worker.mjs`) incl. IDOR, privilege escalation, Beta gating
+- [x] 183 automated checks (`node _test-worker.mjs`) incl. IDOR, privilege escalation, Beta gating
 - [x] Secret scan (repo + `public/` contain no keys, tokens, or credentials — only `.env.example` placeholders)
 - [x] Worker stays ASCII-only; `_build_chunks.mjs` ASCII guard passes (0 non-ASCII bytes)
 - [x] Worker rebuilt + redeployed live 2026-10-01: sha256 `1a1c22b74b282b96efb3739c9be233237ee4601b417c9e33e35f10e56a14fee7`, 135 027 bytes, 22 chunks, uploaded to `aether-api` **and** `aether-payments` (200/ok)
+- [x] Account-only checkout redeployed 2026-10-01: sha256 `5e139dde5031dc1d75ad0f5f0baf8cd655632aa1060f7f8948762be61cce48af`, 135 412 bytes, **6 of 22 chunks** changed (16–21), verified by re-downloading the KV chunks and comparing the sha256 before upload; `aether-meta` KV updated
+- [x] Live proof of the gate: anonymous `POST /api/invoice` → `401 {"error":"Checkout requires an account…","code":"ACCOUNT_REQUIRED"}`, a disallowed origin still → 403, `/api/conversations` → 401, `/api/health` all-true after both deploys and the binding change
 - [x] Live verification after deployment: `/api/health` → `{ok:true,email:false,payments:true,ipnSignature:true,discord:true,db:true}`; anonymous `/api/conversations`, `/api/purchases/…`, `/api/beta/access` and `/api/me` all 401
 - [x] Browser-verified locally: portal dashboard (purchase + conversation history), tester `beta.html`, admin tabs (Conversations, Beta config + audit) incl. the whole Beta-domain request/confirm flow
 
