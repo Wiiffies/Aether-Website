@@ -1,0 +1,136 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="theme-color" content="#08080a"><title>Aether — back shortly</title>
+<meta name="description" content="Aether is in scheduled maintenance and will be back shortly.">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<style>
+:root{--bg:#08090a;--panel:#0d0e10;--line:#242529;--text:#f4f4f5;--muted:#85878b;--mono:'DM Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--accent:#fff}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.65 Manrope,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;display:flex;flex-direction:column;min-height:100%;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.22;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:64px 64px;-webkit-mask-image:linear-gradient(to bottom,black,transparent 65%);mask-image:linear-gradient(to bottom,black,transparent 65%)}
+.wrap{flex:1;display:flex;flex-direction:column;justify-content:center;width:100%;max-width:760px;margin:0 auto;padding:72px 28px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:-.02em;margin-bottom:44px}
+.brand i{display:inline-block;width:26px;height:26px;border-radius:50%;background:linear-gradient(140deg,#fff,#6f7277);flex:none}
+.badge{display:inline-flex;align-items:center;gap:8px;font:10px var(--mono);text-transform:uppercase;letter-spacing:.14em;color:#ffcc00;border:1px solid #4a3a15;background:#191405;border-radius:999px;padding:6px 12px;width:max-content}
+.badge::before{content:"";width:6px;height:6px;border-radius:50%;background:#ffcc00;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+h1{font-size:clamp(40px,7.5vw,74px);line-height:1.02;letter-spacing:-.06em;font-weight:500;margin:22px 0 0;max-width:15ch}
+h1 em{font-family:Georgia,serif;font-weight:400;font-style:italic;color:#fff}
+.lead{color:var(--muted);font-size:15px;max-width:52ch;margin:22px 0 0}
+.card{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:20px 22px;margin-top:34px}
+.card h2{font-size:11px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.12em;color:var(--muted);font-weight:400;margin:0 0 12px}
+.row{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line);font-size:13px}
+.row:first-of-type{border-top:0}
+.row b{font-weight:500}
+.row span{color:var(--muted)}
+#countdown{font-family:var(--mono);font-size:13px;color:#fff}
+.steps{margin:0;padding-left:18px;color:var(--muted);font-size:13px}
+.steps li{margin:5px 0}
+a{color:#fff}
+.foot{margin-top:38px;padding-top:20px;border-top:1px solid var(--line);color:#65686d;font-size:11px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.noscript{border:1px solid #4a3a15;background:#191405;color:#ffcc00;border-radius:6px;padding:11px 13px;font-size:12px;margin-top:26px}
+@media(max-width:560px){.wrap{padding:48px 20px}.row{flex-direction:column;gap:2px}}
+</style></head>
+<body>
+<main class="wrap">
+  <div class="brand"><i aria-hidden="true"></i>Aether</div>
+
+  <span class="badge" id="status-badge">Scheduled maintenance</span>
+
+  <h1>We are doing work on the site right now.</h1>
+
+  <p class="lead" id="lead">Aether is briefly offline while we ship an update. Nothing is lost: your account, orders, invoices and chat threads are all safe, and every purchase already placed stays exactly as it is.</p>
+
+  <section class="card" aria-labelledby="what-happens">
+    <h2 id="what-happens">What this means for you</h2>
+    <div class="row"><b>The shop</b><span>Paused — nothing can be ordered while we work</span></div>
+    <div class="row"><b>Your account &amp; orders</b><span>Untouched and waiting for you</span></div>
+    <div class="row"><b>Support</b><span>questions@get-aether.de is still being read</span></div>
+    <div class="row"><b>Expected back</b><span id="back-at">Shortly</span></div>
+    <div class="row"><b>Time since start</b><span id="countdown" role="timer" aria-live="off">—</span></div>
+  </section>
+
+  <p class="lead" style="margin-top:28px">Keep this tab open — the page checks again on its own and takes you to the site the moment it is back. If you need something urgent, email <a href="mailto:questions@get-aether.de">questions@get-aether.de</a> and we will answer as soon as the work is finished.</p>
+
+  <div class="noscript">Automatic reload needs JavaScript. Refresh this page in a few minutes and you will land straight back on the site.</div>
+
+  <div class="foot"><span>Aether — get-aether.de</span><span id="tick">Checking…</span></div>
+</main>
+
+<script>
+(() => {
+  // ---------- the only two knobs you need to touch ----------
+  // Set backAt to an ISO timestamp to show a live countdown ("2026-10-01T21:00:00Z").
+  // Leave it empty and the page just says "shortly" - never promise a time you cannot keep.
+  const CONFIG = {
+    backAt: "",
+    // How often to look for the site coming back, in seconds. 60 is frequent enough to feel
+    // automatic and rare enough that a long outage does not hammer the origin.
+    recheckSeconds: 60,
+  };
+  // --------------------------------------------------------
+
+  const backAtEl = document.getElementById("back-at");
+  const countdown = document.getElementById("countdown");
+  const tick = document.getElementById("tick");
+  const badge = document.getElementById("status-badge");
+  const lead = document.getElementById("lead");
+
+  const started = Date.now();
+  const target = CONFIG.backAt ? Date.parse(CONFIG.backAt) : NaN;
+  if (Number.isFinite(target)) {
+    backAtEl.textContent = new Date(target).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  }
+
+  function pad(n){ return String(n).padStart(2, "0"); }
+  function human(ms){
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    return (h ? h + "h " : "") + pad(m) + "m " + pad(s % 60) + "s";
+  }
+
+  // "Time since start" is honest in a way a countdown to a guess is not: the clock always moves, so
+  // the page visibly works even when nobody knows the exact finish time.
+  function render(){
+    const now = Date.now();
+    countdown.textContent = human(now - started);
+    if (Number.isFinite(target)) {
+      const left = target - now;
+      if (left <= 0) { backAtEl.textContent = "Any moment now"; }
+      else { backAtEl.textContent = "In about " + human(left).replace(/ \d+s$/, ""); }
+    }
+  }
+  render();
+  setInterval(render, 1000);
+
+  // Ask the site whether it is back. This page is served from the site's own origin, so the request
+  // is same-origin and reads nothing private - it only looks at whether the response is still this
+  // notice. The cache-busting parameter is deliberate: a maintenance page kept alive by a cached
+  // response would tell a visitor the site is down long after it came back, so every probe is forced
+  // to reach the origin, and no-store keeps the browser's own cache out of the decision as well.
+  const MARKER = 'id="status-badge"';
+  // Counted up from zero, so the first probe happens a full interval after load. A visitor who just
+  // landed here gets a moment to read the page, and a stale or partial origin rollout can never
+  // bounce them straight back off it.
+  let elapsed = 0;
+  async function probe(){
+    elapsed += 1;
+    const until = CONFIG.recheckSeconds - elapsed;
+    tick.textContent = until <= 0 ? "Checking for the site…" : "Next check in " + until + "s";
+    if (until > 0) return;
+    elapsed = 0;
+    try {
+      const res = await fetch("/?maintenance-probe=" + Date.now(), { method: "GET", cache: "no-store", redirect: "follow" });
+      const body = await res.text();
+      // Only the real site's page lacks this marker, so a 200 without it means we are genuinely back.
+      if (res.ok && body.indexOf(MARKER) === -1) location.replace("/");
+      else tick.textContent = "Still in maintenance — will keep checking";
+    } catch {
+      // No network at all. The "next check" line stays as the status rather than inventing an error.
+      tick.textContent = "Site still offline — will keep checking";
+    }
+  }
+  setInterval(probe, 1000);
+  probe();
+})();
+</script>
+</body></html>
