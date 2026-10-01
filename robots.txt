@@ -1,0 +1,8 @@
+# Aether — https://get-aether.de
+# Everything that should be indexed is public marketing/purchase content. The customer portal,
+# the admin panel and the private Beta are gated server-side, so crawling them reveals nothing —
+# they are simply not listed here.
+User-agent: *
+Allow: /
+
+Sitemap: https://get-aether.de/sitemap.xml
