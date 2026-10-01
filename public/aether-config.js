@@ -17,9 +17,11 @@ window.AETHER_CONFIG = window.AETHER_CONFIG || {
 
   // Cloudflare Turnstile — PUBLIC site key only (the secret lives in the Worker as
   // TURNSTILE_SECRET and is never exposed here). Leave empty and no widget is rendered
-  // and no captcha is required. To enable: create a Turnstile widget for get-aether.de,
-  // put its site key here and add the secret to the Worker.
-  turnstileSiteKey: "",
+  // and no captcha is required. The widget "Aether signup + password reset (get-aether.de)"
+  // (managed mode, created 2026-10-01) backs registration and the password-reset endpoints.
+  // Rotating the widget means updating this key AND the Worker secret — and the site key has to
+  // be live here BEFORE the secret exists, or registration fails for everyone.
+  turnstileSiteKey: "0x4AAAAAAFLTy5UwWdhRpX5A",
   turnstileLogin: false,
 
   // Donation destination. Set this to your own donation page / profile link

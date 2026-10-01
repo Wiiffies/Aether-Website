@@ -18,7 +18,7 @@ this directory.
 | `NOWPAYMENTS_API_KEY` | secret | Payment API (never the Invoice API) |
 | `NOWPAYMENTS_IPN_SECRET`, `NOWPAYMENTS_IPN_SECRET_2` | secret | both are checked against the `x-nowpayments-sig` HMAC |
 | `DISCORD_WEBHOOK_URL` | secret | order/chat notifications |
-| `TURNSTILE_SECRET` | secret (optional) | captcha hook; set it together with the site key or leave both unset |
+| `TURNSTILE_SECRET` | secret | captcha on register/forgot/reset; **set 2026-10-01** — the site key in `public/aether-config.js` must be live before this exists |
 | `CONTACT_TO`, `CONTACT_FROM`, `SUCCESS_URL`, `CANCEL_URL`, `SITE_URL` | vars | mail routing and link building |
 | `ADMIN_EMAIL` / `ADMIN_EMAILS` | vars | the only source of admin rights — `admin` is **never** a database value |
 | `NEW: ALLOWED_ORIGIN`, `PROMO_CODES`, `REQUIRE_EMAIL_VERIFICATION`, `BETA_HOST`, `BETA_PATH`, `BETA_FLAGS`, `AETHER_ENV` | vars | see MASTER_PROMPT.md |

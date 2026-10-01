@@ -108,7 +108,7 @@ Single source of truth for the customer-portal / Beta work. Status legend:
 - [x] Application rate limits per endpoint (D1 + isolate counters)
 - [x] DDoS protection via Cloudflare proxy (always-on, automatic)
 - [ ] MANUAL: add edge rate-limit rules for `/api/conversations*` + `/api/beta/*` (free plan allows 1 rule)
-- [ ] MANUAL: deploy Turnstile widget + secrets (`TURNSTILE_SECRET`, `turnstileSiteKey`)
+- [x] Turnstile widget + secret live 2026-10-01: managed widget for `get-aether.de` (`www`, `api`), site key in `public/aether-config.js`, secret on the Worker **and** as the `TURNSTILE_SECRET` GitHub secret; the register form gained its `[data-turnstile]` mount first (shipping the secret without it would have broken signups)
 - [!] SSL/TLS mode: **Full (strict) is impossible as long as GitHub Pages is the origin** — enabling it on 2026-10-01 produced an instant site-wide **HTTP 526**; reverted to `Full` within minutes and the site came back (verified: `/`, `/shop.html`, `/account.html`, `/public/checkout.js`, `/public/aether.css` all 200). GitHub Pages answers with `CN=*.github.io` for `get-aether.de`, so strict validation can never succeed. Prerequisite before retrying: move the static site behind a Cloudflare-managed certificate (Cloudflare Pages / Worker with static assets) or let GitHub provision a cert for the domain with the proxy temporarily DNS-only. See SECURITY.md §4.3.
 - [x] `ADMIN_EMAIL=alex.real.apple@gmail.com` set and the guessed `ADMIN_EMAILS=Wispz@outlook.de` emptied (bindings re-sent with `keep_bindings:["secret_text"]`; all four secrets + D1 survived, proven by `/api/health`)
 - [x] `ALLOWED_ORIGIN` set explicitly to `https://get-aether.de,https://www.get-aether.de,https://api.get-aether.de` (wildcards are still ignored by code)
@@ -149,13 +149,26 @@ Single source of truth for the customer-portal / Beta work. Status legend:
 - [x] Production checks run only on `main`/PRs; the Beta workflow only on `beta`, and it never falls back to the production Pages site
 - [x] Remote added and both branches pushed: `https://github.com/Wiiffies/Aether-Website` (public)
 - [x] GitHub Pages publishes `main` through its branch build, custom domain `get-aether.de` kept by the committed `CNAME`, artifact trimmed by `_config.yml`
-- [ ] MANUAL: set the `beta` environment's `BETA_TARGET` + `BETA_DEPLOY_TOKEN`, then wire the transfer step in `deploy-beta.yml`
+- [x] `deploy-beta.yml` publish job wired 2026-10-01: builds a site-only artifact (`_beta_dist`, `betaDeployment` marker checked) and deploys it to the `BETA_TARGET` Cloudflare Pages project with the shared `CLOUDFLARE_API_TOKEN` — no separate Beta token
+- [ ] MANUAL: set `BETA_TARGET` (Cloudflare Pages project name) and create that Pages project
 
 ## 12. Remaining / blocked
 
 - [ ] MANUAL: DNS record + worker route for the Beta hostname (`betatester.get-aether.de` + the long path)
 - [ ] MANUAL: separate Beta Worker with its own D1/KV/secrets (data isolation) before real Beta testing — today isolation is configuration, not a hard boundary
 - [ ] MANUAL: DNS record + route if the portal should live on its own `Customer.get-aether.de` hostname (today it is same-origin on get-aether.de)
-- [ ] MANUAL: `PROMO_CODES`, `TURNSTILE_*`, `RESEND_API_KEY`, `ADMIN_EMAIL` dashboard values
+- [ ] MANUAL: `PROMO_CODES` (decide the codes) and `RESEND_API_KEY` — `ADMIN_EMAIL` and `TURNSTILE_*` are done as of 2026-10-01
 - [x] MANUAL: explicit `ALLOWED_ORIGIN` set (2026-10-01); SSL mode cannot move to `Full (strict)` until the origin stops being GitHub Pages (see §8)
 - [ ] MANUAL: second edge rate-limit rule for chat/Beta/admin (free plan allows one — the existing rule must not throttle `/api/ipn`)
+
+## 13. GitHub Actions secrets + variables (added 2026-10-01)
+
+Managed through the installed `gh` CLI; secret values go in via stdin (`printf '%s' "$VALUE" | gh secret set NAME --repo Wiiffies/Aether-Website`), never on a command line or in a file.
+
+- [x] variable `CLOUDFLARE_ACCOUNT_ID` = `e83c68e5e26e3e9096542df702331096` (deploy-worker.yml reads it instead of a secret copy)
+- [x] variable `BETA_HOST` = `betatester.get-aether.de` (the beta workflow's documented host)
+- [x] secret `TURNSTILE_SECRET` (set 2026-10-01, mirrors the live Worker secret)
+- [x] `deploy-worker.yml` gained an optional **secret sync**: `RESEND_API_KEY`, `TURNSTILE_SECRET`, `NOWPAYMENTS_API_KEY`, `NOWPAYMENTS_IPN_SECRET(_2)`, `DISCORD_WEBHOOK_URL` — only the names present in GitHub are pushed, so a blank copy can never blank a live value
+- [ ] MANUAL: secret `CLOUDFLARE_API_TOKEN` — Cloudflare refuses to mint tokens for our automation (`9109 Unauthorized`), so it has to be created in the dashboard with **Workers Scripts:Edit + Workers KV Storage:Edit + D1:Edit**. Until then `deploy-worker.yml` runs the checks and skips the deploy
+- [ ] MANUAL (optional): add `RESEND_API_KEY` to GitHub once Resend exists — the sync step then keeps the Worker and the repo in agreement
+- [ ] MANUAL: set `BETA_TARGET` to a Cloudflare Pages project — the publish job is wired and refuses to fall back to the production Pages site
