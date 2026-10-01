@@ -45,5 +45,4 @@ textarea.acc-input{min-height:84px;resize:vertical;line-height:1.6}
 .acc-kv dt{font:10px 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#85878b;padding-top:2px}
 .acc-kv dd{margin:0;color:#e8eaed;white-space:pre-wrap;word-break:break-word}
 .acc-hide{display:none !important}
-.acc-note{padding:11px 13px;border:1px solid #4a3a15;border-radius:6px;background:#1a1510;color:#c9a87a;font-size:11px;line-height:1.65;margin-bottom:16px}
 @media (max-width:640px){ .acc-kv{grid-template-columns:1fr;gap:2px 0} .acc-kv dt{padding-top:10px} }

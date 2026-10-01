@@ -32,6 +32,19 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { border-color
 .page-kicker { display: inline-block; }
 .page-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
 .page-lead a { text-decoration: underline; text-decoration-color: #4a4d53; text-underline-offset: 3px; }
+/* Account notes are shared by the portal, the beta pages and the request builders, so the base
+   rule lives in this sheet (loaded by every page). portal.css used to own it, which silently left
+   the request forms' `#bot-account-note` / `#web-account-note` unstyled. */
+.acc-note {
+  padding: 11px 13px;
+  border: 1px solid #4a3a15;
+  border-radius: 6px;
+  background: #1a1510;
+  color: #c9a87a;
+  font-size: 11px;
+  line-height: 1.65;
+  margin-bottom: 16px;
+}
 .acc-note.ok { color: var(--ui-ok); }
 .acc-note.warn { color: var(--ui-warn); }
 .nav a.is-active, .nav a.active { color: #fff; }

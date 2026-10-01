@@ -63,6 +63,16 @@ async function call(method, path, opt = {}) {
   return { status: res.status, json, headers: res.headers, setCookie: res.headers.get("set-cookie") || "" };
 }
 
+// The shared D1 limiter is a fixed-window counter, so a real loop of requests can cross a window
+// boundary and reset the count mid-test — that is exactly how these checks once failed in CI, on
+// the hour boundary at 17:00:00 UTC. Seeding the current window at the limit walks the same code
+// path deterministically and still proves the guard trips at exactly `limit`.
+function seedRateLimit(key, limit, windowMs) {
+  const windowStart = Math.floor(Date.now() / windowMs) * windowMs;
+  env.DB.db.prepare("INSERT INTO rate_limits (rl_key, count, window_start) VALUES (?,?,?) ON CONFLICT(rl_key) DO UPDATE SET count = excluded.count, window_start = excluded.window_start").run(key, limit, windowStart);
+  return windowStart;
+}
+
 let pass = 0, fail = 0;
 function check(name, cond, extra) {
   if (cond) { pass++; console.log("  PASS  " + name); }
@@ -320,10 +330,13 @@ check("sessions store sha256(token), never the token itself", storedSession && s
 r = await call("GET", "/api/me", { token: memberToken });
 check("bearer token still authenticates once only its hash is stored", r.status === 200 && r.json.authenticated === true, r.json);
 
+// Seeded window: one call past a full counter must be refused. The unseeded IP below still gets
+// through, so this also pins the limit to the IP rather than to the route as a whole.
 let limited = false, limitedAt = 0;
-for (let i = 1; i <= 15; i++) {
+for (let i = 1; i <= 3 && !limited; i++) {
+  seedRateLimit("login:203.0.113.7", 12, 900000);
   const rr = await call("POST", "/api/auth/login", { ip: "203.0.113.7", body: { email: "member@example.com", password: "memberpass1" } });
-  if (rr.status === 429) { limited = true; limitedAt = i; break; }
+  if (rr.status === 429) { limited = true; limitedAt = i; }
 }
 check("login brute force from one IP is rate limited", limited, { limitedAt });
 r = await call("POST", "/api/auth/login", { ip: "203.0.113.8", body: { email: "member@example.com", password: "memberpass1" } });
@@ -532,10 +545,10 @@ r = await call("GET", "/api/beta/status", { token: unverifiedToken });
 check("unverified account cannot reach the Beta -> 403", r.status === 403, r.json);
 r = await call("POST", "/api/auth/resend-verification", {});
 check("resend without a session -> 401", r.status === 401, r.json);
-let resendLimited = false, resendStatuses = [];
-for (let i = 0; i < 7; i++) { const rr = await call("POST", "/api/auth/resend-verification", { token: unverifiedToken }); resendStatuses.push(rr.status); if (rr.status === 429) { resendLimited = true; break; } }
-check("verification resend is rate limited per account", resendLimited, resendStatuses);
 const unvId = env.DB.db.prepare("SELECT id FROM users WHERE email = ?").get("unverified@example.com").id;
+let resendLimited = false, resendStatuses = [];
+for (let i = 0; i < 3 && !resendLimited; i++) { seedRateLimit("resend:" + unvId, 4, 3600000); const rr = await call("POST", "/api/auth/resend-verification", { token: unverifiedToken }); resendStatuses.push(rr.status); resendLimited = rr.status === 429; }
+check("verification resend is rate limited per account", resendLimited, resendStatuses);
 const gateToken = "verify-gate-" + "c".repeat(40);
 env.DB.db.prepare("INSERT INTO auth_tokens (token_hash, user_id, purpose, expires_at, created_at) VALUES (?,?,?,?,?)").run(sha(gateToken), unvId, "verify", Date.now() + 600000, Date.now());
 r = await call("POST", "/api/auth/verify-email", { body: { token: gateToken } });

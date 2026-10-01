@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Public pages only. The portal, the admin panel and the private Beta are deliberately absent:
-     they are gated by the API, and the Beta URL is obscurity-based on purpose. -->
+<!-- Public pages only. `account.html` is deliberately listed: it is the front door for customers and
+     is safe to crawl. The private Beta, the admin panel, the auth token pages and the payment
+     result pages are absent and carry `noindex` — they are gated by the API, and the Beta URL is
+     obscurity-based on purpose. Keep `lastmod` in sync when a listed page changes meaningfully. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://get-aether.de/</loc><priority>1.0</priority></url>
-  <url><loc>https://get-aether.de/shop.html</loc><priority>0.9</priority></url>
-  <url><loc>https://get-aether.de/discord-bot.html</loc><priority>0.9</priority></url>
-  <url><loc>https://get-aether.de/website.html</loc><priority>0.9</priority></url>
-  <url><loc>https://get-aether.de/about.html</loc><priority>0.6</priority></url>
-  <url><loc>https://get-aether.de/contact.html</loc><priority>0.6</priority></url>
-  <url><loc>https://get-aether.de/donate.html</loc><priority>0.4</priority></url>
-  <url><loc>https://get-aether.de/account.html</loc><priority>0.4</priority></url>
+  <url><loc>https://get-aether.de/</loc><lastmod>2026-10-01</lastmod><priority>1.0</priority></url>
+  <url><loc>https://get-aether.de/shop.html</loc><lastmod>2026-10-01</lastmod><priority>0.9</priority></url>
+  <url><loc>https://get-aether.de/discord-bot.html</loc><lastmod>2026-10-01</lastmod><priority>0.9</priority></url>
+  <url><loc>https://get-aether.de/website.html</loc><lastmod>2026-10-01</lastmod><priority>0.9</priority></url>
+  <url><loc>https://get-aether.de/about.html</loc><lastmod>2026-10-01</lastmod><priority>0.6</priority></url>
+  <url><loc>https://get-aether.de/contact.html</loc><lastmod>2026-10-01</lastmod><priority>0.6</priority></url>
+  <url><loc>https://get-aether.de/donate.html</loc><lastmod>2026-10-01</lastmod><priority>0.4</priority></url>
+  <url><loc>https://get-aether.de/account.html</loc><lastmod>2026-10-01</lastmod><priority>0.4</priority></url>
 </urlset>

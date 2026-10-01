@@ -44,12 +44,23 @@ jobs:
           fi
       - name: Inline JavaScript parses
         run: node _check-inline-js.mjs *.html
+      - name: Email regex sanity
+        run: node _check-email-regex.mjs
+      - name: Shared assets + OG metadata
+        run: node _check-assets.mjs
       - name: Worker is ASCII-only and compiles
         run: |
           node --check worker/src/index.js
           node -e "const s=require('fs').readFileSync('worker/src/index.js');let n=0;for(const b of s)if(b>127)n++;if(n){console.error('non-ASCII bytes: '+n);process.exit(1)}"
       - name: Worker test suite (D1 stub)
         run: node _test-worker.mjs
+      - name: No secrets committed
+        run: |
+          if git ls-files -z | xargs -0 grep -nIE '(re_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY|AKIA[0-9A-Z]{16})' | grep -v '^\.env\.example:'; then
+            echo "::error::A credential-looking value is committed. Remove it and rotate the key."
+            exit 1
+          fi
+          echo "Secret scan clean (environment placeholders only)."
       - name: Beta build is identifiable
         run: |
           # The Beta branch must carry its own marker so a Beta build can never be mistaken for
