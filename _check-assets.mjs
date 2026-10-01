@@ -1,9 +1,10 @@
 // Guards the publishing metadata that is easy to drift by hand. Run in CI, alongside the other
 // `_check-*.mjs` scripts:
 //
-//   1. Every `public/*.css|js` reference in every page carries the same `?v=` number and none is
-//      left unversioned. This is the lesson from the stale `checkout.js` incident: Cloudflare caches
-//      HTML and assets for hours, so a shared file that changes behaviour must change its URL.
+//   1. Every `public/*.css|js` reference in every page carries a `?v=` number, and every reference
+//      to the *same* asset agrees on it. Assets version independently — only the file that changed
+//      needs a bump — but a page left behind on an old version is exactly how a stale `checkout.js`
+//      silently disabled the account gates once, so mismatches fail the build.
 //   2. `public/og.png` exists and is exactly 1200x630 — the size the `og:image` tags promise, which
 //      chat clients use to pick the large card layout.
 //   3. Every page has a meta description; every indexable page also has an `og:image` pointing at
@@ -16,27 +17,31 @@ const problems = [];
 const pages = readdirSync(".").filter((f) => f.endsWith(".html")).sort();
 
 // ---------- 1. one cache-busting version across every shared asset ----------
-const VERSIONED = /(?:src|href)="public\/[a-z-]+\.(?:css|js)(\?v=(\d+))?"/g;
-const versions = new Map(); // version -> [references]
+const VERSIONED = /(?:src|href)="public\/([a-z-]+\.(?:css|js))(?:\?v=(\d+))?"/g;
+const assets = new Map(); // asset file -> Map(version -> [page])
 const unversioned = [];
 for (const page of pages) {
   const html = readFileSync(page, "utf8");
   for (const m of html.matchAll(VERSIONED)) {
-    const ref = m[0].slice(m[0].indexOf("public/"), -1);
-    if (!m[2]) unversioned.push(page + ": " + ref);
-    else {
-      if (!versions.has(m[2])) versions.set(m[2], []);
-      versions.get(m[2]).push(page + ": " + ref);
-    }
+    const asset = m[1];
+    if (!m[2]) { unversioned.push(page + ": public/" + asset); continue; }
+    if (!assets.has(asset)) assets.set(asset, new Map());
+    const byVersion = assets.get(asset);
+    if (!byVersion.has(m[2])) byVersion.set(m[2], []);
+    byVersion.get(m[2]).push(page);
   }
 }
+if (!assets.size) problems.push("no shared assets referenced at all — did the pages move?");
 if (unversioned.length) problems.push("asset references without ?v=:\n    " + unversioned.join("\n    "));
-if (versions.size > 1) {
-  problems.push("asset versions disagree across the site:\n" + [...versions.entries()]
-    .map(([v, refs]) => "    ?v=" + v + " (" + refs.length + " refs, e.g. " + refs[0] + ")").join("\n"));
+for (const [asset, byVersion] of assets) {
+  if (byVersion.size > 1) {
+    problems.push("public/" + asset + " is referenced at different versions:\n" + [...byVersion.entries()]
+      .map(([v, refs]) => "    ?v=" + v + " on " + refs.join(", "))
+      .join("\n"));
+  }
 }
-const current = versions.size === 1 ? [...versions.keys()][0] : (versions.keys().next().value || "?");
-if (!versions.size) problems.push("no shared assets referenced at all — did the pages move?");
+const summary = [...assets.entries()]
+  .map(([asset, byVersion]) => asset + "?v=" + [...byVersion.keys()].join("/")).join(", ");
 
 // ---------- 2. the OG card ----------
 let ogSize = "";
@@ -66,7 +71,7 @@ for (const page of pages) {
   }
 }
 
-console.log("asset version: ?v=" + current + " across " + pages.length + " pages");
+console.log("asset versions across " + pages.length + " pages: " + summary);
 console.log("og card: public/og.png " + (ogSize || "missing") + "; indexable pages with og:image: " + indexable.length);
 if (problems.length) {
   console.error("\n" + problems.join("\n"));

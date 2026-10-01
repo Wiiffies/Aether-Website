@@ -80,8 +80,10 @@ Nothing about the Beta address can be changed by a browser request alone.
 - [ ] `MANUAL` — create the Beta Worker + its own KV namespace and D1 database, then apply the
       same schema/settings.
 - [x] Branches published to `https://github.com/Wiiffies/Aether-Website` (`main` = production Pages source, `beta` = Beta branch).
-- [ ] `MANUAL` — set the `beta` environment's `BETA_TARGET` variable and `BETA_DEPLOY_TOKEN` secret,
-      then wire the transfer step in `deploy-beta.yml` (the publish job stays skipped until then).
+- [ ] `MANUAL` — set the `BETA_TARGET` repository variable to a Cloudflare Pages project name. The
+      publish job in `deploy-beta.yml` is wired: it builds a site-only artifact (marker checked) and
+      deploys it with the same `CLOUDFLARE_API_TOKEN` production uses — no separate Beta token — and
+      stays skipped until `BETA_TARGET` exists.
 
 ## Shipping a change from Beta to production
 

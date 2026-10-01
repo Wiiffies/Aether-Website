@@ -8,9 +8,10 @@ name: Beta (beta branch only)
 # (session + verified email + Tester role) — never by the URL, the branch name or a hidden button.
 #
 # This workflow deliberately does **not** fall back to this repository's Pages site: that site is
-# production, and a `beta` push must never be able to overwrite it. Set the `beta` environment's
-# `BETA_TARGET` variable (and `BETA_DEPLOY_TOKEN` secret) and wire the transfer step at the bottom;
-# until then the publish job skips and only the checks run.
+# production, and a `beta` push must never be able to overwrite it. Set the repository variable
+# `BETA_TARGET` to a Cloudflare Pages project name and the publish job builds a site-only artifact
+# and deploys it there with the same `CLOUDFLARE_API_TOKEN` the worker workflow uses (no separate
+# Beta token). Until `BETA_TARGET` exists, the publish job skips and only the checks run.
 on:
   push:
     branches: [beta]
@@ -76,22 +77,37 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: beta # separate environment -> separate secrets/vars from production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      BETA_TARGET: ${{ vars.BETA_TARGET }}
+      BETA_HOST: ${{ inputs.beta_host || vars.BETA_HOST }}
     steps:
       - uses: actions/checkout@v4
-      - name: Require the Beta deploy token
-        env:
-          BETA_DEPLOY_TOKEN: ${{ secrets.BETA_DEPLOY_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Require the deploy credential
         run: |
-          test -n "$BETA_DEPLOY_TOKEN" || { echo "::error::BETA_DEPLOY_TOKEN is not set for the beta environment."; exit 1; }
-          echo "Token present."
-      - name: Deploy to the Beta target
-        env:
-          BETA_TARGET: ${{ vars.BETA_TARGET }}
-          BETA_DEPLOY_TOKEN: ${{ secrets.BETA_DEPLOY_TOKEN }}
-          BETA_HOST: ${{ inputs.beta_host || vars.BETA_HOST }}
-        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::CLOUDFLARE_API_TOKEN is not set - the Beta cannot be published."; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::CLOUDFLARE_ACCOUNT_ID (repository variable) is not set."; exit 1; }
           echo "Target : $BETA_TARGET"
           echo "Host   : ${BETA_HOST:-<unset — the Worker's settings.beta_host decides>}"
-          echo "::error::Wire the transfer for this target here (for example 'wrangler pages deploy .' "
-          echo "to a Beta Pages project, or rsync/S3 with BETA_DEPLOY_TOKEN). Nothing was published."
-          exit 1
+      - name: Build the Beta artifact
+        run: |
+          set -euo pipefail
+          # Never publish the repository itself: the artifact is the site only, the same shape the
+          # GitHub Pages branch build produces for production (`_config.yml` excludes docs/tooling).
+          rm -rf _beta_dist && mkdir -p _beta_dist/public
+          cp public/* _beta_dist/public/ 2>/dev/null || true
+          for f in *.html robots.txt sitemap.xml CNAME; do [ -e "$f" ] && cp "$f" _beta_dist/ || true; done
+          test -f _beta_dist/index.html || { echo "::error::the artifact has no index.html"; exit 1; }
+          grep -q "betaDeployment" _beta_dist/public/aether-config.js \
+            || { echo "::error::the artifact is missing the betaDeployment marker."; exit 1; }
+          echo "Beta artifact ready:"; ls -1 _beta_dist | head -30
+      - name: Publish to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy _beta_dist --project-name=${{ vars.BETA_TARGET }} --branch=beta

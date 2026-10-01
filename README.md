@@ -75,7 +75,7 @@ who is allowed to do anything — every authorisation decision happens in the Wo
 | `_dev-server.mjs` | Local full stack: static site + Worker + in-memory D1 |
 | `_build_chunks.mjs` | ASCII guard + gzip/base64 chunker used by the deploy recipe |
 | `_check-inline-js.mjs`, `_check-email-regex.mjs` | Small static checks that have already caught real bugs |
-| `_check-assets.mjs` | Publishing-metadata guard: one `?v=` across every shared asset, `public/og.png` at 1200x630, description + `og:image` on every public page |
+| `_check-assets.mjs` | Publishing-metadata guard: every shared asset is versioned and all references to the same asset agree, `public/og.png` at 1200x630, description + `og:image` on every public page |
 | `_make-logo.mjs` | Regenerates the site logo from the original brand asset — no image libraries, just `zlib` |
 | `_make-og.mjs` | Regenerates `public/og.png` (1200x630 dark card + the brand mark) from the same asset |
 
@@ -98,8 +98,10 @@ password on start. Never open the pages over `file://` — the API and cookies n
   `main` publishes; the `beta` branch publishes nothing until its own Beta target is configured.
 - **Worker:** rebuilt with `_build_chunks.mjs` and deployed to `aether-api` (and `aether-payments`)
   through the Cloudflare API relay — the exact recipe, including the checksum verification and the
-  binding-preserving metadata, is in [`MASTER_PROMPT.md`](MASTER_PROMPT.md). `wrangler` works too
-  once a `CLOUDFLARE_API_TOKEN` exists (see `.github/workflows/deploy-worker.yml`).
+  binding-preserving metadata, is in [`MASTER_PROMPT.md`](MASTER_PROMPT.md). The CI path
+  (`.github/workflows/deploy-worker.yml`) works once the `CLOUDFLARE_API_TOKEN` secret exists
+  (account id from the `CLOUDFLARE_ACCOUNT_ID` variable) and can then also sync the service keys
+  that are stored as GitHub secrets.
 - **Beta:** its own branch, its own workflow, its own hostname and — before real testers — its own
   Worker, KV namespace and D1 database. See [`BETA.md`](BETA.md).
 
@@ -117,8 +119,8 @@ what is *not* enforced matters just as much. The short version:
 - **Deliberately not security:** obscure URLs, hidden pages, frontend role checks, hidden buttons,
   minified or obfuscated JavaScript, Base64, client-side variables. The long Beta URL only reduces
   accidental discovery — knowing it grants nothing.
-- **Still manual:** a few dashboard/DNS steps (mail provider key, admin email variable, Turnstile,
-  SSL mode, Beta infrastructure). They are listed in [`SECURITY.md`](SECURITY.md) §4.
+- **Still manual:** a few dashboard/DNS steps (the CI deploy token, the mail provider key, SSL
+  mode, Beta infrastructure). They are listed in [`SECURITY.md`](SECURITY.md) §4.
 
 Nothing in this project is described as "100% secure", because nothing is. What it *is*: no
 secrets in the repository, no client-side authorisation, no data reachable without a session.

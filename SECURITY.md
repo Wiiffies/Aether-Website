@@ -54,9 +54,12 @@ The frontend talks to the API **same-origin** by default (`public/aether-config.
   24 h for verification), stored only as hashes, invalidated on use, all other sessions
   dropped after a reset. Forgot-password answers identically for known and unknown
   addresses, so it cannot be used to enumerate accounts.
-* **Turnstile**: tokens are verified server-side against `challenges.cloudflare.com`.
-  Disabled until `TURNSTILE_SECRET` exists (fail-open on a captcha outage, never on a
-  failed check).
+* **Turnstile (ON since 2026-10-01)**: a managed widget covers registration and the
+  password-reset endpoints; tokens are verified server-side against
+  `challenges.cloudflare.com`. The public site key lives in `public/aether-config.js`, the
+  secret only in Worker Secrets (plus its GitHub Actions copy). It **fails open on a captcha
+  outage but never on a failed check**, so an outage cannot lock users out of their own
+  accounts. `TURNSTILE_LOGIN` stays unset — sign-in is not captchaed.
 * **Input handling**: type/length caps on every field, 64 KB body cap (413), honeypot
   fields, HTML escaping for emails, Markdown escaping for Discord, `slice()` limits on
   every stored/forwarded value.
@@ -139,9 +142,14 @@ The frontend talks to the API **same-origin** by default (`public/aether-config.
 
 ## 4. Still to do manually in the Cloudflare dashboard
 
-1. **Turnstile**: create a widget for `get-aether.de`, put the public site key in
-   `public/aether-config.js` → `turnstileSiteKey`, and add the secret to the Worker as
-   `TURNSTILE_SECRET` (both, or neither — enabling only one breaks or does nothing).
+1. **Turnstile — done 2026-10-01.** The widget "Aether signup + password reset (get-aether.de)"
+   (managed mode, domains `get-aether.de` / `www` / `api`) is live: the public site key is in
+   `public/aether-config.js`, the secret exists as a Worker secret and as the `TURNSTILE_SECRET`
+   GitHub secret. To rotate, generate a new secret in the widget and update the Worker secret (or
+   the GitHub secret and let the CI sync push it). The **site key changes only if the widget is
+   recreated**, and a new site key must be live on the site *before* the matching secret is set —
+   `turnstileGuard` enforces the moment `TURNSTILE_SECRET` exists, so the wrong order breaks
+   registration for everyone.
 2. **Resend**: create the API key and set `RESEND_API_KEY` as a Worker secret. Until then
    password reset answers with an honest 503, no verification email is sent, and order
    emails stay in mock mode.
@@ -194,8 +202,11 @@ The frontend talks to the API **same-origin** by default (`public/aether-config.
 
 ## 5. Secret handling
 
-* Production secrets (Resend, NOWPayments, Discord webhook, optional Turnstile) exist only
-  as Worker Secrets. Re-uploads keep them (`keep_bindings` is used by the deploy step).
+* Production secrets (Resend, NOWPayments, Discord webhook, Turnstile) exist only as Worker
+  Secrets, with copies as **GitHub Actions secrets** where CI needs them (`CLOUDFLARE_API_TOKEN`)
+  or syncs them (the service keys). Re-uploads keep them (`keep_bindings` is used by the deploy
+  step); the sync step skips blank GitHub secrets, so a missing copy can never blank a live value.
+  GitHub never hands a secret value back — it is write-only.
 * The frontend contains no keys, no tokens and no privileged logic. `public/aether-config.js`
   is intentionally public configuration only.
 * `git grep` style audits are part of the release checklist; a copy of it lives in

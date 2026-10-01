@@ -4,6 +4,14 @@ name: Deploy aether-api worker
 # manual KV-relay recipe in MASTER_PROMPT.md. Nothing here runs without the secret, and the
 # deploy keeps every existing binding + secret (`keep_bindings` semantics are automatic in
 # wrangler: it only ever adds/updates what the config declares).
+#
+# Repo configuration this workflow expects (Settings → Secrets and variables → Actions):
+#   secret   CLOUDFLARE_API_TOKEN   scoped token: Workers Scripts:Edit + Workers KV Storage:Edit + D1:Edit
+#   variable CLOUDFLARE_ACCOUNT_ID  the account the worker lives in (not a secret)
+#   secrets  RESEND_API_KEY, TURNSTILE_SECRET, NOWPAYMENTS_API_KEY,
+#            NOWPAYMENTS_IPN_SECRET, NOWPAYMENTS_IPN_SECRET_2, DISCORD_WEBHOOK_URL
+#            — the optional secret-sync below pushes only the ones that exist here, so the
+#            dashboard and this repo can never silently disagree about a service key.
 on:
   workflow_dispatch:
     inputs:
@@ -27,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,6 +55,29 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: worker
           command: deploy --name ${{ inputs.environment || 'aether-api' }} --keep-vars
+      - name: Sync service secrets from GitHub (only the ones set here)
+        # Never runs for pull requests, and never writes an empty value: a blank GitHub secret
+        # leaves the live secret untouched, so this step cannot lock anyone out by accident.
+        if: ${{ env.CLOUDFLARE_API_TOKEN != '' && github.event_name != 'pull_request' }}
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          TURNSTILE_SECRET: ${{ secrets.TURNSTILE_SECRET }}
+          NOWPAYMENTS_API_KEY: ${{ secrets.NOWPAYMENTS_API_KEY }}
+          NOWPAYMENTS_IPN_SECRET: ${{ secrets.NOWPAYMENTS_IPN_SECRET }}
+          NOWPAYMENTS_IPN_SECRET_2: ${{ secrets.NOWPAYMENTS_IPN_SECRET_2 }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          target="${{ inputs.environment || 'aether-api' }}"
+          synced=""
+          for name in RESEND_API_KEY TURNSTILE_SECRET NOWPAYMENTS_API_KEY NOWPAYMENTS_IPN_SECRET NOWPAYMENTS_IPN_SECRET_2 DISCORD_WEBHOOK_URL; do
+            value="${!name:-}"
+            if [ -n "$value" ]; then
+              printf '%s' "$value" | npx --yes wrangler@3 secret put "$name" --name "$target"
+              synced="$synced $name"
+            fi
+          done
+          echo "Synced to $target from GitHub secrets:${synced:- none} (blank entries keep their live value)."

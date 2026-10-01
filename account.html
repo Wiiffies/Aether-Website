@@ -29,6 +29,7 @@
     <div class="acc-field"><label for="acc-email">Email</label><input class="acc-input" id="acc-email" type="email" placeholder="you@example.com" autocomplete="email" required></div>
     <div class="acc-field"><label for="acc-pass">Password</label><input class="acc-input" id="acc-pass" type="password" placeholder="At least 8 characters" autocomplete="current-password" required></div>
     <div class="acc-field acc-hide" id="acc-discord-wrap"><label for="acc-discord">Discord username <span style="color:#7a7d82;font-weight:400;text-transform:none;letter-spacing:0">— optional</span></label><input class="acc-input" id="acc-discord" placeholder="yourname"></div>
+    <div class="acc-field acc-hide" id="acc-turnstile-wrap"><div data-turnstile hidden></div></div>
     <div class="acc-row"><button class="acc-btn" id="acc-submit" type="submit">Sign in →</button></div>
   </form>
   <div class="acc-msg" id="acc-auth-msg"></div>
@@ -135,7 +136,7 @@
 
 </section>
 </main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
-<script src="public/aether-config.js?v=7"></script>
+<script src="public/aether-config.js?v=8"></script>
 <script src="public/checkout.js?v=7"></script>
 <script src="public/aether.js?v=7" defer></script>
 <script>
@@ -185,6 +186,10 @@
     document.querySelectorAll("[data-mode]").forEach(b => b.classList.toggle("active", b === btn));
     const reg = mode === "register";
     show($("acc-discord-wrap"), reg);
+    show($("acc-turnstile-wrap"), reg);
+    // Turnstile is only needed for registration; mount it lazily so the challenge script is
+    // fetched only when someone actually chooses "Create account".
+    if (reg && A.turnstile) A.turnstile.autoMount($("acc-turnstile-wrap"));
     $("acc-auth-title").textContent = reg ? "Create your account" : "Welcome back";
     $("acc-auth-sub").textContent = reg ? "Your account email is the one your invoices and order updates go to — an account is required to buy." : "Sign in to see your orders, invoices and chat.";
     $("acc-submit").textContent = reg ? "Create account →" : "Sign in →";
@@ -200,12 +205,16 @@
     try {
       if (mode === "register") await A.auth.register(email, password, discord);
       else await A.auth.login(email, password);
-      A.turnstile.reset();
       msg($("acc-auth-msg"), "");
       await boot();
     } catch (err) {
       msg($("acc-auth-msg"), err.message || "Something went wrong", "err");
-    } finally { btn.disabled = false; }
+    } finally {
+      // Turnstile tokens are single-use: reset after every attempt so a failed retry gets a fresh
+      // one instead of being blocked by the captcha.
+      A.turnstile.reset();
+      btn.disabled = false;
+    }
   });
 
   $("acc-logout").addEventListener("click", async () => {
