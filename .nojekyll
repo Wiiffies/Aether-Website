@@ -1,0 +1,3 @@
+# Tell GitHub Pages to serve these files exactly as they are. Without it Jekyll still
+# passes plain HTML through, but nothing here is meant to be processed, and this removes
+# the whole class of "Jekyll ate my page" surprises from a switch that has to work first try.

@@ -1,0 +1,189 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="theme-color" content="#08080a"><title>Aether — back shortly</title>
+<meta name="description" content="Aether is in scheduled maintenance and will be back shortly.">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<style>
+:root{--bg:#08090a;--panel:#0d0e10;--line:#242529;--text:#f4f4f5;--muted:#85878b;--mono:'DM Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--accent:#fff;--ok:#5fd08a}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.65 Manrope,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;display:flex;flex-direction:column;min-height:100%;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.22;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:64px 64px;-webkit-mask-image:linear-gradient(to bottom,black,transparent 65%);mask-image:linear-gradient(to bottom,black,transparent 65%)}
+.wrap{flex:1;display:flex;flex-direction:column;justify-content:center;width:100%;max-width:760px;margin:0 auto;padding:72px 28px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:-.02em;margin-bottom:44px}
+.brand i{display:inline-block;width:26px;height:26px;border-radius:50%;background:linear-gradient(140deg,#fff,#6f7277);flex:none}
+.badge{display:inline-flex;align-items:center;gap:8px;font:10px var(--mono);text-transform:uppercase;letter-spacing:.14em;color:#ffcc00;border:1px solid #4a3a15;background:#191405;border-radius:999px;padding:6px 12px;width:max-content}
+.badge::before{content:"";width:6px;height:6px;border-radius:50%;background:#ffcc00;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+h1{font-size:clamp(40px,7.5vw,74px);line-height:1.02;letter-spacing:-.06em;font-weight:500;margin:22px 0 0;max-width:15ch}
+h1 em{font-family:Georgia,serif;font-weight:400;font-style:italic;color:#fff}
+.lead{color:var(--muted);font-size:15px;max-width:52ch;margin:22px 0 0}
+.card{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:20px 22px;margin-top:34px}
+.card h2{font-size:11px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.12em;color:var(--muted);font-weight:400;margin:0 0 12px}
+.row{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line);font-size:13px}
+.row:first-of-type{border-top:0}
+.row b{font-weight:500}
+.row span{color:var(--muted)}
+.row em{font-style:normal;font-family:var(--mono);font-size:12px;color:#fff}
+.steps{margin:0;padding-left:18px;color:var(--muted);font-size:13px}
+.steps li{margin:5px 0}
+a{color:#fff}
+.open{margin-top:22px;border:1px solid #1f3a2a;background:#08150e;border-radius:8px;padding:14px 16px;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+.open b{color:var(--ok);font-weight:500}
+.open a{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:7px 12px;text-decoration:none;font-size:12px;background:#111214}
+.foot{margin-top:38px;padding-top:20px;border-top:1px solid var(--line);color:#65686d;font-size:11px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.noscript{border:1px solid #4a3a15;background:#191405;color:#ffcc00;border-radius:6px;padding:11px 13px;font-size:12px;margin-top:26px}
+@media(max-width:560px){.wrap{padding:48px 20px}.row{flex-direction:column;gap:2px}}
+</style></head>
+<body>
+<main class="wrap">
+  <div class="brand"><i aria-hidden="true"></i>Aether</div>
+
+  <span class="badge" id="status-badge">Scheduled maintenance</span>
+
+  <h1>We are doing work on the site right now.</h1>
+
+  <p class="lead" id="lead">Aether is briefly offline while we ship an update. Nothing is lost: your account, orders, invoices and chat threads are all safe, and every purchase already placed stays exactly as it is.</p>
+
+  <section class="card" aria-labelledby="what-happens">
+    <h2 id="what-happens">What this means for you</h2>
+    <div class="row"><b>The shop</b><span>Paused — nothing new can be ordered while we work</span></div>
+    <div class="row"><b>Your account &amp; orders</b><span id="account-row">Untouched and waiting for you</span></div>
+    <div class="row"><b>Support</b><span>questions@get-aether.de is still being read</span></div>
+    <div class="row"><b>Expected back</b><span id="back-at">Shortly</span></div>
+    <div class="row"><b>Down for</b><span id="down-for" role="timer" aria-live="off">—</span></div>
+    <div class="row"><b>Next check</b><span id="countdown" aria-live="off">—</span></div>
+  </section>
+
+  <div class="open" id="account-open" hidden>
+    <span><b>Your account is still open.</b> Signing in, your orders, your invoices and every chat thread keep working while we work on the rest.</span>
+    <a href="account.html">Open your account ↗</a>
+  </div>
+
+  <p class="lead" style="margin-top:28px">Nothing to do — this page reloads itself, checks every 30 seconds, and takes you straight back to the site the moment it is up. If you need something urgent, email <a href="mailto:questions@get-aether.de">questions@get-aether.de</a> and we will answer as soon as the work is finished.</p>
+
+  <div class="noscript">Automatic checking and reloading need JavaScript. Refresh this page in a few minutes and you will land straight back on the site.</div>
+
+  <div class="foot"><span>Aether — get-aether.de</span><span id="tick">Checking…</span></div>
+</main>
+
+<script>
+(() => {
+  // ---------- the only two knobs you need to touch ----------
+  // Set backAt to an ISO timestamp to show an expected time ("2026-10-01T21:00:00Z").
+  // Leave it empty and the page just says "shortly" - never promise a time you cannot keep.
+  const CONFIG = {
+    backAt: "",
+    // How often the site is checked, in seconds. 30 is frequent enough to feel automatic and rare
+    // enough that a long outage does not hammer the origin.
+    recheckSeconds: 30,
+    // How often the page reloads ITSELF while the site is still down, in seconds. Reloading is what
+    // picks up an edited notice, and it cannot lose the timers below because they are stored outside
+    // the page.
+    selfReloadSeconds: 300,
+  };
+  // --------------------------------------------------------
+
+  const backAtEl = document.getElementById("back-at");
+  const downFor = document.getElementById("down-for");
+  const countdown = document.getElementById("countdown");
+  const tick = document.getElementById("tick");
+  const accountOpen = document.getElementById("account-open");
+  const accountRow = document.getElementById("account-row");
+
+  const MARKER = 'id="status-badge"';
+  const START_KEY = "aether-maintenance-since";
+  const RELOAD_KEY = "aether-maintenance-reloaded";
+
+  function pad(n){ return String(n).padStart(2, "0"); }
+  function human(ms){
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    return (h ? h + "h " : "") + pad(m) + "m " + pad(s % 60) + "s";
+  }
+  function read(key){ try { return Number(localStorage.getItem(key) || 0) || 0; } catch { return 0; } }
+  function write(key, value){ try { localStorage.setItem(key, String(value)); } catch {} }
+
+  // "Down for" survives a refresh: the first load in this browser records the moment it saw the
+  // notice and every reload continues from there. Reopening it in a new tab tomorrow shows the
+  // honest total instead of starting from zero again.
+  let started = read(START_KEY);
+  if (!started || started > Date.now()) { started = Date.now(); write(START_KEY, started); }
+
+  // The first self-reload happens a full interval after arrival, never on the first check: a page that
+  // flashes and reloads itself while somebody is reading it looks broken, not automatic.
+  if (!read(RELOAD_KEY)) write(RELOAD_KEY, Date.now());
+
+  const target = CONFIG.backAt ? Date.parse(CONFIG.backAt) : NaN;
+  if (Number.isFinite(target)) {
+    backAtEl.textContent = new Date(target).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+    if (Date.now() - started > 3600000) started = Date.now() - 3600000;
+  }
+
+  function renderClock(){
+    const now = Date.now();
+    downFor.textContent = human(now - started);
+    if (Number.isFinite(target) && target - now <= 0) backAtEl.textContent = "Any moment now";
+  }
+  renderClock();
+  setInterval(renderClock, 1000);
+
+  // The next check is a point on the clock, not "30 seconds after whenever this page happened to
+  // load": refreshing at 12 seconds in still shows "in 18s" instead of jumping back to 30, and two
+  // open tabs agree with each other.
+  const GRID = CONFIG.recheckSeconds * 1000;
+  // `skew` only matters when a boundary is being re-armed: it pushes the next one past right now, so
+  // a slow frame cannot fire the same check twice. The countdown itself runs down to zero.
+  const gridAt = (skew) => Math.ceil((Date.now() + (skew || 0)) / GRID) * GRID;
+  let nextAt = gridAt(0);
+
+  let checking = false;
+  async function probe(){
+    if (checking) return;
+    checking = true;
+    tick.textContent = "Checking whether the site is back…";
+    let back = false;
+    try {
+      // The cache-busting parameter is deliberate: a maintenance page kept alive by a cached response
+      // would tell a visitor the site is down long after it came back, so every probe is forced to
+      // reach the origin, and no-store keeps the browser's own cache out of the decision as well.
+      const res = await fetch("/?maintenance-probe=" + Date.now(), { method: "GET", cache: "no-store", redirect: "follow" });
+      const body = await res.text();
+      // Only the real site's page lacks this marker, so a 200 without it means we are genuinely back.
+      back = res.ok && body.indexOf(MARKER) === -1;
+    } catch {
+      // No network at all: report it as still offline rather than inventing an error.
+      tick.textContent = "No connection right now — will keep trying";
+      checking = false;
+      return;
+    }
+    if (back) { tick.textContent = "The site is back — taking you there"; location.replace("/"); return; }
+    tick.textContent = "Still in maintenance — next check shortly";
+    checking = false;
+    // Reload the notice itself every few minutes so an edited message (or a switch between a soft and
+    // a hard shutdown) is actually seen by the people who are waiting on it.
+    const last = read(RELOAD_KEY);
+    if (!last || Date.now() - last > CONFIG.selfReloadSeconds * 1000) { write(RELOAD_KEY, Date.now()); location.reload(); }
+  }
+
+  setInterval(() => {
+    const now = Date.now();
+    countdown.textContent = Math.ceil(Math.max(0, nextAt - now) / 1000) + "s";
+    if (now >= nextAt) { nextAt = gridAt(250); probe(); }
+  }, 500);
+
+  // Whether the account area is reachable is a question only the server can answer, so ask it: the
+  // probe is redirected to this same notice when the shutdown is a hard one, and lands on the real
+  // page when the account area was deliberately left open. Nothing is hardcoded, so the notice can
+  // never claim a link that does not work.
+  (async () => {
+    try {
+      const res = await fetch("/account.html?account-probe=" + Date.now(), { cache: "no-store", redirect: "follow" });
+      const body = await res.text();
+      if (res.ok && body.indexOf(MARKER) === -1) {
+        if (accountRow) accountRow.textContent = "Open — your chats and orders still work";
+        if (accountOpen) accountOpen.hidden = false;
+      }
+    } catch {}
+  })();
+})();
+</script>
+</body></html>
