@@ -1,0 +1,25 @@
+# GitHub Pages build configuration (the "Deploy from a branch" pipeline publishes `main`).
+#
+# Pages runs Jekyll, which would otherwise publish the documentation and the local tooling as
+# part of the site. This keeps the published artifact to the site itself: the HTML pages, the
+# `public/` assets, the favicon and the CNAME. Underscore-prefixed files (the local tooling) are
+# ignored by Jekyll automatically.
+exclude:
+  # documentation — useful in the repo, noise on the website
+  - "*.md"
+  # repository/config files
+  - .env.example
+  - .gitattributes
+  - .gitignore
+  - .github/
+  - .vscode/
+  # the Worker is deployed separately and never needs to be served as a static file
+  - worker/
+  # Jekyll's own defaults (repeated because setting `exclude` replaces them)
+  - Gemfile
+  - Gemfile.lock
+  - node_modules/
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/

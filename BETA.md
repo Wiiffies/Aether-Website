@@ -15,7 +15,7 @@ beta  ──► Beta deployment      ──► betatester.get-aether.de/yesthisi
 | Concern | Production | Beta |
 | --- | --- | --- |
 | Branch | `main` | `beta` |
-| Workflow | `.github/workflows/deploy-production.yml` | `.github/workflows/deploy-beta.yml` (refuses any ref other than `beta`) |
+| Workflow | `.github/workflows/deploy-production.yml` (checks on `main`/PRs; the live publisher is the Pages *branch* build from `main`) | `.github/workflows/deploy-beta.yml` (refuses any ref other than `beta`, and never falls back to the production Pages site) |
 | GitHub environment | `github-pages` | `beta` (own secrets/vars — nothing shared by default) |
 | Host | `get-aether.de` | `betatester.get-aether.de` + the long path |
 | Secrets | Worker secrets on `aether-api` | its own Worker/KV/D1 secrets; production secrets are never exposed to Beta |
@@ -79,10 +79,9 @@ Nothing about the Beta address can be changed by a browser request alone.
       branch build at the long path.
 - [ ] `MANUAL` — create the Beta Worker + its own KV namespace and D1 database, then apply the
       same schema/settings.
-- [ ] `MANUAL` — set the `beta` GitHub environment's `BETA_TARGET` / `BETA_DEPLOY_TOKEN` (or
-      point `deploy-beta.yml` at your chosen target).
-- [ ] `MANUAL` — push the `main` and `beta` branches to GitHub and add the repository remote
-      (this working copy had no git repository at all, so it was initialised locally).
+- [x] Branches published to `https://github.com/Wiiffies/Aether-Website` (`main` = production Pages source, `beta` = Beta branch).
+- [ ] `MANUAL` — set the `beta` environment's `BETA_TARGET` variable and `BETA_DEPLOY_TOKEN` secret,
+      then wire the transfer step in `deploy-beta.yml` (the publish job stays skipped until then).
 
 ## Shipping a change from Beta to production
 

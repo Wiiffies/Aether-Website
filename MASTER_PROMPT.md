@@ -1,30 +1,37 @@
 # AETHER — Master Prompt (living checklist — update after each task)
 
 > Copy-paste this file to continue work or give to another agent. Tick [ ] → [x] as you finish.
+> Live implementation checklist for the current workstream: **PROJECT_TODO.md**. Security picture + manual dashboard steps: **SECURITY.md**. Beta deployment: **BETA.md**.
 
 ## PROJECT
-Aether — get-aether.de (GitHub Pages, static) + api.get-aether.de (Cloudflare Worker)
+Aether — get-aether.de (GitHub Pages, static) + Cloudflare Worker `aether-api` routed at `get-aether.de/api/*` (same-origin API; `https://api.get-aether.de` still answers for legacy/compat).
 Sell: Discord bots + Websites. Source-code only. No hosting/DB/domain/backend **for customers**.
 Stack: HTML/CSS/JS + public/checkout.js + public/aether-config.js + Cloudflare Worker (worker/src/index.js) + **D1 `aether-db`** + NOWPayments **Payment API** + Resend + Discord webhook
-Local dev: `python -m http.server 5501 --bind 127.0.0.1` → http://127.0.0.1:5501 — NEVER file://
-Pages: index.html, shop.html, discord-bot.html, website.html, contact.html, about.html, **account.html** (customer portal), **admin.html** (control room), payment-success.html, payment-cancel.html
-Files: public/checkout.js, public/aether-config.js, public/portal.css, worker/src/index.js, worker/wrangler.toml
+Customer portal: **account.html** (accounts mandatory for purchases, chat and Beta). The dedicated `Customer.get-aether.de` hostname is **not configured yet** — today the portal is served from `get-aether.de/account.html` with the same-origin API, which is why there is no separate origin to secure. DNS + route for that hostname is a MANUAL item.
+Beta: separate git branch `beta` + separate deployment target, hostname `betatester.get-aether.de`, path **exactly** `/yesthisistheofficaldomainanditssolongsopeopledontaccidentlyfindthis` (obscurity only — never shorten it, and never treat it as security).
+Admin: **admin.html** (orders, accounts, direct messages, **conversations**, **Beta**) — admin is derived from the `ADMIN_EMAILS`/`ADMIN_EMAIL` variable only, never from the database.
+Local dev: `node _dev-server.mjs` → http://127.0.0.1:5501 serves static **and** `/api/*` through the real Worker with an in-memory D1 (+ `ALLOW_DEV_ORIGIN=true`, prints a random local admin password). NEVER file://
+Pages: index.html, shop.html, discord-bot.html, website.html, contact.html, about.html, **account.html** (customer portal), **admin.html** (control room), **beta.html** (tester area), payment-success.html, payment-cancel.html, forgot-password.html, reset-password.html, verify-email.html, donate.html, error.html, 404.html
+Files: public/checkout.js, public/aether-config.js, public/portal.css, public/pages.css, public/ui.css, worker/src/index.js, worker/wrangler.toml
 
 ## CRITICAL CONSTRAINTS (never break)
 - Emails: `questions@get-aether.de` = orders/questions, `business@get-aether.de` = business only. NEVER hello@/orders@, never create new addresses, NEVER touch MX / Email Routing (route*.mx.cloudflare.net stays).
 - `CONTACT_FROM` must stay `Aether <questions@get-aether.de>` (verified sender).
-- Secrets ONLY via Worker Secrets — NEVER in HTML/JS/wrangler.toml/GitHub: `RESEND_API_KEY`, `NOWPAYMENTS_API_KEY`, `NOWPAYMENTS_IPN_SECRET`, `NOWPAYMENTS_IPN_SECRET_2`, `DISCORD_WEBHOOK_URL`
-- NOWPayments = **Payment API ONLY** (`POST https://api.nowpayments.io/v1/payment`), NOT Invoice API. Body: `{price_amount, price_currency:"eur", pay_currency:"btc|ltc|eth", order_id:"aether_<ts>_<rand>", order_description, ipn_callback_url:"https://api.get-aether.de/api/ipn"}`
+- Secrets ONLY via Worker Secrets — NEVER in HTML/JS/wrangler.toml/GitHub: `RESEND_API_KEY`, `NOWPAYMENTS_API_KEY`, `NOWPAYMENTS_IPN_SECRET`, `NOWPAYMENTS_IPN_SECRET_2`, `DISCORD_WEBHOOK_URL`, `TURNSTILE_SECRET`. `ADMIN_EMAIL` is **config, not a credential** (a plain text variable).
+- NOWPayments = **Payment API ONLY** (`POST https://api.nowpayments.io/v1/payment`), NOT Invoice API. Body: `{price_amount, price_currency:"eur", pay_currency:"btc|ltc|eth", order_id:"aether_<ts>_<rand>", order_description, ipn_callback_url:"https://api.get-aether.de/api/ipn"}`.
 - Fixed IPN for ALL: `https://api.get-aether.de/api/ipn` — never per-coin/package. XMR removed; only BTC/LTC/ETH.
-- D1 is used ONLY for accounts, orders and per-order chat. Order/chat data is never shared with anyone else and never exposed without auth (admin routes need `ADMIN_EMAILS`).
+- D1 is used ONLY for accounts, orders, per-order chat, conversations, sessions, tokens, rate limits, settings, audit log and Beta feedback. Nothing is exposed without auth (admin routes need `ADMIN_EMAILS`/`ADMIN_EMAIL`).
 - Frontend `apiBase = ""` → **same origin**: `/api/*` on get-aether.de is routed to the Worker (worker route `get-aether.de/api/*` + `www.get-aether.de/api/*`), so the session cookie is first-party (`__Host-aether_session`, HttpOnly, Secure, SameSite=Lax). `https://api.get-aether.de` still works (legacy/compat, SameSite=None + Bearer).
 - CORS is an **explicit allowlist** (`ALLOWED_ORIGIN`); `*` is deliberately ignored by the Worker. Unknown origins get no CORS headers and their writes get 403.
-- Local dev: `node _dev-server.mjs` → http://127.0.0.1:5501 serves the static site AND `/api/*` through the real Worker with an in-memory D1. `python -m http.server` no longer reaches the API (that is intentional).
+- **Roles are server-side only.** `user` | `tester` live in `users.role`; `admin` is derived at request time from `ADMIN_EMAILS`/`ADMIN_EMAIL`. The API can never grant `admin`, never demote an admin, and never let someone change their own role. The UI buttons are convenience only.
+- **Anonymous chat does not exist.** Every `/api/conversations*` route needs a session and every row is filtered by `user_id`; another account's conversation id returns **404** (not 403) so ids cannot be probed.
+- **Never claim "100% secure".** Obscure URLs, hidden pages, frontend role checks, hidden buttons, minified/obfuscated JS, Base64 and client-side variables are **not** security mechanisms. Say what is enforced in code, what is enforced at the Cloudflare edge, and what is still manual.
 - Security architecture + manual dashboard steps live in **SECURITY.md**. Read it before changing auth, cookies, CORS or headers.
-- **Signed-in customers never type an email.** `POST /api/invoice` and `POST /api/order` both resolve the account first: if the body has no usable email (or Discord) and the request carries a valid token, the account's own email/Discord are used. A typed email always wins. Signed out, an email is still required. The frontend does the same via `AetherCheckout.accountEmail()` / `resolveEmail()` so the UI never shows an empty required field to a member.
-- **Never write `[^\\s@]` in a JS regex.** `public/checkout.js` shipped with a doubled backslash in `isEmail`, so the class meant "not backslash, not s, not @" and rejected every address containing the letter **s** (`test@example.com`, `wispz@outlook.de`). Fixed 2026-09-30. `node _check-email-regex.mjs` runs every `isEmail` in the project against addresses that must pass/fail — run it after touching validation.
+- **Signed-in customers never type an email.** `POST /api/invoice` and `POST /api/order` both resolve the account first: if the body has no usable email (or Discord) and the request carries a valid token, the account's own email/Discord are used. A typed email always wins. Signed out, an email is still required.
 - **worker/src/index.js must stay 100% ASCII** (escape every €, —, →, · as `\uXXXX`). A non-ASCII byte is what turned every character in the Discord embed into `?`. `_build_chunks.mjs` aborts if it finds one.
-- **PBKDF2 in workerd rejects iterations > 100000** ("Pbkdf2 failed: iteration counts above 100000 are not supported"). `PBKDF2_ITERATIONS = 100000` is the ceiling; anything higher made register/login return a bare `1101`.
+- **PBKDF2 in workerd rejects iterations > 100000**. `PBKDF2_ITERATIONS = 100000` is the ceiling; anything higher made register/login return a bare `1101`.
+- **The Discord embed thumbnail stays a raster.** `AETHER_LOGO` in the worker points at `/Aether%20Logo%20trasnparent%20new.png` because Discord does not render SVG; every page uses the 436-byte `public/aether-logo.svg` instead, so the 1.2 MB file is fetched only by Discord. Do not “optimise” it away without a small PNG replacement.
+- **Never write `[^\\s@]` in a JS regex.** `public/checkout.js` once shipped with a doubled backslash in `isEmail`, so every address containing the letter **s** was rejected. `node _check-email-regex.mjs` runs every `isEmail` in the project against addresses that must pass/fail — run it after touching validation.
 
 ## PRICING (locked)
 - Discord: Basic **€15** (≤10 commands, 2 revisions) · Premium **€30** (≤25 commands, 3 revisions) · Custom **€50+**
@@ -50,121 +57,155 @@ Both builders persist state in the URL (`website.html?pages=…&type=…&style=�
 - Discord Starter €15: LTC 4746627664, ETH 6214760305, BTC 5024772056
 - Discord Premium €30: LTC 5353160401, ETH 5762161630, BTC 6096587586
 
+## CUSTOMER PORTAL (account.html)
+Accounts are mandatory for customer functionality — there is no guest checkout for *features*: purchases, chat and Beta all require a session.
+- **Identity:** PBKDF2-SHA256 100 000 iters, per-user salt, no plaintext anywhere. Sessions are `__Host-aether_session` (HttpOnly, Secure, SameSite=Lax, Path=/) stored as **SHA-256(token)** in `sessions`, rotated on every login, 14-day TTL, capped at 10 per user. `Authorization: Bearer <token>` also works (third-party-cookie safety).
+- **Email verification:** registering sends a 24 h single-use token (stored hashed in `auth_tokens`); `verify-email.html` consumes it. `POST /api/auth/resend-verification` is session-bound and limited to 4/h per account. While verification is enforced, unverified accounts get `403 {"error":"Please verify your email address before continuing.","code":"EMAIL_UNVERIFIED"}` on purchases, conversations and Beta. Enforcement **stands down honestly** when no mail provider is configured (`email:false` in health) — that is the current production state until `RESEND_API_KEY` exists; `REQUIRE_EMAIL_VERIFICATION=true` forces the gate on anyway.
+- **Purchase IDs:** `AETH-2026-XXXXXXXX`, generated server-side from `crypto.getRandomValues` with an ambiguity-free alphabet `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`, unique (checked + unique index), never accepted from the browser, backfilled lazily for old orders, shown in the portal/order detail/admin/emails. A Purchase ID is an **identifier, not a credential**: `GET /api/purchases/:id` only ever looks inside the authenticated account (`404` for anything else).
+- **Chat:** conversations are `conv_<18 hex>`, owned by `user_id`, statuses `open|answered|closed`, messages capped at 4000 chars (control chars stripped), rate limited. A conversation can reference one of *your own* Purchase IDs (validated). Legacy per-order chat rows (no `conversation_id`) are bridged into the same history with a deterministic id, so nothing is lost. Admin replies land in the same thread and email the customer.
+- **Portal UI:** dashboard cards in the order purchases → chat → Beta → security; Purchase ID column; verification banner + resend; thread view with 12 s polling and a close button; `#nav-beta` only renders when the server says the account is a tester.
+- **Beta area (`beta.html`):** server-gated — the page asks `/api/beta/status` and shows a denied state for anyone else. Shows the environment, server-provided feature flags, a single-use ticket tool and feedback (stored in `beta_feedback`, never in production tables).
+
 ## WORKER API (all live)
+Public / auth
 - `GET  /api/health` → `{ok,service,time,email,payments,ipnSignature,discord,turnstile,db}` (booleans only — no addresses/config)
-- `POST /api/auth/forgot` → single-use reset link (30 min); answers identically for unknown emails; honest 503 while `RESEND_API_KEY` is missing
-- `POST /api/auth/reset` → `{token,password}` → replaces the password, kills every other session, signs the user back in
-- `POST /api/auth/password` → signed-in password change (needs `currentPassword`)
-- `POST /api/auth/verify-email` → consumes a 24 h verification token
+- `POST /api/auth/register` · `POST /api/auth/login` · `POST /api/auth/logout` · `GET /api/me` · `DELETE /api/me` (self-service account deletion: sessions/tokens/conversations/feedback cleared, orders detached not deleted)
+- `POST /api/auth/forgot` → single-use reset link (30 min); identical answer for unknown emails; honest 503 while `RESEND_API_KEY` is missing
+- `POST /api/auth/reset` → `{token,password}` → replaces the password, kills every other session, signs back in
+- `POST /api/auth/password` → signed-in change (needs `currentPassword`)
+- `POST /api/auth/verify-email` → consumes the 24 h token · `POST /api/auth/resend-verification` → new token (session-bound, 4/h)
+Orders / payment
 - `POST /api/order` → validates (Discord optional, **email optional when signed in**), questions@ vs business@ routing, auto-reply
-- `POST /api/invoice` → **email optional when signed in** (falls back to the account email), `pay_currency` + promo validation
-- `POST /api/invoice` → validates pay_currency + promo, creates NOWPayments Payment, stores the D1 order (links `user_id` when signed in **or when the email already owns an account**), sends pending email+Discord, returns `{orderId,paymentId,promoApplied,discount,…}`
-- `POST /api/ipn` → verifies `x-nowpayments-sig` HMAC-SHA512 against **both** IPN secrets; handles waiting/confirming/confirmed/finished/sending/failed/expired/partially_paid; updates `orders.status`; email+Discord
-- `GET  /api/payment/:paymentId` (or `?payment_id=`, `/api/status`) → verifies via `api.nowpayments.io/v1/payment/:id` → `{status,isPaid,isPending,isFailed}`
-- `GET|POST /api/promo?code=&amount=` → `{valid,code,type,value,discount,finalAmount}`; unknown codes return `{valid:false}` (never 500)
-- `POST /api/auth/register` · `POST /api/auth/login` · `POST /api/auth/logout` → `{ok,token,user,emailVerified,isAdmin}` + `__Host-aether_session` cookie (HttpOnly, Secure, SameSite=Lax same-origin / None on the api. host). Sessions are stored as **SHA-256(token)** in D1, rotate on login, expire after 14 days, capped at 10 per user.
-- `GET  /api/me` (`isAdmin`) · `DELETE /api/me` → a user deletes their own account (sessions removed, orders/messages detached, not deleted)
-- `GET  /api/orders` · `GET /api/orders/:id` · `POST /api/orders/:id/message` → the customer's orders and per-order chat
-- `GET  /api/admin` · `GET /api/admin/orders[?status=&limit=]` · `GET /api/admin/orders/:id` · `POST /api/admin/orders/:id/message` · `GET /api/admin/users` · `DELETE /api/admin/users/:id` · `GET /api/admin/messages` → everything, admin only (`ADMIN_EMAILS`), 403 otherwise
-- Auth accepts **either** `Authorization: Bearer <token>` **or** the cookie, so accounts survive blocked third-party cookies.
+- `POST /api/invoice` → email optional when signed in, `pay_currency` + promo validation, creates the NOWPayments Payment, stores the D1 order (**links `user_id`** when signed in *or when the email already owns an account*), generates the **Purchase ID**, returns `{orderId,purchaseId,paymentId,promoApplied,discount,…}`
+- `POST /api/ipn` → verifies `x-nowpayments-sig` HMAC-SHA512 against **both** IPN secrets; waiting/confirming/confirmed/finished/sending/failed/expired/partially_paid; updates `orders.status`; email+Discord carry the Purchase ID
+- `GET  /api/payment/:paymentId` (or `?payment_id=`, `/api/status`) → verified via `api.nowpayments.io/v1/payment/:id`
+- `GET|POST /api/promo?code=&amount=` → `{valid,code,type,value,discount,finalAmount}`; unknown codes never 500
+Customer (session + ownership)
+- `GET  /api/orders` · `GET /api/orders/:id` · `POST /api/orders/:id/message`
+- `GET  /api/purchases/:purchaseId` → `{purchase, conversation}` (400 malformed, 404 not yours)
+- `GET|POST /api/conversations` (list / create with optional Purchase ID) · `GET /api/conversations/:id` · `POST /api/conversations/:id/messages` · `POST /api/conversations/:id/status`
+Beta (session + verified + tester)
+- `GET|POST /api/beta/access` (status) · `POST /api/beta/feedback` · `POST /api/beta/ticket` (120 s, single-use) · `POST /api/beta/redeem`
+Admin (`ADMIN_EMAILS`/`ADMIN_EMAIL`, 403 otherwise; all state-changing actions are audit-logged)
+- `GET /api/admin` · `GET /api/admin/orders[?status=&limit=]` · `GET /api/admin/orders/:id` · `POST /api/admin/orders/:id/message`
+- `GET /api/admin/users` (role + verified + `assignableRoles` + `adminEmailsConfigured`) · `POST /api/admin/users/:id/role` (grant/revoke `tester`) · `DELETE /api/admin/users/:id`
+- `GET /api/admin/conversations` · `GET /api/admin/conversations/:id` · `POST /api/admin/conversations/:id/messages` · `POST /api/admin/conversations/:id/status`
+- `GET /api/admin/beta` · `POST /api/admin/beta/domain/request` (password re-auth → 64-hex 30-min single-use token) · `POST /api/admin/beta/domain/confirm` · `POST /api/admin/beta/flags`
+- `GET /api/admin/audit` · `GET /api/admin/messages`
+Rules that hold everywhere: 64 KB body cap, per-field length caps, sanitised errors, security headers on every response, Origin/Referer check on every write (CSRF), app-layer rate limits per route, and `no-store` on API responses.
 
 ## WORKER VARIABLES
-- `CONTACT_TO`, `CONTACT_FROM`, `SUCCESS_URL`, `CANCEL_URL` — unchanged
-- `ALLOWED_ORIGIN` — comma-separated origin allowlist. Currently `*` in the vars, which the code **ignores** and falls back to `https://get-aether.de,https://www.get-aether.de,https://api.get-aether.de`. Set it explicitly in the dashboard so the config matches reality.
-- `SITE_URL` (default `https://get-aether.de`) — used in password-reset / verification links
-- `TURNSTILE_SECRET` (secret, optional) + `TURNSTILE_LOGIN` (optional, `true` = captcha on login too). Until the secret exists no captcha is required and `public/aether-config.js → turnstileSiteKey` should stay empty.
+- `CONTACT_TO`, `CONTACT_FROM`, `SUCCESS_URL`, `CANCEL_URL`, `SITE_URL` (default `https://get-aether.de`, used in reset/verification links) — unchanged
+- `ALLOWED_ORIGIN` — comma-separated origin allowlist. Dashboard currently holds `*`, which the code **ignores** in favour of the built-in `https://get-aether.de,https://www.get-aether.de,https://api.get-aether.de`. Set it explicitly so config == reality.
+- `ADMIN_EMAIL=alex.real.apple@gmail.com` — single admin address (preferred). `ADMIN_EMAILS` can hold a comma-separated list; the code reads **both**, unioned. The dashboard still holds the guessed `ADMIN_EMAILS=Wispz@outlook.de` → **MANUAL: replace it** (applies instantly, no redeploy). Empty = nobody is admin.
+- `REQUIRE_EMAIL_VERIFICATION` — `true` forces the verified-email gate even without a mail provider; unset = automatic (gate on as soon as `RESEND_API_KEY` exists).
+- `BETA_HOST` (default `betatester.get-aether.de`), `BETA_PATH` (default `/yesthisistheofficaldomainanditssolongsopeopledontaccidentlyfindthis`), `BETA_FLAGS` (JSON, default `{"betaNewChat":true,"betaDashboard":true,"betaTools":true}`) — the admin panel can override all three in D1 `settings`; the frontend never hardcodes them.
+- `AETHER_ENV` — `production` is reported in `/api/beta/status`.
+- `TURNSTILE_SECRET` (secret, optional) + `TURNSTILE_LOGIN`; until the secret exists no captcha is required and `public/aether-config.js → turnstileSiteKey` must stay empty. Set both or neither.
 - `ALLOW_DEV_ORIGIN` — local development only, must stay unset/false in production.
-- `PROMO_CODES` — JSON map, e.g. `{"WELCOME10":{"type":"percent","value":10},"SAVE5":{"type":"fixed","value":5}}`. Shorthand: a number = percent, `"10%"` = percent. **Currently empty → `/api/promo` returns `{valid:false}`.**
-- `ADMIN_EMAILS` — comma-separated admin emails, e.g. `you@example.com,ops@example.com`. **Currently `Wispz@outlook.de` (guessed — change it to the email you actually sign in with).** Empty = nobody is admin (all `/api/admin/*` → 403).
-- D1 binding `DB` → `aether-db` (`201052a6-bed3-4c1c-a3ee-e16394aa36e4`, WEUR)
+- `PROMO_CODES` — JSON map, e.g. `{"WELCOME10":{"type":"percent","value":10}}`. **Currently empty → `/api/promo` returns `{valid:false}`.**
+- D1 binding `DB` → `aether-db` (`201052a6-bed3-4c1c-a3ee-e16394aa36e4`, WEUR). KV namespace `747e914c4ebf40c5b64d876090f1b467` holds the deploy staging chunks + `aether-meta`.
 
 ## D1 SCHEMA (live)
-`users(id, email UNIQUE, password_hash, discord, created_at, email_verified)` ·
+`users(id, email UNIQUE, password_hash, discord, created_at, email_verified, **role** DEFAULT 'user')` ·
 `sessions(token PK = **sha256 of the session token**, user_id, created_at, expires_at)` ·
-`auth_tokens(token_hash PK, user_id, purpose 'reset'|'verify', expires_at, created_at)` ·
+`auth_tokens(token_hash PK, user_id, purpose 'reset'|'verify', expires_at, created_at, **payload**)` ·
 `rate_limits(rl_key PK, count, window_start)` ·
-`orders(id, user_id, order_id UNIQUE, payment_id, amount, currency, type, package, description, status DEFAULT 'pending', promo_code, discount, meta, extra, created_at, email)` ·
-`messages(id, order_id, user_id, sender DEFAULT 'customer'/*'admin'*/, body, created_at)` ·
-indexes `idx_sessions_user, idx_orders_user, idx_orders_orderid, idx_orders_email, idx_messages_order`
+`orders(id, user_id, order_id UNIQUE, payment_id, amount, currency, type, package, description, status DEFAULT 'pending', promo_code, discount, meta, extra, created_at, email, **purchase_id**)` ·
+`messages(id, order_id, user_id, sender DEFAULT 'customer'/*'admin'*/, body, created_at, **conversation_id**)` ·
+`conversations(conversation_id PK, user_id, order_id, purchase_id, subject, status 'open'|'answered'|'closed', assigned_admin, created_at, updated_at)` ·
+`settings(key PK, value, updated_at)` (Beta host/path/flags — server-owned) ·
+`audit_log(id, actor_id, actor_email, action, target, detail, created_at)` ·
+`beta_feedback(id, user_id, kind, body, created_at)`
+indexes `idx_sessions_user, idx_orders_user, idx_orders_orderid, idx_orders_email, idx_messages_order, **idx_orders_purchase_id (unique), idx_conversations_user, idx_messages_conversation, idx_beta_feedback_user**`
+All of it is applied to the live database. `_test-worker.mjs` and `_dev-server.mjs` mirror this schema exactly — update all three together.
+
+## CLOUDFLARE EDGE (applied via API)
+- Worker routes `get-aether.de/api/*` + `www.get-aether.de/api/*` → `aether-api` (production/Alpha). `aether-payments` stays bound for the legacy coin links.
+- TLS: Always Use HTTPS, min TLS 1.2, TLS 1.3, HSTS 1 year + includeSubDomains + nosniff. SSL mode should be **Full (strict)** → still MANUAL.
+- Cloudflare Managed Free Ruleset (WAF) deployed — ruleset `77454fe2d30c4220b5701f6fdfb893ba`, entrypoint `d0c31ddfc1a94d17b965ec5749aeb18a`.
+- Edge rate limiting: ruleset `c1f44df272df4b5aa9139338a895ab15` — one rule (free plan allows exactly one): `10 req / 10 s per IP+colo` on `/api/auth/*` + order/contact/invoice, `block` for 10 s. Because it is used up, **chat, Beta and admin are protected by the application limits only** (`/api/conversations` 400/h, conversation writes 120/10 min, resend 4/h, admin routes per-route limits). MANUAL: either swap that one rule for a broader one or upgrade the plan.
+- DDoS: Cloudflare's always-on L3/4 + L7 mitigation via the proxied zone (no proxy = no protection — keep both hostnames orange-clouded).
+- Bot Fight Mode intentionally **OFF** so NOWPayments IPNs and the checkout polling are never challenged.
+- Turnstile hook exists in code and is off until keys are set.
 
 ## DEPLOY (wrangler is NOT authenticated — no CLOUDFLARE_API_TOKEN)
 1. `node --check worker/src/index.js`
-2. `node _build_chunks.mjs` → writes `_gz2_00.txt`…`_gz2_10.txt` (gzip + base64, 2000 chars each) and prints `sha256`, per-chunk `len/sum`. **Aborts if the source is not pure ASCII.**
-3. For each chunk `i`, call the Cloudflare MCP `execute` tool with `cloudflare.request({method:"PUT", path:`/accounts/${accountId}/storage/kv/namespaces/747e914c4ebf40c5b64d876090f1b467/values/aether-gz-${i}`, body:<that 2000-char chunk>, contentType:"text/plain", rawBody:true})` and GET it back to compare `len`/`sum`. **One chunk per call — the sandbox rejects a code string longer than ~2.2 KB ("Unexpected token ';'").**
-4. One more `execute` call: GET `aether-gz-0..10` + `aether-meta`, `atob` → gunzip via `new Response(new Response(bytes).body.pipeThrough(new DecompressionStream("gzip")))`, verify `sha256 == expected`, then multipart-PUT to BOTH `aether-api` and `aether-payments`. Metadata carries the bindings; secret bindings survive re-upload. Reference snippet: `aether-deploy.mjs`.
-5. The multipart module part **must** be `Content-Disposition: form-data; name="index.js"; filename="index.js"` + `Content-Type: application/javascript+module` — without `filename` Cloudflare answers `10021: No such module: index.js`.
-6. The multipart metadata must include `main_module:"index.js"`, `compatibility_date`, `compatibility_flags:["nodejs_compat"]` and `keep_bindings:["plain_text","secret_text","d1","kv_namespace"]` — that last field is what preserves the Worker secrets and the D1 binding across a code-only deploy. Verified live 2026-10-01 (`db:true`, `payments:true`, `ipnSignature:true`).
-7. Chunk values can hold 2000 chars; putting 3 per `execute` call works (the real limit is higher than the old ~2.2 KB note). Always compare `len`/`sum` on upload and the final `sha256` before the PUT.
-8. After a deploy, allow ~1 minute before believing a failure — the previous version can still answer briefly.
+2. `node _test-worker.mjs` (177 checks — run this **before** every deploy; it has caught live-breaking bugs)
+3. `node _build_chunks.mjs` → writes `_gz2_00.txt`…`_gz2_21.txt` (gzip level 9 + base64, 2000 chars each) and prints `srcBytes`, `nonAscii` (must be 0), `sha256`, `gzBytes`, `chunkCount` and per-chunk `len/sum/head/tail`. **Aborts if the source is not pure ASCII.**
+4. For each *changed* chunk, call the Cloudflare MCP `execute` tool with `cloudflare.request({method:"PUT", path:`/accounts/${accountId}/storage/kv/namespaces/747e914c4ebf40c5b64d876090f1b467/values/aether-gz-${i}`, body:<chunk>, contentType:"text/plain", rawBody:true})`.
+   - **The `execute` `code` argument caps around ~3 KB.** One 2000-char chunk per call is the reliable size; packing 4 chunks into one call returns a misleading `10000: Authentication error`. Chunk 21 is shorter (784 chars).
+   - Cheap optimisation: one call can `GET` all 22 existing `aether-gz-*` values, compute `len`+`sum` (sum = Σ charCodeAt) inside the sandbox and return just those numbers. Compare with the fresh manifest and re-upload **only** the chunks whose `sum` changed — gzip keeps a byte-identical prefix, so a small edit near the end usually moves just the last few chunks (this deploy needed 5 of 22).
+5. One more `execute` call: `GET` `aether-gz-0..21`, `atob` → gunzip (`new Response(new Response(bytes).body.pipeThrough(new DecompressionStream("gzip")))`), **compare `sha256` with the manifest and abort unless it matches**, then multipart-PUT to BOTH `aether-api` and `aether-payments`. Write the new `sha256` into the `aether-meta` KV value.
+6. Multipart details that must be right or Cloudflare answers `10021: No such module: index.js`:
+   - part `Content-Disposition: form-data; name="index.js"; filename="index.js"` + `Content-Type: application/javascript+module`
+   - metadata part: `main_module:"index.js"`, `compatibility_date:"2024-12-01"`, `compatibility_flags:["nodejs_compat"]`, and **`keep_bindings:["plain_text","secret_text","d1","kv_namespace"]`** — that last field is what preserves the Worker secrets and the D1 binding across a code-only deploy (verified live: `db:true`, `payments:true`, `ipnSignature:true`, `discord:true` after every upload).
+7. Allow ~1 minute after the PUT before believing a failure — the previous version can still answer briefly. Then verify: `curl https://get-aether.de/api/health` and an anonymous `GET /api/conversations` (must be 401).
+8. D1 schema changes are applied through the same `execute` tool: `POST /accounts/${accountId}/d1/database/201052a6-bed3-4c1c-a3ee-e16394aa36e4/query` with `{sql, params}`. Additive `ALTER TABLE … ADD COLUMN` / `CREATE TABLE IF NOT EXISTS` statements are safe to repeat; **update `_test-worker.mjs` and `_dev-server.mjs` in the same commit** so tests keep mirroring production.
+
+## GIT + BETA BRANCH
+- Real repo in the working copy (there was none): `main` = production/Alpha, `beta` = Beta.
+- Commits on `main`: `1a64287` (customer portal, verified accounts, Purchase IDs, chat history, Tester/Beta), `460976f` (independent Beta deployment plumbing + BETA.md).
+- `beta` diverges by exactly 2 files (`BETA_BRANCH.md`, `public/aether-config.js → betaDeployment: true`) so the Beta build is identifiable and can never be confused with production. **Never merge a Beta-only flag back into `main` without removing it.**
+- Remote: **`https://github.com/Wiiffies/Aether-Website`** (public). `main` is pushed and is the live production source; `beta` is pushed as the Beta branch.
+- **Publishing model:** GitHub Pages builds from `main` with its *branch* build (Settings → Pages → Deploy from a branch → `main` / `/`) — that pipeline needs no credentials and cannot be broken by a workflow, so it stays the live publisher. `_config.yml` keeps the published artifact to the site itself (docs, `worker/` and repo config are excluded).
+- Workflows: `.github/workflows/deploy-production.yml` = production **checks** on `main` + PRs (inline JS, email regex, worker ASCII/compile, 177-check suite, secret scan, placeholder-copy check) because the branch build publishes in parallel; `.github/workflows/deploy-beta.yml` = `beta` only, refuses any other ref, checks + a publish job that is skipped until `vars.BETA_TARGET`/`secrets.BETA_DEPLOY_TOKEN` are set and **never** falls back to the production Pages site; `.github/workflows/deploy-worker.yml` = checks + `wrangler-action`, inert until `CLOUDFLARE_API_TOKEN` is a repo secret.
+- Want checks to *gate* publishing instead of running beside it? Switch Pages to the “GitHub Actions” source (`PUT /repos/{owner}/{repo}/pages {"build_type":"workflow"}`), restore the deploy job documented at the top of `deploy-production.yml`, and give the Beta its own target so it can never publish over production.
+- Beta data isolation is by convention + configuration today (separate Worker/KV/D1 and secrets for the Beta hostname). **MANUAL** before real testers: give the Beta Worker its own D1/KV bindings so a Beta bug can never touch production rows.
 
 ## LOCAL TESTS (no credentials needed)
-`node _test-worker.mjs` — loads the real worker against an in-memory SQLite D1 stub (`node:sqlite`) and runs **106 checks**: health, promo maths, register/login/duplicate/wrong-password, me, orders, invoice + email-based order claiming, customer chat, admin guards, admin orders/users/messages/reply/delete, guest-order claiming on register, account deletion, account-derived email, plus the hardening suite: security headers, CORS allowlist + wildcard rejection, cross-site write 403, hashed session storage, per-IP login rate limiting, password policy, forgot/reset/change-password/verify-email, single-use + expiry rules, 413 body cap, truncated descriptions, no provider payload echo. Run this **before every deploy** — it has caught several bugs that would have been live outages.
-`node _dev-server.mjs` — full local stack (static + real Worker + in-memory D1) on http://127.0.0.1:5501, prints a random local admin password at startup.
+`node _test-worker.mjs` — loads the real worker against an in-memory SQLite D1 stub (`node:sqlite`) and runs **177 checks**: health, promo maths, register/login/duplicate/wrong-password, me, orders, invoice + email-based order claiming, customer chat, admin guards, admin orders/users/messages/reply/delete, guest-order claiming on register, account deletion, account-derived email, plus the hardening suite (security headers, CORS allowlist + wildcard rejection, cross-site write 403, hashed session storage, per-IP login rate limiting, password policy, forgot/reset/change/verify-email, single-use + expiry rules, 413 body cap, truncated descriptions, no provider payload echo) and the portal suite (Purchase ID format/uniqueness/owner-only/400/401, conversation create/list/legacy bridge/IDOR 404 on read **and** write/closed refuses/4000-char cap/admin reply visible to the customer, role escalation attempts refused incl. `admin` and self-demotion, Tester grant/revoke stored server-side, Beta access/status/ticket/redeem/single-use/feedback/403-after-revoke, the Beta-domain change flow incl. wrong password 401, non-admin confirm refusal, single-use confirm, flags and admin-only audit, and the verified-email gate flipping the whole portal to 403 while mail is configured and standing down when it is not).
+`node _dev-server.mjs` — full local stack (static + real Worker + in-memory D1) on http://127.0.0.1:5501, prints a random local admin password at startup. Kill it by finding the PID with `netstat -ano | grep "127.0.0.1:5501" | grep -oE "[0-9]+$" | head -1` then `taskkill //PID <pid> //F` (the `LISTENING` column is localised as `ABHÖREN` on this machine — do not filter on it).
 `node _check-inline-js.mjs <pages…>` — parses every inline `<script>` block in the HTML pages.
 `node _check-email-regex.mjs` — actually *runs* each `isEmail` it finds against addresses that must pass/fail (this is what caught the `[^\\s@]` bug).
 
 ## WHAT IS ALREADY DONE [x]
-- [x] Worker deployed LIVE (2026-09-30, tag modified 13:50 UTC) — health `{"ok":true,"resend":false,"nowpayments":true,"ipnSecret":true,"discord":true,"db":true,"promos":0}`
-- [x] Secrets set: NOWPAYMENTS_API_KEY, IPN ×2, DISCORD_WEBHOOK_URL (canary) — all present and preserved through re-uploads
-- [x] Discord username optional; XMR removed (BTC/LTC/ETH only)
-- [x] Custom orders carry extra notes + "reply within 3 days"
-- [x] CORS `*` + `authorization` header + `DELETE` method + `credentials` + exposed `set-cookie`
-- [x] checkout.js: payAddress + orderId + copy, 8s polling, only `isPaid` auto-redirects; **sends `Authorization: Bearer` from localStorage**; `apiFetch` helper
-- [x] payment-success.html verifies server-side via `GET /api/payment/:id` (cannot be faked)
-- [x] **Discord embeds beautified + title/description/fields/author/footer/thumbnail** (Aether logo), per-status colours, `sendDiscord` retries 3× with backoff
-- [x] **Mojibake fixed** — worker is ASCII-only with `\uXXXX` escapes. Verified live: em dash U+2014, € U+20AC, curly quotes, → U+2192, ✓ all round-trip byte-exact.
-- [x] **Accounts (D1)** — register/login/logout/me, PBKDF2-SHA256 @100000 iters, 30-day sessions, cookie + Bearer
-- [x] **Orders filed to accounts** — signed-in user, or matched by email at checkout; guest orders are claimed when that email registers
-- [x] **Per-order chat** — customer page + email + Discord ping; admin replies land in the same thread and email the customer
-- [x] **Promo codes** — `PROMO_CODES` JSON, percent/fixed, capped, applied in builders + invoice, discount stored on the order
-- [x] **Admin** — `/api/admin/*` for all orders + all accounts + all direct messages, reply-as-admin, delete any account; non-admins get 403
-- [x] **Self-service account deletion** — `DELETE /api/me` (typed confirmation in the UI)
-- [x] **account.html** + **admin.html** + `public/portal.css`; "Account" link added to every page's nav (bumped `?v=4`, then `?v=5`)
-- [x] **Account-aware checkout (2026-09-30)** — `AetherCheckout` caches the signed-in account (`localStorage aether_account`, refreshed from `/api/me` once per page) so the pay modal shows "Email — from your account" instead of an email field, prefills Discord, and offers a Change button; request forms prefill and drop the required `*` via `bindAccountFields()`; the worker derives the same on the server. Worker tests cover it.
-- [x] **Bigger-project options (2026-09-30)** — per-add-on pricing in both builders, Project Size selector on both, large-project quote copy in both request sections, stale shop pricing bullets corrected (`+5 cmds +€5` / `+1 revision +€3` were wrong).
-- [x] **isEmail bug fixed** — `public/checkout.js` rejected every address containing the letter `s`. Found with `_check-email-regex.mjs`; the worker was unaffected.
-- [x] **All pages bumped to `?v=5`** (checkout.js changed)
-- [x] Builders: €2/extra command (>10), €3/feature, ≤4 revisions (2 free, +€7), €5/extra page (>3), complexity presets, promo field, shareable URL that restores state
-- [x] Live verified end-to-end 2026-09-30: register/login/me/logout, real BTC+LTC invoices (order + payment_id stored, status `waiting`), chat message, admin 403 for non-admins, account deletion, UTF-8 integrity. Frontend verified in a real browser (dashboard, empty state, not-an-admin notice, admin tables).
-- [x] Test data removed from D1 — `users`/`orders`/`messages`/`sessions` are all at 0
-- [x] **Production hardening (2026-10-01)** — worker rebuilt + deployed live (sha256 `5c9323b41d522d244056625c9cff4710320ed8a247914971ad1978223eef733f`, 82 406 bytes, both `aether-api` and `aether-payments`), D1 migrated (`auth_tokens`, `rate_limits`, `users.email_verified`, legacy plaintext sessions purged), 106 local checks green, new pages + UI layer shipped, 160+ legacy deploy artifacts and the 5.3 MB scraped `page_content (8)` folder deleted, `SECURITY.md` + `.gitignore` + `.env.example` added.
+- [x] Worker deployed LIVE **2026-10-01** — sha256 `1a1c22b74b282b96efb3739c9be233237ee4601b417c9e33e35f10e56a14fee7`, 135 027 bytes, 0 non-ASCII, gz 32 086 B, 22 chunks, uploaded to **both** `aether-api` and `aether-payments` (200/ok). Live health: `{"ok":true,"service":"aether-api","time":…,"email":false,"payments":true,"ipnSignature":true,"discord":true,"turnstile":false,"db":true}`; anonymous `GET /api/conversations`, `/api/purchases/…`, `/api/beta/access`, `/api/me` all 401.
+- [x] Secrets set and preserved across code-only deploys: NOWPAYMENTS_API_KEY, IPN ×2, DISCORD_WEBHOOK_URL. **RESEND_API_KEY still missing → `email:false`.**
+- [x] Migrations applied live: `users.role`, `orders.purchase_id` (+ unique index), `messages.conversation_id`, `auth_tokens.payload`, tables `conversations`, `settings`, `audit_log`, `beta_feedback`, indexes `idx_conversations_user`, `idx_messages_conversation`, `idx_beta_feedback_user`.
+- [x] Accounts + verified-email plumbing (register/verify/resend/reset/change), Purchase IDs, conversations with ownership + history, Tester role + Beta API and area, admin tabs for conversations/Beta/audit, Beta-hostname change flow with re-auth + email confirmation + audit.
+- [x] 177 local checks green; inline-JS parse + email-validator checks green; secret scan clean (only `.env.example` placeholders).
+- [x] Frontend: portal (`account.html`), tester area (`beta.html`), admin (`admin.html`), `public/ui.css` beta/role/flag styles, `?v=6` asset bumps.
+- [x] `MASTER_PROMPT.md`, `PROJECT_TODO.md`, `SECURITY.md`, `BETA.md`, `.env.example`, `.gitignore` all updated; `.github/workflows/*` for production/Beta/worker.
+- [x] Earlier hardening still in place: security headers, CORS allowlist, CSRF origin checks, hashed sessions, two-layer rate limiting, Turnstile hook, 413 cap, sanitised errors, Discord embed beautification, promo engine, account-aware checkout.
+- [x] D1 live data: `users` = 1 (`alex.real.apple@gmail.com`, genuine signup, unverified), `sessions`/`orders`/`messages` = 0, `settings` empty (code defaults apply).
 
 ## INFORMATION STILL NEEDED / MANUAL ACTIONS (user must do)
-- [ ] **RESEND_API_KEY still missing** → `resend:false` → no email is delivered (Discord still works). Cloudflare Dashboard → Workers & Pages → aether-api → Settings → Variables → Encrypted → `RESEND_API_KEY`. Then Resend → Domains → verify get-aether.de → add TXT/DKIM to DNS (**do NOT delete MX route*.mx.cloudflare.net**).
-- [ ] **Confirm `ADMIN_EMAILS`** — currently the guess `Wispz@outlook.de`. It must equal the email you register/sign in with at /account.html, otherwise /admin.html shows "Not an admin account". Comma-separate several. (Change it in Workers → aether-api → Settings → Variables — applies instantly, no redeploy.)
+- [ ] **RESEND_API_KEY** → Workers & Pages → aether-api → Settings → Variables → Encrypted. Then Resend → Domains → verify get-aether.de (add TXT/DKIM; **never delete MX route*.mx.cloudflare.net**). Until then `email:false` and the verification gate stands down honestly.
+- [ ] **Replace the guessed `ADMIN_EMAILS=Wispz@outlook.de` with `ADMIN_EMAIL=alex.real.apple@gmail.com`** (dashboard variable — instant, no redeploy). Otherwise `/admin.html` shows "Not an admin account" for the real admin.
 - [ ] **Set `PROMO_CODES`** — same place. Until then every code returns `{valid:false}`.
-- [ ] NOWPayments Dashboard → Settings → IPN → Callback URL = `https://api.get-aether.de/api/ipn` (delete the old `aether-payments.wispz.workers.dev/nowpayments-ipn`), enable BTC/LTC/ETH, both IPN secrets matching the Worker.
-- [x] Worker deployed 2026-10-01 — live health: `{"ok":true,"service":"aether-api","email":false,"payments":true,"ipnSignature":true,"discord":true,"turnstile":false,"db":true}`. Bindings + secrets survived the code-only upload (`keep_bindings`).
-- [ ] **Push the frontend to GitHub Pages** — every page (`?v=6` bumps), `public/checkout.js`, `public/aether-config.js`, new `public/ui.css`, plus `forgot-password.html`, `reset-password.html`, `verify-email.html`, `donate.html`, `error.html`, `404.html`. The worker is already deployed (sha `5c9323b4…`) and the `/api/*` route exists, so this push is safe — the pages rely on the same-origin API.
-- [ ] **Turnstile (optional)**: create a widget for get-aether.de, put the site key in `public/aether-config.js` and the secret in the Worker. Set both or neither.
-- [ ] D1 currently holds **1 real account** (`alex.real.apple@gmail.com`, created 2026-09-30 14:35) — that is a genuine signup, not test data. Test rows are at 0.
-- [ ] There is no git repo in this working folder — commit from wherever the Pages site is actually maintained.
+- [ ] **Beta deployment target**: `beta` is pushed, but the Beta publish job stays skipped until the `beta` environment has `BETA_TARGET` + `BETA_DEPLOY_TOKEN` and the transfer step is wired.
+- [ ] **Beta infrastructure**: DNS record + Worker route for `betatester.get-aether.de`, a Beta Worker with its **own** KV/D1/secrets, publishing the long Beta path.
+- [ ] **`Customer.get-aether.de`**: DNS record + route if the portal should live on its own hostname (today it is same-origin on get-aether.de).
+- [ ] Turnstile widget + secret (site key into `public/aether-config.js`); set both or neither.
+- [ ] SSL/TLS mode → **Full (strict)**; set `ALLOWED_ORIGIN` explicitly; consider a second edge rate-limit rule (free plan allows only one) so chat/Beta/admin are also covered at the edge.
+- [ ] NOWPayments Dashboard → Settings → IPN → Callback URL = `https://api.get-aether.de/api/ipn`; BTC/LTC/ETH enabled; both IPN secrets matching the Worker.
 
 ## HOW TO VERIFY AFTER DONE
 ```
-curl https://api.get-aether.de/api/health
-node _test-worker.mjs                     # 74 local checks, no credentials needed
-node _check-email-regex.mjs               # every isEmail actually runs against real addresses
-node _check-inline-js.mjs *.html          # inline <script> blocks parse
-curl "https://api.get-aether.de/api/promo?code=WELCOME10&amount=30"
-curl -X POST https://api.get-aether.de/api/auth/register -H "content-type: application/json" \
-  -d '{"email":"you@example.com","password":"at-least-8-chars"}'
-# Browser: http://127.0.0.1:5501/account.html → create account → orders + chat
-#          http://127.0.0.1:5501/admin.html   → all orders / accounts / messages
-#          http://127.0.0.1:5501/discord-bot.html#custom-bot-builder → share link restores state
+curl https://get-aether.de/api/health
+curl -i https://get-aether.de/api/conversations                 # 401 anonymous — no anonymous chat
+curl -i https://get-aether.de/api/beta/access                    # 401 anonymous — obscurity is not access
+node _test-worker.mjs                                           # 177 checks, no credentials needed
+node _check-email-regex.mjs && node _check-inline-js.mjs *.html
+# Browser: http://127.0.0.1:5501/account.html → register → verify → purchase → chat → (tester) Beta
+#          http://127.0.0.1:5501/beta.html    → tester-only area
+#          http://127.0.0.1:5501/admin.html   → orders / accounts / conversations / Beta config / audit
 ```
 
-## SECURITY HARDENING (2026-10-01) — see SECURITY.md for the full picture
-**In code (worker + frontend):** CORS allowlist (never `*`, never reflecting unknown origins), Origin/Referer checks on every write (CSRF), security headers on every API response (nosniff, frame-ancestors none, HSTS, no-referrer, permissions-policy, no-store), two-layer rate limiting (in-isolate burst + D1 fixed windows per route), Turnstile verification hook (off until the secret exists), password reset + change + email verification with single-use hashed tokens, hashed session storage + rotation + expiry + per-user cap, honest 503s instead of fake successes, sanitised errors/health, 64 KB body cap and per-field length caps, dead code removed (static payment links, minified legacy bundle).
-**Frontend:** same-origin API, token now lives in `sessionStorage` for the tab only (cookie is the primary mechanism, legacy localStorage copy is migrated then deleted), new `/forgot-password.html`, `/reset-password.html`, `/verify-email.html`, `/donate.html`, `/error.html`, `/404.html`, password meter, toasts, focus-visible rings, reduced-motion support, `public/ui.css`, Donate in every nav, favicon switched from the 1.2 MB PNG to the 436-byte SVG.
-**Cloudflare (applied via API):** Always Use HTTPS, min TLS 1.2, HSTS 1 year + includeSubDomains, worker routes for `get-aether.de/api/*` and `www.get-aether.de/api/*`, Cloudflare Managed Free Ruleset (WAF) deployed, one edge rate-limit rule (10 req / 10 s per IP+colo on auth + order/contact/invoice, block 10 s). Bot Fight Mode intentionally OFF so NOWPayments IPNs are never challenged.
-**Still manual:** Turnstile keys, Resend key, SSL mode → Full (strict), cache rules, `ALLOWED_ORIGIN` value, alerts. Listed in SECURITY.md §4.
+## SECURITY (2026-10-01) — see SECURITY.md for the full picture
+**In code (worker + frontend):** CORS allowlist (never `*`, never reflecting unknown origins), Origin/Referer checks on every write (CSRF), security headers on every API response (nosniff, frame-ancestors none, HSTS, no-referrer, permissions-policy, no-store), two-layer rate limiting (in-isolate burst + D1 fixed windows per route), Turnstile verification hook (off until the secret exists), password reset + change + email verification with single-use hashed tokens, hashed session storage + rotation + expiry + per-user cap, server-side roles with no API path to `admin`, ownership filtering on orders/purchases/conversations (404 not 403), Beta gating by session + verified email + role, single-use expiring re-auth tokens for the Beta hostname change, audit logging, honest 503s instead of fake successes, sanitised errors/health, 64 KB body cap and per-field length caps.
+**Cloudflare (applied via API):** Always Use HTTPS, min TLS 1.2, HSTS 1 year + includeSubDomains, worker routes for `get-aether.de/api/*` and `www.get-aether.de/api/*`, Cloudflare Managed Free Ruleset (WAF), one edge rate-limit rule (10 req / 10 s per IP+colo on auth + order/contact/invoice, block 10 s), automatic DDoS mitigation via the proxied zone. Bot Fight Mode intentionally OFF so NOWPayments IPNs are never challenged.
+**Explicitly NOT security:** the long Beta URL, hidden pages, frontend role checks/hidden buttons, minified or obfuscated JavaScript, Base64, client-side variables. Everyone who knows the Beta URL still needs a session, a verified email and the Tester role.
+**Still manual:** Turnstile keys, Resend key, SSL mode → Full (strict), `ALLOWED_ORIGIN` value, edge rule for chat/Beta/admin, Beta DNS/routing/isolated data, alerts. Listed in SECURITY.md §4.
 
 ## UPDATE LOG
-- 2026-09-30 15:55 — **Account-aware checkout + bigger-project options.** Worker: `/api/invoice` and `/api/order` now take the email/Discord from the signed-in account when the body has none (a typed email still wins). checkout.js: account cache + account chip in the pay modal + `resolveEmail`/`bindAccountFields`/`accountEmail`/`loadAccount`, `auth.register|login|logout` keep the cache in sync. Both builders: per-add-on `data-price`, new heavy add-ons, Project Size (+€40/+€100), `size=` in the URL, large-project quote copy; request forms no longer demand an email from members. **Fixed a live bug: `isEmail` in checkout.js rejected any email containing the letter `s`.** New tools `_check-inline-js.mjs` + `_check-email-regex.mjs`; worker suite grown to **74 checks, all passing**. Browser-verified: guest modal, account modal, Change button, empty-email fallback, both builders' maths (€190 / €260), both request forms capturing the account email, and a real LTC invoice created end-to-end with no email typed (test row deleted from D1 afterwards). `?v=4` → `?v=5`.
+- 2026-10-01 15:00 — **Customer portal release.** Worker rebuilt + deployed live (sha256 `1a1c22b7…`, 135 027 bytes, 22 chunks, both scripts) and the live D1 migrated (role, purchase_id + unique index, conversations, messages.conversation_id, auth_tokens.payload, settings, audit_log, beta_feedback). New: server-side roles (`user`/`tester`, `admin` derived from config only) with admin grant/revoke; verified-email gate + `resend-verification`; **Purchase IDs** `AETH-2026-XXXXXXXX` (CSPRNG, unique, owner-only lookup, email/Discord/admin/portal); conversations with full history, ownership (IDOR → 404), status + admin support inbox and replies that email the customer; legacy per-order chat bridged in; Tester/Beta API + `beta.html` tester area + feature flags; admin Beta tab with a password-re-auth + email-confirmation flow for changing the Beta hostname (64-hex 30-min single-use token, audit-logged); audit log. Frontend: `portal.*`/`admin.*` API surface, verify card + resend, chat UI with polling, Purchase ID column, beta card, role chip, new `public/ui.css` styles. Added a real git repo (main + beta branch) with branch-scoped workflows, BETA.md, and refreshed MASTER_PROMPT/SECURITY/PROJECT_TODO/.env.example. Tests: **177 checks, 0 failed**; secret scan clean; live health + anonymous 401s verified after the deploy. Deploy trick worth remembering: compare KV chunk checksums first — only 5 of 22 chunks changed.
+- 2026-10-01 — **Production hardening.** Worker rebuilt + deployed (sha256 `5c9323b4…`, 82 406 bytes, both scripts), D1 migrated (`auth_tokens`, `rate_limits`, `users.email_verified`, legacy plaintext sessions purged), 106 local checks green, new pages (`forgot-password`, `reset-password`, `verify-email`, `donate`, `error`, `404`) + `public/ui.css`, 160+ legacy deploy artifacts and the 5.3 MB scraped folder deleted, `SECURITY.md` + `.gitignore` + `.env.example` added.
+- 2026-09-30 15:55 — **Account-aware checkout + bigger-project options.** Worker: `/api/invoice` and `/api/order` take the email/Discord from the signed-in account when the body has none. checkout.js: account cache + account chip + `resolveEmail`/`bindAccountFields`/`accountEmail`/`loadAccount`. Both builders: per-add-on `data-price`, heavy add-ons, Project Size (+€40/+€100), `size=` in the URL, quote copy. **Fixed a live bug: `isEmail` rejected any email containing the letter `s`.** New tools `_check-inline-js.mjs` + `_check-email-regex.mjs`. `?v=4` → `?v=5`.
 - 2026-09-24 17:04 — checkout.js 16655 bytes, ?v=2 live, health verified
 - 2026-09-27 12:19 — LIVE VERIFIED: invoice BTC €15, payment status pending, CORS *, polling, success-page verification, ?v=2 → ?v=3
 - 2026-09-30 13:00 — Worker rewritten ASCII-only; beautified Discord embeds with retries; promo engine; D1 accounts + orders + per-order chat; IPN status colours; checkout.js promo + Bearer auth
 - 2026-09-30 13:40 — Admin routes (`/api/admin/*`) + `DELETE /api/me`; guest orders claimed by email; `orders.email` column added; global error handler so failures return JSON instead of a bare 1101; `?v=3` → `?v=4`; account.html + admin.html + portal.css; MASTER_PROMPT rewritten
-- 2026-09-30 13:50 — **Fixed register/login outage**: workerd rejects PBKDF2 > 100000 iterations → `PBKDF2_ITERATIONS = 100000`. Deployed, verified live (register/login/me/invoice/chat/delete), UTF-8 proven byte-exact, D1 test rows cleaned.
-- 2026-09-30 — Added `_test-worker.mjs` (65 checks) + `_build_chunks.mjs` (ASCII guard + chunk generator) so future deploys are test-first.
+- 2026-09-30 13:50 — **Fixed register/login outage**: workerd rejects PBKDF2 > 100000 iterations → `PBKDF2_ITERATIONS = 100000`. Deployed, verified live, UTF-8 proven byte-exact, D1 test rows cleaned.
+- 2026-09-30 — Added `_test-worker.mjs` + `_build_chunks.mjs` (ASCII guard + chunk generator) so future deploys are test-first.

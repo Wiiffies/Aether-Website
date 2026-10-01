@@ -1,0 +1,132 @@
+# Aether
+
+The code behind **[get-aether.de](https://get-aether.de)** — an independent studio that builds
+**Discord bots** and **static websites**, delivered as source code. You host it; we write it.
+
+This repository is the whole product: the static site, the customer portal, the private Beta area,
+the admin panel and the single Cloudflare Worker that powers all of it.
+
+| Where | What |
+| --- | --- |
+| `https://get-aether.de` | Public site (this repository, published with GitHub Pages) |
+| `https://get-aether.de/account.html` | **Customer portal** — accounts, purchases, chat history, security |
+| `https://get-aether.de/beta.html` | **Private Beta** — server-gated testers only, never "anyone with the URL" |
+| `https://get-aether.de/admin.html` | Admin panel — orders, accounts, support conversations, Beta config, audit log |
+| `https://get-aether.de/api/*` | Cloudflare Worker (`aether-api`) |
+
+## What's in the box
+
+- **Accounts are required for everything customer-facing.** There is no anonymous chat and no guest
+  lookup: purchases, conversations and Beta access all require a session.
+- **Email verification** with single-use, hashed, expiring tokens and a session-bound resend
+  endpoint. Protected features return `403 EMAIL_UNVERIFIED` while an account is unverified.
+- **Purchase IDs** (`AETH-2026-XXXXXXXX`) generated server-side, unique, owner-only lookups. An ID
+  is an *identifier, not a credential* — it never unlocks anything by itself.
+- **Support chat with history.** Every conversation is owned by the account, listed in the portal,
+  linked to an optional Purchase ID, and answered from the admin inbox into the same thread.
+- **Tester role + private Beta** enforced server-side (session + verified email + role), with
+  server-provided feature flags and Beta-only feedback storage.
+- **Admin panel** for orders, accounts, role grants, support replies and the Beta address, with
+  password re-auth + email confirmation + single-use tokens for sensitive configuration changes,
+  and an audit log.
+- **Checkout** with NOWPayments (Payment API), promo codes, HMAC-verified IPN callbacks, email and
+  Discord notifications.
+
+## Architecture
+
+```
+                       ┌──────────────────────── Cloudflare ────────────────────────┐
+  Browser ─── HTTPS ──▶ │  TLS · Managed WAF ruleset · edge rate limit · DDoS shield │
+                       └───────────────┬──────────────────────────┬─────────────────┘
+                                       │ /*                       │ /api/*
+                                       ▼                          ▼
+                        GitHub Pages (this repo, main)      Cloudflare Worker aether-api
+                        HTML · CSS · JS · public/*          worker/src/index.js
+                                                                 │
+                                       ┌─────────────────────────┼───────────────────────┐
+                                       ▼                         ▼                       ▼
+                                   D1 aether-db              KV (deploy staging)   Resend · Discord
+                              users · orders · chat ·              · settings        · NOWPayments
+                              sessions · tokens · audit
+```
+
+The API is served from the **same origin** as the site, so the session cookie is first-party
+(`__Host-aether_session`, HttpOnly, Secure). The frontend never holds an API key and never decides
+who is allowed to do anything — every authorisation decision happens in the Worker.
+
+## Layout
+
+| Path | Purpose |
+| --- | --- |
+| `*.html` | Pages: shop, builders, checkout, portal, Beta, admin, auth flows, errors |
+| `public/checkout.js` | Frontend API client (`auth.*`, `portal.*`, `admin.*`, checkout, promo) |
+| `public/aether-config.js` | Public config only — no secrets, ever |
+| `public/*.css` | `aether.css` (site), `pages.css`, `portal.css`, `ui.css` (shared UI layer) |
+| `public/aether-logo.svg` | The logo every page uses (436 bytes, gradient mark) |
+| `Aether Logo trasnparent new.png` | Raster copy used **only** by the Discord embed thumbnail — Discord cannot render SVG |
+| `worker/src/index.js` | The entire API: auth, orders, invoices, IPN, chat, roles, Beta, admin |
+| `worker/wrangler.toml` | Bindings and defaults for a `wrangler`-based deploy |
+| `_test-worker.mjs` | 177-check test suite (runs the real Worker against an in-memory D1) |
+| `_dev-server.mjs` | Local full stack: static site + Worker + in-memory D1 |
+| `_build_chunks.mjs` | ASCII guard + gzip/base64 chunker used by the deploy recipe |
+| `_check-inline-js.mjs`, `_check-email-regex.mjs` | Small static checks that have already caught real bugs |
+
+## Local development
+
+```bash
+node _dev-server.mjs      # http://127.0.0.1:5501 — static site AND /api/* through the real Worker
+node _test-worker.mjs     # 177 checks, no credentials needed
+node _check-inline-js.mjs *.html
+node _check-email-regex.mjs
+```
+
+`_dev-server.mjs` runs the Worker against an in-memory SQLite D1 and prints a random local admin
+password on start. Never open the pages over `file://` — the API and cookies need an origin.
+
+## Deployment
+
+- **Site:** GitHub Pages builds from `main` (Settings → Pages → Deploy from a branch). Pushing to
+  `main` publishes; the `beta` branch publishes nothing until its own Beta target is configured.
+- **Worker:** rebuilt with `_build_chunks.mjs` and deployed to `aether-api` (and `aether-payments`)
+  through the Cloudflare API relay — the exact recipe, including the checksum verification and the
+  binding-preserving metadata, is in [`MASTER_PROMPT.md`](MASTER_PROMPT.md). `wrangler` works too
+  once a `CLOUDFLARE_API_TOKEN` exists (see `.github/workflows/deploy-worker.yml`).
+- **Beta:** its own branch, its own workflow, its own hostname and — before real testers — its own
+  Worker, KV namespace and D1 database. See [`BETA.md`](BETA.md).
+
+## Security
+
+Security here is not a feature page; it is a set of enforced behaviours, and the honest summary of
+what is *not* enforced matters just as much. The short version:
+
+- **Enforced in code:** CORS allowlist, CSRF origin checks on writes, security headers, per-route
+  rate limits, PBKDF2 password hashing, hashed + rotating sessions, verified-email gating,
+  server-side roles that can never grant `admin`, ownership filtering on every customer resource
+  (`404`, not `403`, for someone else's data), single-use expiring re-auth tokens, audit logging.
+- **Enforced at the edge:** TLS/HSTS, the Cloudflare managed WAF ruleset, one edge rate-limit rule,
+  and always-on DDoS mitigation for the proxied zone.
+- **Deliberately not security:** obscure URLs, hidden pages, frontend role checks, hidden buttons,
+  minified or obfuscated JavaScript, Base64, client-side variables. The long Beta URL only reduces
+  accidental discovery — knowing it grants nothing.
+- **Still manual:** a few dashboard/DNS steps (mail provider key, admin email variable, Turnstile,
+  SSL mode, Beta infrastructure). They are listed in [`SECURITY.md`](SECURITY.md) §4.
+
+Nothing in this project is described as "100% secure", because nothing is. What it *is*: no
+secrets in the repository, no client-side authorisation, no data reachable without a session.
+
+## Documentation
+
+| File | Contents |
+| --- | --- |
+| [`MASTER_PROMPT.md`](MASTER_PROMPT.md) | Living project checklist: API reference, schema, variables, deploy recipe, update log |
+| [`SECURITY.md`](SECURITY.md) | Security model, threat notes and the manual dashboard list |
+| [`PROJECT_TODO.md`](PROJECT_TODO.md) | Current workstream status (`[x]` done · `[ ]` pending · `[ ] MANUAL` external) |
+| [`BETA.md`](BETA.md) | Beta branch, Beta deployment, access order and data isolation |
+
+## Contact
+
+- Orders and questions — **questions@get-aether.de**
+- Business enquiries only — **business@get-aether.de**
+
+© 2026 Aether. All rights reserved. This repository is public for transparency and deployment —
+it is not an open-source project, and no licence is granted for reuse.
