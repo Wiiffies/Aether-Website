@@ -15,6 +15,16 @@ window.AETHER_CONFIG = window.AETHER_CONFIG || {
 
   currency: "eur",
 
+  // ---------------------------------------------------------------------------
+  // BETA BRANCH ONLY (git branch `beta`).
+  // This build is published by .github/workflows/deploy-beta.yml to the Beta
+  // environment. apiBase stays "" because the Beta host routes /api/* to the Beta
+  // Worker, so the session cookie is still first-party. betaDeployment only drives
+  // UI labelling - it NEVER grants access: the Worker checks the Tester role.
+  // ---------------------------------------------------------------------------
+  betaDeployment: true,
+
+
   // Cloudflare Turnstile — PUBLIC site key only (the secret lives in the Worker as
   // TURNSTILE_SECRET and is never exposed here). Leave empty and no widget is rendered
   // and no captcha is required. To enable: create a Turnstile widget for get-aether.de,
