@@ -1475,13 +1475,20 @@ async function handleOrder(request, env){
   let body; try{ body=await request.json(); }catch{ return json({ error:"Invalid JSON" }, 400, env, request); }
   const type=String(body.type||"").trim();
   const amount=body.amount!=null ? Number(body.amount) : null;
-  // 99999% -- a signed-in customer should never have to retype what the account already knows.
-  // Their account supplies the email + Discord, so the request form can leave those blank.
+  // 99999% -- order requests (website / discord bot) are ACCOUNT-ONLY, exactly like checkout.
+  // There is no "leave your email and we will build it" path: the account supplies the reply
+  // address and keeps the request in the portal chat. The plain contact form stays open to
+  // anyone who writes in, because that is not a purchase.
+  const isOrderRequest = type==="discord_bot" || type==="website";
   const auth=await requireAuth(request, env).catch(()=>null);
+  if(isOrderRequest && !auth) return json({ error:"Order requests need an account \u2014 create one or sign in, and your request stays in your account chat.", code:"ACCOUNT_REQUIRED" }, 401, env, request);
+  if(isOrderRequest){ const orderGate=verifiedGate(auth, env, request); if(orderGate) return orderGate; }
   const accountEmail=(auth && auth.user && isEmail(auth.user.email)) ? String(auth.user.email).trim() : "";
   const discord=String(body.discord||body.discordUsername||(auth && auth.user && auth.user.discord)||"").trim().slice(0,120);
+  // The account email is the only reply address for an order request; a posted one cannot override it.
   let email=String(body.email||body.customerEmail||"").trim().slice(0,200);
   if(!isEmail(email) && accountEmail) email=accountEmail;
+  if(isOrderRequest && accountEmail) email=accountEmail;
   const description=String(body.description||body.botDescription||body.websiteDescription||"").trim().slice(0,4000);
   const extra=String(body.extra||body.additionalInfo||"").trim().slice(0,4000);
   const meta= body.meta && typeof body.meta==="object" ? body.meta : {};
@@ -1546,6 +1553,7 @@ async function handleOrder(request, env){
       ["Your request", description.slice(0,900)],
       ["Estimated Price", amount!=null? `\u20AC${amount} (estimate \u2014 final quote after review)` : "Custom \u2014 we\u2019ll quote after review"],
       ["Payment","Crypto only \u2014 Bitcoin, Litecoin, Ethereum via NOWPayments. Hosting / domain / DB not included."],
+      ...(isOrderRequest && auth ? [["Your account","This request is filed in your account chat too \u2014 follow it up at https://get-aether.de/account.html"]] : []),
     ], note:"Need to add something? Just reply to this email (questions@get-aether.de or business@get-aether.de). Please add as many notes/instructions as you can in your original request \u2014 it speeds things up."}),
     text:`Thanks! We got your request.\n\n${text}\n\nWe\u2019ll reply within 3 days.`,
   }).catch(e=>({ error:e.message }));
@@ -1553,7 +1561,31 @@ async function handleOrder(request, env){
   const results = await Promise.all(tasks);
   const emailRes = results[0];
   if(emailRes && emailRes.error) return json({ error: emailRes.error }, 500, env, request);
-  return json({ ok:true, emailed: !(emailRes && emailRes.mocked), discord: !(results[1] && results[1].mocked) && !(results[1] && results[1].error) }, 200, env, request);
+  // An account-only request also belongs in the customer's own chat history, so they can follow
+  // it up in the portal instead of hunting through an old email. This never fails the request:
+  // the notification above has already gone out.
+  let conversationId = "";
+  if(isOrderRequest && auth && auth.user && env.DB){
+    try{
+      const convId = newConversationId();
+      const now = new Date().toISOString();
+      const subject = (type==="discord_bot" ? "Discord bot request" : "Website request") + " \u2014 " + String(body.package||body.tier||"Custom").slice(0,60);
+      const summary = [
+        subject,
+        amount!=null ? "Estimate: \u20AC" + amount + " (confirmed before work starts)" : "Estimate: custom \u2014 we will quote after review",
+        "",
+        description,
+        extra ? "\nAdditional info: " + extra : "",
+      ].join("\n");
+      await env.DB.prepare("INSERT INTO conversations (conversation_id, user_id, order_id, purchase_id, subject, status, created_at, updated_at) VALUES (?,?,?,?,?,'open',?,?)")
+        .bind(convId, auth.user.id, "", null, subject, now, now).run();
+      const conv = { conversation_id: convId, order_id: "", purchase_id: null, subject, status: "open", created_at: now, updated_at: now };
+      await insertConversationMessage(env, conv, "customer", summary, auth.user.id);
+      await audit(env, auth.user, "conversation.create", convId, type);
+      conversationId = convId;
+    }catch(e){ conversationId = ""; }
+  }
+  return json({ ok:true, emailed: !(emailRes && emailRes.mocked), discord: !(results[1] && results[1].mocked) && !(results[1] && results[1].error), conversationId }, 200, env, request);
 }
 
 async function handleInvoice(request, env){

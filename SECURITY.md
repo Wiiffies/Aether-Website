@@ -82,6 +82,11 @@ The frontend talks to the API **same-origin** by default (`public/aether-config.
   server-side and switches on automatically as soon as email delivery is configured (forced
   with `REQUIRE_EMAIL_VERIFICATION`); when no provider exists it stands down rather than
   locking every account out of its own data, and `/api/me` reports that honestly.
+* **Account-only requests**: `POST /api/order` with `type: discord_bot|website` is the same rule —
+  a signed-out visitor gets `401 ACCOUNT_REQUIRED`, the account email is the only reply address (a
+  typed one is ignored), and the request is filed into that account's portal chat. The two builder
+  pages have no email input at all, so there is nothing to type. Only the general `type: contact`
+  form accepts an email from anyone, and it writes no order.
 * **Account-only checkout**: `POST /api/invoice` requires a session — a signed-out buyer gets
   `401 {"code":"ACCOUNT_REQUIRED"}` and **no order row is written**. The order is owned by the
   session account (`user_id` comes from the session, never from the body) and the account's own

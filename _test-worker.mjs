@@ -258,10 +258,28 @@ check("a typed email can no longer override the account email", typedRow && type
 r = await call("GET", "/api/orders/" + orderId, { token: memberToken });
 check("another account cannot read that order -> 404", r.status === 404, r.json);
 
+console.log("\n--- order requests are account-only (no email box, no guest path) ---");
 r = await call("POST", "/api/order", { body: { type: "website", package: "Custom", amount: 90, description: "Big custom build, no email typed" }, token: memberToken });
-check("inquiry with no email while signed in -> accepted", r.status === 200 && r.json.ok === true, r.json);
-r = await call("POST", "/api/order", { body: { type: "website", package: "Custom", amount: 90, description: "No email and not signed in" } });
-check("inquiry with no email while signed out -> 400", r.status === 400, r.json);
+check("signed-in website request -> accepted", r.status === 200 && r.json.ok === true, r.json);
+const orderConvId = r.json.conversationId || "";
+check("the request is filed into the customer's own chat", /^conv_[0-9a-f]{18}$/.test(orderConvId), r.json);
+r = await call("GET", "/api/conversations/" + orderConvId, { token: memberToken });
+check("the customer can open that request thread", r.status === 200 && (r.json.messages || []).length >= 1, r.json);
+check("it is owned by the account, not by a typed address", env.DB.db.prepare("SELECT user_id FROM conversations WHERE conversation_id = ?").get(orderConvId).user_id === memberId);
+
+r = await call("POST", "/api/order", { body: { type: "website", package: "Custom", amount: 90, description: "No email box and not signed in", email: "stranger@example.com" } });
+check("anonymous website request -> 401 ACCOUNT_REQUIRED", r.status === 401 && r.json.code === "ACCOUNT_REQUIRED", r.json);
+r = await call("POST", "/api/order", { body: { type: "discord_bot", package: "Custom", amount: 60, description: "Anonymous bot request", email: "stranger@example.com" } });
+check("anonymous bot request -> 401 ACCOUNT_REQUIRED", r.status === 401 && r.json.code === "ACCOUNT_REQUIRED", r.json);
+check("the rejected guests wrote nothing at all", env.DB.db.prepare("SELECT COUNT(*) AS n FROM conversations").get().n === 1, env.DB.db.prepare("SELECT COUNT(*) AS n FROM conversations").get().n);
+
+r = await call("POST", "/api/order", { body: { type: "discord_bot", package: "Custom", amount: 45, description: "Signed-in bot request that typed someone else's email", email: "other@example.com" }, token: memberToken });
+check("a signed-in bot request is accepted", r.status === 200 && !!r.json.conversationId, r.json);
+check("a typed email cannot file the request under another account",
+  env.DB.db.prepare("SELECT COUNT(*) AS n FROM conversations WHERE user_id = (SELECT id FROM users WHERE email = ?)").get("other@example.com").n === 0);
+
+r = await call("POST", "/api/order", { body: { type: "contact", description: "Just a question about hosting", email: "someone@example.com" } });
+check("the plain contact form still works without an account", r.status === 200 && r.json.ok === true, r.json);
 
 r = await call("GET", "/api/orders", { token: memberToken });
 check("member sees exactly their two orders", r.status === 200 && r.json.orders.length === 2, r.json.orders && r.json.orders.length);

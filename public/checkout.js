@@ -70,6 +70,18 @@
     return "account.html" + back;
   }
   function accountDiscord(){ const a = account(); return a && a.discord ? String(a.discord).trim() : ""; }
+  // Request forms (website / discord bot) are account-only like checkout itself: the account
+  // supplies the reply address and the request is filed in the portal chat, so pages ask for a
+  // session before they submit anything. Renders the same CTA the pay modal uses.
+  function accountRequiredNotice(el, text){
+    if(accountEmail()) return true;
+    if(el){
+      el.innerHTML = esc(text || "This needs an account \u2014 there is no guest checkout.") +
+        ' <a href="' + accountUrl() + '" style="display:inline-block;margin-left:8px;padding:6px 12px;border-radius:6px;background:#fff;color:#000;font-weight:700;text-decoration:none">Create an account / sign in</a>';
+      el.className = "form-msg err";
+    }
+    return false;
+  }
   function loadAccount(force){
     if(!getToken() && CROSS_ORIGIN){ setAccount(null); return Promise.resolve(null); }
     if(!force && account()) return Promise.resolve(account());
@@ -553,7 +565,7 @@
   window.AetherCheckout = {
     API, CURRENCY, SUCCESS_URL, CANCEL_URL, CROSS_ORIGIN, IS_LOCAL,
     apiUrl, postJson, apiFetch, esc, isEmail, isConfigured, getToken, setToken, turnstile, ui,
-    account, setAccount, accountEmail, accountDiscord, loadAccount, resolveEmail, bindAccountFields,
+    account, setAccount, accountEmail, accountDiscord, accountUrl, accountRequiredNotice, loadAccount, resolveEmail, bindAccountFields,
     showPayModal,
     // Account portal helpers — used by account.html and admin.html
     auth: {

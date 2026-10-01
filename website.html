@@ -207,13 +207,13 @@
   <section class="request" id="web-request">
     <div class="request-head">
       <h2>CUSTOM WEBSITE REQUEST</h2>
-      <p>Describe the site you want. Send as inquiry (free) or pay with crypto right away — your builder estimate will be included.<br><span style="color:#9aa0a6">Please add as many notes/instructions as you can — the more detail, the faster I can quote. If you don’t have Discord, leave it blank.</span><br><b style="color:#c8c9cc">Building something big — 15+ pages, several areas, a dashboard, a shop, 3D?</b> <span style="color:#9aa0a6">Set Project Size and send the inquiry: larger projects are quoted individually and you pay only once you approve the quote.</span></p>
+      <p>Describe the site you want. <b style="color:#c8c9cc">Requests are account-only — sign in first</b> (the account email is the reply address and the request is filed in your portal chat). Send as inquiry (free) or pay with crypto right away — your builder estimate will be included.<br><span style="color:#9aa0a6">Please add as many notes/instructions as you can — the more detail, the faster I can quote. If you don’t have Discord, leave it blank.</span><br><b style="color:#c8c9cc">Building something big — 15+ pages, several areas, a dashboard, a shop, 3D?</b> <span style="color:#9aa0a6">Set Project Size and send the inquiry: larger projects are quoted individually and you pay only once you approve the quote.</span></p>
     </div>
     <div class="divider"></div>
     <form class="request-body" id="web-form" novalidate>
       <div class="form-grid">
         <div class="field"><label for="web-discord">Discord Username <span style="color:#7a7d82;font-weight:400">— leave blank if you don’t have Discord</span></label><input id="web-discord" name="discord" data-account-discord placeholder="yourname — leave blank if you don’t have Discord" autocomplete="username"></div>
-        <div class="field"><label for="web-email">Email <span class="req" data-account-optional>*</span></label><input id="web-email" name="email" type="email" placeholder="example@email.com" data-account-email autocomplete="email"><span data-account-email-note style="display:none;font:10px 'DM Mono',monospace;line-height:1.6;margin-top:6px"></span></div>
+        <div class="field"><label>Account</label><div id="web-account-note" class="acc-note" style="margin:0">Sign in to send a request — there is no guest order. Your account email is used and the request is filed in your portal chat.</div></div>
         <div class="field"><label for="web-req-type">Website Type <span class="req">*</span></label><input id="web-req-type" name="website_type" placeholder="Landing Page" required></div>
         <div class="field"><label>Number of Pages <span class="req">*</span></label>
           <div class="stepper" style="border:1px solid #2a2e33;border-radius:4px;padding:8px 10px;background:#111214;justify-content:space-between">
@@ -232,7 +232,7 @@
       <div class="form-foot">
         <button type="submit" class="outline-button" style="min-width:170px" data-action="inquiry">Send Inquiry (free) <span>↗</span></button>
         <button type="button" id="web-pay" class="tier-cta primary" style="width:auto;min-width:190px">Pay with Crypto — €50 <span>↗</span></button>
-        <span class="form-msg" id="web-msg">Sending via Worker if configured — otherwise falls back to email. Paying redirects to NOWPayments.</span>
+        <span class="form-msg" id="web-msg">Account required — sign in and your request + our replies stay in your account. Paying redirects to NOWPayments.</span>
       </div>
     </form>
   </section>
@@ -416,7 +416,8 @@
       const amt = Number(btn.dataset.amount);
       const pkg = btn.dataset.package;
       const desc = btn.dataset.desc || `Website ${pkg}`;
-      const defEmail = document.getElementById('web-email')?.value.trim() || '';
+      // form defaults: the account email (there is no email box any more) + the typed Discord
+      const defEmail = (C && C.accountEmail ? C.accountEmail() : '') || '';
       const defDiscord = document.getElementById('web-discord')?.value.trim() || '';
       if(!C || !C.isConfigured()){
         const body = `${desc}\nAmount: €${amt}\n\nPlease email questions@get-aether.de with your Discord + details to checkout with crypto. Worker not configured — see worker/README.md.`;
@@ -444,7 +445,6 @@
 
   function collectCustom(){
     const discord=document.getElementById('web-discord').value.trim();
-    const email=document.getElementById('web-email').value.trim();
     const wtype=document.getElementById('web-req-type').value.trim() || typeSel.value;
     const desc=document.getElementById('web-desc').value.trim();
     const featsText=document.getElementById('web-features-text').value.trim();
@@ -453,39 +453,50 @@
     const style=styleSel.value;
     const complexityLabel = compSel.options[compSel.selectedIndex].text;
     const { total, feats, size, sizeLabel } = calc();
-    return { discord, email, wtype, desc, featsText, ref, extra, style, complexityLabel, total, feats, size, sizeLabel };
+    return { discord, wtype, desc, featsText, ref, extra, style, complexityLabel, total, feats, size, sizeLabel };
   }
   function validateCustom(d){
-    // The signed-in account can supply the email, so this field is optional for members.
-    d.email = (C.resolveEmail ? C.resolveEmail(d.email) : d.email);
     if(!d.wtype || !d.desc) return "Please fill in the Website Type and Description. Discord is optional — leave it blank if you don’t have one.";
-    if(!d.email) return "Add an email, or sign in on the Account page and your account email is used automatically.";
     return null;
   }
 
   const form=document.getElementById('web-form');
   const msg=document.getElementById('web-msg');
-  // Signed in? Email + Discord are filled from the account and no longer required.
+  const acctNote=document.getElementById('web-account-note');
+  // Requests are account-only: the account supplies the reply address and the request is filed in
+  // the portal chat, so a signed-out visitor is sent to the Account page instead of typing an email.
+  function requireAccount(){
+    const em = C && C.accountEmail ? C.accountEmail() : "";
+    if(em){
+      if(acctNote){ acctNote.className = "acc-note ok"; acctNote.textContent = "Signed in as " + em + " — the request and our replies stay in your account chat."; }
+      return true;
+    }
+    if(C && C.accountRequiredNotice) C.accountRequiredNotice(msg, "Order requests need an account — there is no guest order, and the reply plus the estimate live in your portal chat.");
+    return false;
+  }
+  // Discord is prefilled from the account (the account email is used server-side either way).
   if(C && C.bindAccountFields) C.bindAccountFields(document);
+  requireAccount();
   form.addEventListener('submit', async (e)=>{
     e.preventDefault();
     const d = collectCustom();
     const err = validateCustom(d);
     if(err){ msg.textContent=err; msg.className='form-msg err'; return; }
+    if(!requireAccount()) return;
     const honey = form.querySelector('[name="website"]')?.value;
     if(honey){ msg.textContent='Thanks! We got your request.'; msg.className='form-msg ok'; return; }
 
     msg.textContent='Sending…'; msg.className='form-msg';
     const payload = {
       type: 'website', package: 'Custom', amount: d.total,
-      discord: d.discord, email: d.email, description: d.desc,
+      discord: d.discord, description: d.desc, // no email: the worker always replies to the account address
       meta: { websiteType: d.wtype, style: d.style, pages, projectSize: d.sizeLabel, features: d.feats, complexity: d.complexityLabel, revisions },
       featuresText: d.featsText, reference: d.ref, extra: d.extra
     };
     try{
       if(C && C.isConfigured()){
         await C.submitOrder(payload);
-        msg.textContent='Sent! Check your email — I most likely reply within 3 days.';
+        msg.textContent='Sent! Your request is in your account chat now — I most likely reply within 3 days.';
         msg.className='form-msg ok';
         form.reset();
         pages=1; revisions=2; pagesOut.textContent='1'; revOut.textContent='2';
@@ -496,7 +507,7 @@
     } catch(err){
       const now=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
       const featsLine = d.feats.length ? d.feats.join(', ') : '—';
-      const body = `NEW WEBSITE ORDER\n\nPackage: Custom\nEstimated Price: €${d.total}\n\nCustomer:\nDiscord: ${d.discord}\nEmail: ${d.email}\n\nWebsite Type:\n${d.wtype}\nStyle: ${d.style}\nComplexity: ${d.complexityLabel}\nPages: ${pages}\n\nFeatures selected:\n${featsLine}\n\nDescription:\n${d.desc}\n\nFeatures / Requirements:\n${d.featsText || '—'}\n\nReference Website:\n${d.ref || '—'}\n\nAdditional Information:\n${d.extra || '—'}\n\nSubmitted:\n${now}\n`;
+      const body = `NEW WEBSITE ORDER\n\nPackage: Custom\nEstimated Price: €${d.total}\n\nCustomer:\nDiscord: ${d.discord}\nAccount: ${(C && C.accountEmail && C.accountEmail()) || '—'}\n\nWebsite Type:\n${d.wtype}\nStyle: ${d.style}\nComplexity: ${d.complexityLabel}\nPages: ${pages}\n\nFeatures selected:\n${featsLine}\n\nDescription:\n${d.desc}\n\nFeatures / Requirements:\n${d.featsText || '—'}\n\nReference Website:\n${d.ref || '—'}\n\nAdditional Information:\n${d.extra || '—'}\n\nSubmitted:\n${now}\n`;
       const subject=`Custom Website — €${d.total} — ${d.discord} — ${d.wtype} — ${pages} page(s)`;
       C.mailtoFallback({ subject, body });
       msg.textContent='Worker not configured — opening your mail app. Email questions@get-aether.de if it didn’t open. See worker/README.md to enable direct delivery.';
@@ -506,8 +517,9 @@
 
   payBtn?.addEventListener('click', ()=>{
     const d = collectCustom();
-    const err = validateCustom(d);
-    if(err){ msg.textContent=err; msg.className='form-msg err'; return; }
+    const err = validateCustom(d);    if(err){ msg.textContent=err; msg.className='form-msg err'; return; }
+    if(!requireAccount()) return;
+
     if(!C || !C.isConfigured()){
       msg.textContent='Checkout not configured yet — set public/aether-config.js → apiBase to your Worker URL. You can still Send Inquiry (email fallback). See worker/README.md.';
       msg.className='form-msg err';
@@ -524,7 +536,7 @@
       title: `Custom Website — €${d.total}`,
       amount: d.total,
       breakdownHtml: breakdown,
-      defaultEmail: d.email,
+      defaultEmail: (C.accountEmail ? C.accountEmail() : ''),
       defaultDiscord: d.discord,
       onConfirm: async ({email, discord, payCurrency})=>{
         let finalAmount = d.total;

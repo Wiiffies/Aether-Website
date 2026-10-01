@@ -40,7 +40,7 @@ this directory.
 ## Test and run locally
 
 ```bash
-node ../_test-worker.mjs     # 183 checks against an in-memory D1 stub — run before every deploy
+node ../_test-worker.mjs     # 191 checks against an in-memory D1 stub — run before every deploy
 node ../_dev-server.mjs      # static site + this Worker on http://127.0.0.1:5501
 ```
 
