@@ -48,11 +48,13 @@ jobs:
         run: node _check-inline-js.mjs *.html
       - name: Email regex sanity
         run: node _check-email-regex.mjs
+      - name: Shared assets + OG metadata
+        run: node _check-assets.mjs
       - name: Worker is ASCII-only and compiles
         run: |
           node --check worker/src/index.js
           node -e "const s=require('fs').readFileSync('worker/src/index.js');let n=0;for(const b of s)if(b>127)n++;if(n){console.error('non-ASCII bytes: '+n);process.exit(1)}console.log('worker ASCII-only, '+s.length+' bytes')"
-      - name: Worker test suite (D1 stub, 177 checks)
+      - name: Worker test suite (D1 stub)
         run: node _test-worker.mjs
       - name: No secrets committed
         run: |
