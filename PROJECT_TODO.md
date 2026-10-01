@@ -49,6 +49,8 @@ Single source of truth for the customer-portal / Beta work. Status legend:
 - [x] Unverified accounts are blocked from purchases, chat, and Beta (`403 EMAIL_UNVERIFIED`)
 - [x] Enforcement is server-side and flips on as soon as an email provider is configured
 - [x] Password reset already existed (generic answers, single-use, kills sessions)
+- [x] Reset works without a mail provider (2026-10-01): delivery chain email -> Discord ops channel -> operator log, with the Discord hop allowlisted to `RESET_DISCORD_EMAILS` (default: admins) so no customer link lands in a shared channel; identical `200 {ok,delivery,message}` for known and unknown accounts
+- [x] Mail layer is provider-agnostic (2026-10-01): Cloudflare Email Sending binding (`env.EMAIL`) preferred, Resend fallback, log mock last; `emailProvider` reported by `/api/health`; the verified-email gate stays tied to `RESEND_API_KEY`/`REQUIRE_EMAIL_VERIFICATION` so a half-enabled binding can never lock buyers out
 
 ## 4. Chat system (no anonymous chat)
 
@@ -129,7 +131,7 @@ Single source of truth for the customer-portal / Beta work. Status legend:
 
 ## 10. Testing / audit
 
-- [x] 191 automated checks (`node _test-worker.mjs`) incl. IDOR, privilege escalation, Beta gating
+- [x] 209 automated checks (`node _test-worker.mjs`) incl. IDOR, privilege escalation, Beta gating, the reset delivery chain (admin allowlist, no enumeration, the logged link used end to end) and all three mail transports
 - [x] `_check-assets.mjs` added and wired into both workflows (one `?v=` across every page, 1200x630 OG card, description + `og:image` coverage)
 - [x] Rate-limit tests deflaked 2026-10-01: the one red Beta CI run on `294caf7` was the 1 h D1 window rolling over mid-loop at 17:00:00 UTC — both limiter checks now seed the window at the limit instead of looping (still 191 checks, 0 failed)
 - [x] `.acc-note` base style moved from `portal.css` to `ui.css` — fixes the unstyled account notes on `discord-bot.html`/`website.html`
@@ -157,7 +159,7 @@ Single source of truth for the customer-portal / Beta work. Status legend:
 - [ ] MANUAL: DNS record + worker route for the Beta hostname (`betatester.get-aether.de` + the long path)
 - [ ] MANUAL: separate Beta Worker with its own D1/KV/secrets (data isolation) before real Beta testing — today isolation is configuration, not a hard boundary
 - [ ] MANUAL: DNS record + route if the portal should live on its own `Customer.get-aether.de` hostname (today it is same-origin on get-aether.de)
-- [ ] MANUAL: `PROMO_CODES` (decide the codes) and `RESEND_API_KEY` — `ADMIN_EMAIL` and `TURNSTILE_*` are done as of 2026-10-01
+- [ ] MANUAL: `PROMO_CODES` (decide the codes) and **real email** — `ADMIN_EMAIL` and `TURNSTILE_*` are done as of 2026-10-01. Mail has two paths and needs no code change: Cloudflare Email Sending (dashboard -> Email Service -> Email Sending -> Onboard Domain -> `get-aether.de`, then attach the `EMAIL` binding; free for the account's verified destinations) or `RESEND_API_KEY` (Worker secret + GitHub secret; the workflow syncs it)
 - [x] MANUAL: explicit `ALLOWED_ORIGIN` set (2026-10-01); SSL mode cannot move to `Full (strict)` until the origin stops being GitHub Pages (see §8)
 - [ ] MANUAL: second edge rate-limit rule for chat/Beta/admin (free plan allows one — the existing rule must not throttle `/api/ipn`)
 

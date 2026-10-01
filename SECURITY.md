@@ -54,6 +54,8 @@ The frontend talks to the API **same-origin** by default (`public/aether-config.
   24 h for verification), stored only as hashes, invalidated on use, all other sessions
   dropped after a reset. Forgot-password answers identically for known and unknown
   addresses, so it cannot be used to enumerate accounts.
+* **Mail transports (2026-10-01)**: outgoing mail is provider-agnostic — the **Cloudflare Email Sending binding** (`env.EMAIL`, native, no secret to hold or rotate) is preferred, **Resend** (`RESEND_API_KEY`) is the fallback, and with neither, mail is mocked into the Worker log and every caller is told (`emailProvider` in `/api/health`). A transport that fails throws, so the password-reset chain can fall through to the next channel instead of reporting success for mail that never left. This removes the old single point of failure where one missing third-party key silently disabled reset and verification. The one thing it does not do is pretend: as long as no transport is enabled, health says `email:false`, the reset page says the link went to the recovery channel, and the verified-email gate stays off (it keys off `RESEND_API_KEY`, or `REQUIRE_EMAIL_VERIFICATION=true`) so nobody is ever locked out by mail that cannot be sent.
+* **Password-reset delivery without a mail provider**: email -> the operator's Discord webhook -> one server log line. The Discord hop is an allowlist (`RESET_DISCORD_EMAILS`, default: the admin accounts), because a shared channel is not a mailbox: one customer's single-use link must never appear where the operator (or anyone with the channel) could take over an account. The log hop is operator-only (Cloudflare dashboard) and single-use links stay hashed at rest in `auth_tokens`, so a database leak still yields nothing usable. Every account takes the same code path with the same `200 {ok,delivery,message}` response, and `delivery` describes the deployment rather than the account, so the endpoint cannot be used to discover who has an account.
 * **Turnstile (ON since 2026-10-01)**: a managed widget covers registration and the
   password-reset endpoints; tokens are verified server-side against
   `challenges.cloudflare.com`. The public site key lives in `public/aether-config.js`, the
@@ -150,9 +152,22 @@ The frontend talks to the API **same-origin** by default (`public/aether-config.
    recreated**, and a new site key must be live on the site *before* the matching secret is set —
    `turnstileGuard` enforces the moment `TURNSTILE_SECRET` exists, so the wrong order breaks
    registration for everyone.
-2. **Resend**: create the API key and set `RESEND_API_KEY` as a Worker secret. Until then
-   password reset answers with an honest 503, no verification email is sent, and order
-   emails stay in mock mode.
+2. **Real email — pick one of two paths (no code change needed either way).**
+   (a) **Cloudflare Email Sending (recommended, no third-party account and no key at all):**
+   dashboard -> Compute -> Email Service -> Email Sending -> Onboard Domain -> `get-aether.de`
+   (adds SPF/DKIM/DMARC on `cf-bounce`; **never delete the existing MX records**), then attach the
+   `EMAIL` binding to `aether-api` and `aether-payments` (`{"type":"send_email","name":"EMAIL"}`
+   in the script metadata together with `keep_bindings`). `/api/health` then reports
+   `email:true, emailProvider:"cloudflare"`. Sending to the account's **verified destination
+   addresses** is free on every plan; arbitrary recipients need the Workers Paid plan. While the
+   service is disabled the binding call returns `10203 email.sending_disabled`, which the delivery
+   chain catches and routes to Discord/log rather than losing the mail.
+   (b) **Resend:** create the API key and set `RESEND_API_KEY` as a Worker secret (and as the
+   GitHub secret, which the worker workflow syncs for you). Then verify `get-aether.de` in Resend
+   (TXT/DKIM) — again, never touch the MX records.
+   Until one of those is done: `email:false`, mail is mocked to the Worker log, the reset link
+   travels the recovery channel, and no verification email can be sent (the gate stands down
+   honestly rather than locking people out).
 3. **SSL/TLS mode is `Full`, and it must stay `Full` while GitHub Pages is the origin — tested
    2026-10-01, it is NOT a safe change.** Cloudflare `Full (strict)` was enabled, the whole site
    instantly answered **HTTP 526 (origin SSL handshake failed)** and the setting was reverted

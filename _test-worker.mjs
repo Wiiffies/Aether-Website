@@ -346,10 +346,81 @@ r = await call("POST", "/api/auth/register", { body: { email: "weak@example.com"
 check("password without a digit -> 400", r.status === 400, r.json);
 
 console.log("\n--- hardening: password reset / settings ---");
+// No email provider in this env: the link must still be delivered - through the recovery channel -
+// instead of the old 503 dead end. console.log is captured because the operator log is the last
+// resort of that chain.
+const loggedLines = [];
+const realConsoleLog = console.log;
+console.log = (...a) => { loggedLines.push(a.map(String).join(" ")); };
+const forgotKnown = await call("POST", "/api/auth/forgot", { body: { email: "member@example.com" } });
+const forgotUnknown = await call("POST", "/api/auth/forgot", { body: { email: "nobody-here@example.com" } });
+console.log = realConsoleLog;
+check("forgot without an email provider -> 200 with a delivery channel, never a 503 dead end", forgotKnown.status === 200 && forgotKnown.json.ok === true && forgotKnown.json.delivery === "logs", forgotKnown.json);
+check("the answer is identical for an unknown account (no enumeration)", JSON.stringify(forgotUnknown.json) === JSON.stringify(forgotKnown.json), { known: forgotKnown.json, unknown: forgotUnknown.json });
+const loggedLine = loggedLines.find(l => l.includes("[reset-link]") && l.includes("/reset-password.html?token=")) || "";
+const loggedToken = loggedLine.split("/reset-password.html?token=")[1] || "";
+check("the operator log carries a complete reset link", loggedToken.length === 64, loggedLine.slice(0, 80));
+check("the token reaches the database only as a hash", env.DB.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens WHERE token_hash = ?").get(sha(loggedToken)).n === 1 && env.DB.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens WHERE token_hash = ?").get(loggedToken).n === 0);
+r = await call("POST", "/api/auth/reset", { body: { token: loggedToken, password: "recovered123" } });
+check("the logged link resets the password end to end", r.status === 200 && typeof r.json.token === "string", r.json);
+r = await call("POST", "/api/auth/login", { body: { email: "member@example.com", password: "recovered123" } });
+check("the recovered password signs in", r.status === 200, r.json);
+
+// Discord recovery channel. The log line always happens; the webhook only ever carries links for
+// the allowlisted accounts (default = the admins), so a stranger's link cannot surface in the
+// operator's channel. fetch is stubbed so nothing leaves this machine.
+const posted = [];
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (url, init) => { const u = String(url); posted.push({ url: u, body: init && init.body ? String(init.body) : "" }); if (u.includes("api.resend.com")) return { ok: false, status: 500, text: async () => "resend unavailable in tests" }; return { ok: true, status: 200, text: async () => "{}" }; };
+const resetPosts = () => posted.filter(p => p.url.includes("discord.com/api/webhooks") && p.body.includes("/reset-password.html?token="));
+env.DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/123/test-token";
+const discordDelivery = await call("POST", "/api/auth/forgot", { body: { email: "admin@example.com" } });
+check("no email provider + admin account -> the link goes to the Discord recovery channel", discordDelivery.status === 200 && discordDelivery.json.delivery === "discord" && resetPosts().length === 1, { delivery: discordDelivery.json.delivery, posts: posted.length });
+const postsAfterAdmin = posted.length;
 r = await call("POST", "/api/auth/forgot", { body: { email: "member@example.com" } });
-check("forgot without an email provider -> honest 503, never a fake success", r.status === 503, r.json);
-r = await call("POST", "/api/auth/forgot", { body: { email: "nobody-here@example.com" } });
-check("forgot answer does not reveal whether the account exists", r.status === 503 && !/exists|not found|no account/i.test(JSON.stringify(r.json)), r.json);
+check("another account's link never lands in the shared channel", r.status === 200 && posted.length === postsAfterAdmin && resetPosts().length === 1, { newPosts: posted.length - postsAfterAdmin });
+const unknownOnDiscord = await call("POST", "/api/auth/forgot", { body: { email: "nobody-here@example.com" } });
+check("the response body still cannot probe for accounts", JSON.stringify(unknownOnDiscord.json) === JSON.stringify(discordDelivery.json), { known: discordDelivery.json, unknown: unknownOnDiscord.json });
+env.RESET_DISCORD_EMAILS = "*";
+const widened = await call("POST", "/api/auth/forgot", { body: { email: "member@example.com" } });
+check("RESET_DISCORD_EMAILS=* deliberately widens the channel to every account", widened.status === 200 && resetPosts().length === 2, { posts: resetPosts().length });
+const discordToken = (resetPosts()[1].body.split("/reset-password.html?token=")[1] || "").match(/^[0-9a-f]{64}/);
+check("the Discord embed carries a real single-use link", !!discordToken, resetPosts()[1].body.slice(0, 140));
+r = await call("POST", "/api/auth/reset", { body: { token: discordToken ? discordToken[0] : "", password: "discordpass1" } });
+check("the link delivered to Discord works end to end", r.status === 200 && typeof r.json.token === "string", r.json);
+delete env.RESET_DISCORD_EMAILS;
+env.RESEND_API_KEY = "re_test_key";
+r = await call("POST", "/api/auth/forgot", { body: { email: "member@example.com" } });
+check("with an email provider configured the link is emailed, exactly as before", r.status === 200 && r.json.delivery === "email" && posted.filter(p => p.url.includes("api.resend.com")).length === 1 && resetPosts().length === 2, { delivery: r.json.delivery, discordPosts: resetPosts().length });
+r = await call("POST", "/api/auth/forgot", { body: { email: "admin@example.com" } });
+check("a failed email falls back to the recovery channel instead of losing the link", r.status === 200 && resetPosts().length === 3, { posts: resetPosts().length });
+delete env.RESEND_API_KEY;
+delete env.DISCORD_WEBHOOK_URL;
+globalThis.fetch = realFetch;
+
+// Cloudflare Email Sending binding. When it is attached, mail goes out through it with no secret at
+// all, and every caller that used to ask "is Resend configured?" now asks about the transport.
+const boundMail = [];
+env.EMAIL = { send: async (m) => { boundMail.push(m); return { messageId: "cf-msg-1" }; } };
+r = await call("GET", "/api/health");
+check("health reports which email transport is live", r.json.email === true && r.json.emailProvider === "cloudflare", { email: r.json.email, provider: r.json.emailProvider });
+r = await call("POST", "/api/auth/forgot", { body: { email: "admin@example.com" } });
+const mailMessage = r.json.message;
+check("with the binding attached the reset link is emailed like any other mail", r.status === 200 && r.json.delivery === "email" && boundMail.length >= 1 && /reset-password\.html\?token=/.test(JSON.stringify(boundMail.map(m => m.text || ""))), { delivery: r.json.delivery, sent: boundMail.length });
+check("the reset mail goes to the account, from the configured From address", !!boundMail[0] && boundMail[0].to[0] === "admin@example.com" && /questions@get-aether\.de/.test(boundMail[0].from), boundMail[0] ? { from: boundMail[0].from, to: boundMail[0].to } : null);
+check("the visitor is told to check their inbox, not the ops channel", /inbox/i.test(mailMessage), mailMessage);
+r = await call("POST", "/api/auth/register", { body: { email: "boundmail@example.com", password: "boundpass1" } });
+check("registration sends its verification email through the binding too", r.status === 200 && r.json.emailSent === true && boundMail.some(m => m.to[0] === "boundmail@example.com" && /verify-email\.html\?token=/.test(m.text || "")), { emailSent: r.json.emailSent, sent: boundMail.length });
+env.DB.db.prepare("DELETE FROM users WHERE email = ?").run("boundmail@example.com");
+env.EMAIL = { send: async () => { throw new Error("email sending disabled for this account"); } };
+env.DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/123/fallback";
+const fallbackPosts = [];
+globalThis.fetch = async (url) => { fallbackPosts.push(String(url)); return { ok: true, status: 200, text: async () => "{}" }; };
+r = await call("POST", "/api/auth/forgot", { body: { email: "admin@example.com" } });
+check("a broken transport falls through to the recovery channel instead of losing the link", r.status === 200 && fallbackPosts.some(u => u.includes("discord.com/api/webhooks")), { posts: fallbackPosts.length });
+globalThis.fetch = realFetch;
+delete env.EMAIL;
+delete env.DISCORD_WEBHOOK_URL;
 
 const resetToken = "reset-token-" + "a".repeat(40);
 env.DB.db.prepare("INSERT INTO auth_tokens (token_hash, user_id, purpose, expires_at, created_at) VALUES (?,?,?,?,?)").run(sha(resetToken), memberId, "reset", Date.now() + 600000, Date.now());

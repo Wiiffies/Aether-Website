@@ -71,7 +71,7 @@ who is allowed to do anything — every authorisation decision happens in the Wo
 | `Aether Logo trasnparent new.png` | The original 1.2 MB brand asset: still the Discord embed thumbnail, and the source `_make-logo.mjs` crops from |
 | `worker/src/index.js` | The entire API: auth, orders, invoices, IPN, chat, roles, Beta, admin |
 | `worker/wrangler.toml` | Bindings and defaults for a `wrangler`-based deploy |
-| `_test-worker.mjs` | 191-check test suite (runs the real Worker against an in-memory D1) |
+| `_test-worker.mjs` | 209-check test suite (runs the real Worker against an in-memory D1) |
 | `_dev-server.mjs` | Local full stack: static site + Worker + in-memory D1 |
 | `_build_chunks.mjs` | ASCII guard + gzip/base64 chunker used by the deploy recipe |
 | `_check-inline-js.mjs`, `_check-email-regex.mjs` | Small static checks that have already caught real bugs |
@@ -83,7 +83,7 @@ who is allowed to do anything — every authorisation decision happens in the Wo
 
 ```bash
 node _dev-server.mjs      # http://127.0.0.1:5501 — static site AND /api/* through the real Worker
-node _test-worker.mjs     # 191 checks, no credentials needed
+node _test-worker.mjs     # 209 checks, no credentials needed
 node _check-inline-js.mjs *.html
 node _check-email-regex.mjs
 node _check-assets.mjs

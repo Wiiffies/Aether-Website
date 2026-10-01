@@ -13,7 +13,9 @@
  *
  * Secrets (wrangler secret put): RESEND_API_KEY, NOWPAYMENTS_API_KEY, NOWPAYMENTS_IPN_SECRET(+_2),
  *   DISCORD_WEBHOOK_URL, TURNSTILE_SECRET (optional), TURNSTILE_LOGIN (optional flag)
+ * Bindings: DB (D1, required), EMAIL (optional: Cloudflare Email Sending - preferred over RESEND_API_KEY)
  * Vars : CONTACT_TO, CONTACT_FROM, ALLOWED_ORIGIN (explicit origin allowlist, never "*"),
+ *   RESET_DISCORD_EMAILS (optional: who may receive a reset link through the Discord webhook)
  *   SUCCESS_URL, CANCEL_URL, SITE_URL, PROMO_CODES (JSON), ADMIN_EMAILS, ALLOW_DEV_ORIGIN (local only)
  * D1 binding: DB (aether-db) - tables: users, sessions, orders, messages, auth_tokens, rate_limits
  * This file must stay ASCII-only: the deploy pipeline (see _build_chunks.mjs) aborts on bytes > 127.
@@ -115,10 +117,41 @@ function orderRecipients(env, type, body){
   return ["questions@get-aether.de"];
 }
 
-// ---------- Resend ----------
+// ---------- outgoing mail ----------
+// Two transports behind one call site. The Cloudflare Email Sending binding (`env.EMAIL`) wins when
+// it is attached - it is native to the platform, needs no secret and has nothing to rotate -
+// otherwise Resend is used with RESEND_API_KEY. With neither, mail is mocked into the Worker log
+// and the caller is told; mail is never silently dropped. Callers never branch on the provider.
+function emailProvider(env){
+  if (env.EMAIL && typeof env.EMAIL.send === "function") return "cloudflare";
+  if (env.RESEND_API_KEY) return "resend";
+  return "none";
+}
+function emailConfigured(env){ return emailProvider(env) !== "none"; }
+// Resend
 async function sendEmail(env, { to, subject, html, text, replyTo }) {
   const key = env.RESEND_API_KEY;
-  if (!key) { console.log("[email:mock]", { to, subject }); return { mocked: true }; }
+  // Cloudflare Email Sending first: native, no secret. A failure falls through to Resend when that
+  // is configured, and throws otherwise so the caller (see the reset-link delivery chain) can pick
+  // another channel instead of pretending the mail went out.
+  if (env.EMAIL && typeof env.EMAIL.send === "function") {
+    try {
+      const cfPayload = {
+        from: env.CONTACT_FROM || "Aether <questions@get-aether.de>",
+        to: Array.isArray(to) ? to : [to],
+        subject,
+        html: html || `<pre>${escapeHtml(text||"")}</pre>`,
+        text: text || (html ? String(html).replace(/<[^>]+>/g,"") : ""),
+      };
+      if (replyTo && isEmail(replyTo)) cfPayload.reply_to = replyTo;
+      const sent = await env.EMAIL.send(cfPayload);
+      return { provider: "cloudflare", id: (sent && (sent.messageId || sent.id)) || null };
+    } catch (e) {
+      console.error("Cloudflare Email Sending failed", e && e.message);
+      if (!key) throw new Error("Email failed: " + ((e && e.message) || "cloudflare email error"));
+    }
+  }
+  if (!key) { console.log("[email:mock]", { to, subject }); return { mocked: true, provider: "none" }; }
   const from = env.CONTACT_FROM || "Aether <questions@get-aether.de>";
   const payload = {
     from, to: Array.isArray(to) ? to : [to], subject,
@@ -131,7 +164,7 @@ async function sendEmail(env, { to, subject, html, text, replyTo }) {
   });
   const body = await res.text();
   if (!res.ok) { console.error("Resend error", res.status, body); throw new Error(`Email failed: ${res.status} ${body}`); }
-  try { return JSON.parse(body); } catch { return { raw: body }; }
+  try { return Object.assign({ provider: "resend" }, JSON.parse(body)); } catch { return { provider: "resend", raw: body }; }
 }
 
 // ---------- Discord webhook (beautified + resilient) ----------
@@ -748,7 +781,7 @@ async function handleResendVerification(request, env){
   const auth = await requireAuth(request, env);
   if (!auth) return json({ error:"Sign in first and we can resend your confirmation email." }, 401, env, request);
   if (isVerifiedUser(auth.user)) return json({ ok:true, emailVerified:true, message:"Your email is already confirmed." }, 200, env, request);
-  if (!env.RESEND_API_KEY) return json({ error: EMAIL_UNAVAILABLE_MSG }, 503, env, request);
+  if (!emailConfigured(env)) return json({ error: EMAIL_UNAVAILABLE_MSG }, 503, env, request);
   if (await hitRateLimit(env, "resend:" + auth.user.id, 4, 3600000))
     return json({ error:"A confirmation email was sent recently - check your inbox and spam folder first." }, 429, env, request);
   const token = await issueAuthToken(env, auth.user.id, "verify", 24*3600*1000);
@@ -1088,7 +1121,7 @@ async function handleAdminBeta(request, env, url){
       defaults:{ host: DEFAULT_BETA_HOST, path: DEFAULT_BETA_PATH },
       pending,
       admin_email_verified: isVerifiedUser(auth.user),
-      email_configured: !!env.RESEND_API_KEY,
+      email_configured: emailConfigured(env),
       audit: auditRows.results || [],
     }, 200, env, request);
   }
@@ -1111,7 +1144,7 @@ async function handleAdminBeta(request, env, url){
     const token = await issueAuthToken(env, auth.user.id, "beta_domain", BETA_DOMAIN_TTL_MS, JSON.stringify({ host, path: bp }));
     const link = `${siteUrl(env)}/admin.html?betaToken=${token}#beta`;
     let emailed = false;
-    if (env.RESEND_API_KEY) {
+    if (emailConfigured(env)) {
       try {
         await sendEmail(env, { to: auth.user.email, subject:"Confirm the Aether Beta domain change", html: orderHtml({ title:"Confirm the Beta domain change", fields:[["Admin", auth.user.email],["New Beta URL", "https://" + host + bp],["Confirm link", link],["Valid for", "30 minutes - single use"]], note:"If you did not request this, ignore this email: nothing changes until the link is opened and confirmed." }), text:`Confirm the Aether Beta domain change:\n${link}\n\nValid for 30 minutes and single use.` });
         emailed = true;
@@ -1204,8 +1237,8 @@ async function handleRegister(request, env){
   const user = await env.DB.prepare("SELECT id, email, discord, created_at FROM users WHERE id = ?").bind(userId).first();
   if (user) { user.email_verified = 0; user.role = ROLE_USER; }
   dropExpiredSessions(env);
-  // Email verification is optional: it only fires when an email provider is configured.
-  if (env.RESEND_API_KEY) {
+  // Email verification is optional: it only fires when an email transport is configured.
+  if (emailConfigured(env)) {
     try {
       const vtoken = await issueAuthToken(env, userId, "verify", 24*3600*1000);
       const link = `${siteUrl(env)}/verify-email.html?token=${vtoken}`;
@@ -1214,7 +1247,7 @@ async function handleRegister(request, env){
   }
   // Claim guest orders that were placed with this email before the account existed.
   await env.DB.prepare("UPDATE orders SET user_id = ? WHERE user_id IS NULL AND email IS NOT NULL AND lower(email) = lower(?)").bind(userId, email).run().catch(()=>{});
-  return json({ ok:true, token, user: user ? publicUser(env, user) : null, emailVerified: false, emailVerificationRequired: verificationRequired(env), emailSent: !!env.RESEND_API_KEY, isAdmin: isAdminEmail(env, email) }, 200, env, request, { "set-cookie": sessionCookie(token, SESSION_TTL_SEC, request) });
+  return json({ ok:true, token, user: user ? publicUser(env, user) : null, emailVerified: false, emailVerificationRequired: verificationRequired(env), emailSent: emailConfigured(env), isAdmin: isAdminEmail(env, email) }, 200, env, request, { "set-cookie": sessionCookie(token, SESSION_TTL_SEC, request) });
 }
 async function handleLogin(request, env){
   if (!hasDb(env)) return json({ error:"Accounts not configured \u2014 DB missing" }, 503, env, request);
@@ -1273,6 +1306,47 @@ async function handleDeleteMe(request, env){
   return json({ ok:true, deleted:true }, 200, env, request, { "set-cookie": clearCookie(request) });
 }
 
+// ---------- how a password-reset link is delivered ----------
+// Email first (Cloudflare Email Sending binding or Resend). A deployment with no transport at all
+// cannot email, so the link is handed to the recovery channel instead: the operator's Discord
+// webhook, and as the last resort one server log line the operator can read in the Cloudflare dashboard. Both recovery transports
+// are deliberately narrow - the webhook only carries links for the accounts in RESET_DISCORD_EMAILS
+// (default: the admin accounts), and every account still gets a log line so nothing is lost.
+// `delivery` describes the deployment, never the account: every branch answers with the same 200
+// body and only the log/webhook side effect differs, so this cannot be used to probe which email
+// addresses have an account.
+function resetDeliveryChannel(env){
+  if (emailConfigured(env)) return "email";
+  if (env.DISCORD_WEBHOOK_URL) return "discord";
+  return "logs";
+}
+function resetChannelAllows(env, email){
+  const raw = String(env.RESET_DISCORD_EMAILS == null ? "" : env.RESET_DISCORD_EMAILS).trim().toLowerCase();
+  if (!raw) return isAdminEmail(env, email); // default: admin accounts only
+  if (raw === "*") return true;             // explicit opt-in for every account (see SECURITY.md)
+  return raw.split(",").map(s=>s.trim()).filter(Boolean).includes(String(email||"").trim().toLowerCase());
+}
+async function deliverResetLink(env, email, link, emailPayload){
+  if (emailConfigured(env)) {
+    try { await sendEmail(env, emailPayload); return "email"; }
+    catch (e) { console.warn("[reset-link] email delivery failed, trying the recovery channel", e && e.message); }
+  }
+  if (env.DISCORD_WEBHOOK_URL && resetChannelAllows(env, email)) {
+    try {
+      await sendDiscord(env, { embeds: discordEmbed({
+        title:"Password reset link",
+        color: DISCORD_ACCENT.pending,
+        description:"Requested from the Aether account-recovery form. Single use, valid for 30 minutes. If nobody asked for it, ignore this message: nothing changes until the link is opened.",
+        fields:[["Account", email],["Link", link],["Valid for", "30 minutes - single use"]],
+      }) });
+      return "discord";
+    } catch (e) { console.warn("[reset-link] recovery channel failed, falling back to the operator log", e && e.message); }
+  }
+  // Last resort: the operator's log line (Cloudflare dashboard -> Workers -> aether-api -> Logs).
+  // Never printed when a real channel delivered the link.
+  console.log("[reset-link] " + email + " " + link);
+  return "logs";
+}
 // ---------- password reset + account settings ----------
 // POST /api/auth/forgot { email } - always answers the same way, so the endpoint cannot be
 // used to find out which email addresses have an account.
@@ -1282,15 +1356,21 @@ async function handleForgotPassword(request, env){
   const captcha = await turnstileGuard(request, env, body);
   if (captcha) return captcha;
   const email = String(body.email||"").trim().toLowerCase().slice(0,200);
-  const generic = { ok:true, message:"If that email has an Aether account, a reset link is on its way. Check your inbox (and spam)." };
+  const channel = resetDeliveryChannel(env);
+  const message = channel === "email"
+    ? "If that email has an Aether account, a reset link is on its way. Check your inbox (and spam)."
+    : channel === "discord"
+      ? "Email delivery is not configured on this deployment, so the reset link went to the site's recovery channel instead of an inbox (the Discord ops channel, or the server log). It works once and expires after 30 minutes - contact questions@get-aether.de if you cannot reach it."
+      : "Email delivery is not configured on this deployment, so the reset link was written to the server log instead of an inbox. It works once and expires after 30 minutes - contact questions@get-aether.de and we will retrieve it with you.";
+  const generic = { ok:true, delivery:channel, message };
   if (!isEmail(email)) return json(generic, 200, env, request);
-  if (!env.RESEND_API_KEY) return json({ error:"Password reset is not available yet \u2014 email delivery is not configured. Contact questions@get-aether.de and we will reset it for you." }, 503, env, request);
+  // No email provider? deliverResetLink() hands the link to the recovery channel instead of refusing.
   try {
     const row = await env.DB.prepare("SELECT id, email FROM users WHERE email = ?").bind(email).first();
     if (row) {
       const token = await issueAuthToken(env, row.id, "reset", 30*60*1000);
       const link = `${siteUrl(env)}/reset-password.html?token=${token}`;
-      await sendEmail(env, {
+      await deliverResetLink(env, row.email, link, {
         to: row.email,
         subject:"Reset your Aether password",
         html: orderHtml({ title:"Reset your password", fields:[["Account", row.email],["Link", link],["Valid for", "30 minutes \u2014 single use"]], note:"If you did not ask for this, ignore this email: your password stays unchanged. Signing in elsewhere is not affected until the link is used." }),
@@ -1996,7 +2076,8 @@ async function handleRequest(request, env, ctx){
 
     // Health
     if(path==="/api/health"||path==="/health"){
-      const hasResend=!!env.RESEND_API_KEY;
+      const hasEmail=emailConfigured(env);
+      const emailName=emailProvider(env);
       const hasNow=!!env.NOWPAYMENTS_API_KEY;
       const hasIpn=!!env.NOWPAYMENTS_IPN_SECRET;
       const hasDiscord=!!env.DISCORD_WEBHOOK_URL;
@@ -2004,7 +2085,7 @@ async function handleRequest(request, env, ctx){
       let dbOk = hasDb;
       if (hasDb) { try { await env.DB.prepare("SELECT 1").first(); } catch{ dbOk = false; } }
       // Public, but deliberately uninformative: booleans only - no addresses, no config echo.
-      return json({ ok:true, service:"aether-api", time:new Date().toISOString(), email:hasResend, payments:hasNow, ipnSignature:hasIpn, discord:hasDiscord, turnstile: !!env.TURNSTILE_SECRET, db: hasDb ? (dbOk ? true : "error") : false }, 200, env, request);
+      return json({ ok:true, service:"aether-api", time:new Date().toISOString(), email:hasEmail, emailProvider:emailName, payments:hasNow, ipnSignature:hasIpn, discord:hasDiscord, resetDelivery: resetDeliveryChannel(env), turnstile: !!env.TURNSTILE_SECRET, db: hasDb ? (dbOk ? true : "error") : false }, 200, env, request);
     }
     if(path==="/api/order" && request.method==="POST"){
       const rl = await rlGuard(request, env, "order", 40, 3600000); if(rl) return rl;
