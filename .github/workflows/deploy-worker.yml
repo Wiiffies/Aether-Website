@@ -1,0 +1,52 @@
+name: Deploy aether-api worker
+
+# The worker is deployed by CI when the Cloudflare API token secret exists, instead of the
+# manual KV-relay recipe in MASTER_PROMPT.md. Nothing here runs without the secret, and the
+# deploy keeps every existing binding + secret (`keep_bindings` semantics are automatic in
+# wrangler: it only ever adds/updates what the config declares).
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Which worker to deploy"
+        required: true
+        default: "aether-api"
+        type: choice
+        options: ["aether-api", "aether-payments"]
+  push:
+    branches: [main]
+    paths:
+      - "worker/**"
+
+permissions:
+  contents: read
+
+jobs:
+  worker:
+    name: Check + deploy
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Worker is ASCII-only and compiles
+        run: |
+          node --check worker/src/index.js
+          node -e "const s=require('fs').readFileSync('worker/src/index.js');let n=0;for(const b of s)if(b>127)n++;if(n){console.error('non-ASCII bytes: '+n);process.exit(1)}"
+      - name: Test suite
+        run: node _test-worker.mjs
+      - name: Skip notice when the token is absent
+        if: ${{ env.CLOUDFLARE_API_TOKEN == '' }}
+        run: echo "::notice::CLOUDFLARE_API_TOKEN is not configured - skipping the worker deploy (checks still ran)."
+      - name: Deploy worker
+        if: ${{ env.CLOUDFLARE_API_TOKEN != '' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          command: deploy --name ${{ inputs.environment || 'aether-api' }} --keep-vars

@@ -1,0 +1,85 @@
+name: Deploy Beta (beta branch only)
+
+# The Beta is a REAL, separately deployable environment: this workflow is the only one that
+# publishes it, it runs ONLY from the `beta` branch, and it targets its own environment and
+# hostname. It never touches the production deployment, and production never touches Beta.
+#
+# The obscure Beta URL only reduces accidental discovery. Access is enforced by the Worker
+# (session + verified email + Tester role) - never by the URL, the branch name or a hidden
+# button.
+on:
+  push:
+    branches: [beta]
+  workflow_dispatch:
+    inputs:
+      beta_host:
+        description: "Beta hostname (must be a subdomain of get-aether.de)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-beta
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Static checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Refuse to publish a non-beta ref
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "beta" ]; then
+            echo "::error::This workflow only deploys the beta branch (got ${GITHUB_REF_NAME})."; exit 1
+          fi
+      - name: Inline JavaScript parses
+        run: node _check-inline-js.mjs *.html
+      - name: Worker test suite (D1 stub)
+        run: node _test-worker.mjs
+
+  deploy:
+    name: Publish Beta build
+    needs: checks
+    runs-on: ubuntu-latest
+    environment:
+      name: beta # separate environment -> separate secrets/vars from production
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      # BETA_TARGET is a repository/environment variable holding the Beta deployment target
+      # (its own Pages project, or a bucket/host). Falling back to Pages keeps the workflow
+      # runnable before the target is configured.
+      - name: Show Beta target
+        env:
+          BETA_TARGET: ${{ vars.BETA_TARGET }}
+          BETA_HOST: ${{ inputs.beta_host || vars.BETA_HOST }}
+        run: |
+          echo "Beta target: ${BETA_TARGET:-<unset - defaults to this repository's Pages site>}"
+          echo "Beta host  : ${BETA_HOST:-<unset - see the admin panel: settings.beta_host>}"
+      - uses: actions/configure-pages@v5
+        if: ${{ vars.BETA_TARGET == '' }}
+      - uses: actions/upload-pages-artifact@v3
+        if: ${{ vars.BETA_TARGET == '' }}
+        with:
+          path: .
+      - id: deployment
+        if: ${{ vars.BETA_TARGET == '' }}
+        uses: actions/deploy-pages@v4
+      - name: Deploy to a dedicated Beta target
+        if: ${{ vars.BETA_TARGET != '' }}
+        env:
+          BETA_TARGET: ${{ vars.BETA_TARGET }}
+          BETA_DEPLOY_TOKEN: ${{ secrets.BETA_DEPLOY_TOKEN }}
+        run: |
+          echo "Configure the actual transfer for your target here (rsync/S3/wrangler), using"
+          echo "BETA_DEPLOY_TOKEN and the BETA_TARGET variable. Nothing is published without it."
+          echo "Target: $BETA_TARGET"
+          test -n "$BETA_DEPLOY_TOKEN" || { echo "::error::BETA_DEPLOY_TOKEN secret is not set for the beta environment."; exit 1; }
