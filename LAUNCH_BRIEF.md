@@ -4,8 +4,10 @@ Everything in this file is an **external action**: a dashboard click, a token, a
 lives on your account somewhere. No agent can do these for you, and nothing else in the project is
 blocked on them.
 
-The site is **in maintenance mode right now** (only `/admin.html`, `/beta.html`, `/maintenance.html`
-and `/api/*` answer; everything else 302s to the notice). Section 6 below is how you reopen it.
+The site is **in maintenance mode right now, in SOFT mode**: the shop and every marketing page 302
+to the notice, while `/account.html` (orders, invoices and **all chat threads**), the password
+recovery pages, the payment-result pages, `/admin.html`, `/beta.html`, `/public/*` and `/api/*` all
+stay open. Section 7 below is how you switch to HARD, or reopen the site entirely.
 
 Legend: `[ ]` = to do, `[x]` = done and verified.
 
@@ -143,6 +145,21 @@ The pages now ship a Content-Security-Policy, which means an origin that is not 
 (`Rules → Overview → Aether response security headers`). `node _check-headers.mjs` fails the build if
 the page and the policy disagree, so you will find out before your visitors do.
 
+## 5c. Platform settings already applied (do not undo these by hand)
+
+Every one of these was a real defect, not a preference. If a support article or an assistant tells
+you to change one of them back, the "why" is in this table.
+
+| Setting | Now | Why |
+| --- | --- | --- |
+| Email Obfuscation (zone → Scrape Shield) | **Off** | it rewrote `questions@get-aether.de` into a link that only renders if a Cloudflare script runs, and injected `/cdn-cgi/scripts/…` into every page — so the file served no longer matched the file in the repo |
+| Cache level | **Standard** (`basic`) | `Aggressive` cached HTML, not just assets, so an edit could sit behind the old file |
+| Browser Cache TTL | **0 = respect origin** (10 min) | `14400` (4 h) is why your own changes "did not show up" for hours |
+| Development Mode | **Off** | it auto-expires anyway; caching is now correct without it |
+| HSTS | **On**, 1 year, includeSubDomains, nosniff | HTTPS-only for the whole domain. `preload` is deliberately **off** — it is hard to reverse |
+| Response headers rule | **On** | CSP, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`, `COOP` on every page (and matching headers in the Worker for JSON) |
+| Edge rate limit | **On** | 10 requests / 10 s per IP on `/api/auth/*` and the form endpoints, blocked for 10 s. This works **today**, independent of the Worker deploy |
+
 ## 6. Optional, but it is the next real security step
 
 - [ ] Move the static site off GitHub Pages (Cloudflare Pages or a Worker with static assets). It is
@@ -151,6 +168,14 @@ the page and the policy disagree, so you will find out before your visitors do.
       fails with a 526 — this is why the zone sits at `Full`).
 - [ ] Second edge rate-limit rule for `/api/program*` + `/api/conversations*` (the free plan allows
       one rule, and the existing one must not throttle `/api/ipn`).
+- [ ] **Minimum TLS version 1.3** (zone → SSL/TLS → Edge Certificates). Deliberately left at `1.2`:
+      a customer on an older Android WebView can still pay today, and dropping them to gain a cipher
+      is a bad trade for a shop. Do this only if your own analytics say nobody is on TLS 1.2.
+- [ ] **Remove `'unsafe-inline'` from `script-src`.** The honest state: it is there because every
+      page carries small inline scripts and GitHub Pages has no build step to add nonces. Closing it
+      means generating per-page hashes into `_security-headers.mjs` and emitting one Cloudflare rule
+      per page — real work, and a mistake there breaks the page silently. The exposure is small: no
+      page renders user-supplied HTML, so there is no injection point for an inline script.
 
 ## 7. The two maintenance modes, and reopening the site
 
@@ -214,6 +239,16 @@ THE PROJECT
 - The Worker is deployed by GitHub Actions (.github/workflows/deploy-worker.yml),
   which needs the repository secret CLOUDFLARE_API_TOKEN. That secret does not exist
   yet, so the deploy step is skipped and the Worker is still running an older build.
+- The zone is already hardened and the site is in SOFT maintenance mode: HSTS (1 year,
+  includeSubDomains, nosniff), a Content-Security-Policy plus X-Frame-Options,
+  X-Content-Type-Options, Referrer-Policy, Permissions-Policy and COOP applied to every
+  page by a Cloudflare response-header rule, Email Obfuscation OFF on purpose (it was
+  rewriting my support email into a JavaScript-only link), cache level Standard and
+  browser cache TTL 0 (= the 10 minutes the origin sends), and an edge rate-limit rule
+  that blocks 10 requests per 10 seconds per IP on /api/auth/* and the form endpoints.
+  Do not flip any of those without telling me why first.
+- Maintenance mode is two Cloudflare redirect rules (SOFT = customer area stays open,
+  HARD = everything public closed). SOFT is the one that is on.
 
 WHAT I WANT TO FINISH, IN THIS ORDER
 1. Create the CLOUDFLARE_API_TOKEN (Workers Scripts:Edit, Workers KV Storage:Edit,

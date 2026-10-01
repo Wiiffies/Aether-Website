@@ -210,9 +210,28 @@ authorised a second earlier.
 
 **Maintenance modes** now come in two flavours — `Maintenance (SOFT)` keeps the account area, chats,
 password recovery and payment results open while the shop is closed; `Maintenance (HARD)` closes
-everything public. `maintenance/README.md` documents both, including the trap that caught this
-project once already: `/public/*` must stay open, or the admin and beta pages load **with no scripts
-at all** while *looking* fine.
+everything public. The notice page itself finishes the job without help: it keeps its "down for"
+clock across refreshes (browser storage, not a per-load timer), runs a real countdown to the next
+clock-aligned check instead of restarting at a full interval, probes the origin every 30 s and
+navigates the visitor back the moment the site answers, reloads itself every 5 min so an edited
+notice is seen, and only offers the "your account is still open" link after asking the server — so
+it cannot promise a link that the HARD rule would redirect. `maintenance/README.md` documents both
+modes, including the trap that caught this project once already: `/public/*` must stay open, or the
+admin and beta pages load **with no scripts at all** while *looking* fine.
+
+### 3c. Added 2026-10-01 (late): the zone stopped rewriting what it serves
+
+Three zone settings were silently working against the repo, and all three are now fixed:
+
+| Setting | Was | Now | Why it changed |
+| --- | --- | --- | --- |
+| Scrape Shield → **Email Obfuscation** | on | **off** | it replaced `questions@get-aether.de` with a `/cdn-cgi/l/email-protection` link that renders only if Cloudflare's injected `email-decode.min.js` runs, and injected that script into every page. On a page whose whole purpose is "email us if it is urgent", a support address that disappears without JavaScript is a defect — and it meant the artifact a visitor received no longer matched the file in the repo, so no integrity check of a served page could be trusted. Verified after the change: `maintenance.html` is served **byte-for-byte identical** to the committed blob |
+| **Cache level** | aggressive | **basic** (Standard) | aggressive cached HTML and not just assets, so the edge could outrank the origin |
+| **Browser Cache TTL** | 14400 (4 h) | **0** = respect origin (GitHub Pages sends `max-age=600`) | a 4-hour browser TTL is why an edit "did not show" for the rest of the day; changes now land within ~10 minutes |
+| **Development Mode** | on (by hand, as a workaround) | **off** | it bypassed the edge cache to work around the two settings above, and expires by itself |
+
+Redirect rules are evaluated **before** the cache, so switching maintenance modes never depended on
+these; what they fix is seeing your own edits.
 
 ## 4. Still to do manually in the Cloudflare dashboard
 

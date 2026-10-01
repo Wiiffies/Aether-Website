@@ -14,7 +14,11 @@ Cloudflare zone is ever changed by someone else.
 ## Switch A — Cloudflare rule (fastest, recommended)
 
 The page it serves is `maintenance.html` on `main`, which is live at
-<https://get-aether.de/maintenance.html>. That file is the source of truth.
+<https://get-aether.de/maintenance.html>. That file is the source of truth, and it is now served
+**byte-for-byte**: Cloudflare's **Email Obfuscation is switched off** (zone → Scrape Shield) so it
+cannot rewrite the support address into a JavaScript-only `[email protected]` placeholder and inject
+its own `/cdn-cgi/scripts/…` decoder into the page. With it on, the page a visitor received was no
+longer the page in this repo, and the support email was unreadable without scripts.
 
 There are **two rules, and exactly one of them should be on** — the ruleset evaluates top to bottom,
 so leaving both enabled is the same as leaving the HARD one on:
@@ -98,19 +102,24 @@ serving, and deleting it drops `get-aether.de` from the Pages configuration.
 
 ## Caching is the thing that makes a switch look broken
 
-Two layers sit in front of the origin and both are eager:
+The zone used to be the problem. It is fixed, and here is what it was, so nobody "tunes" it back:
 
-| Layer | Setting today | Effect |
+| Layer | Setting now | What it was, and why it broke things |
 | --- | --- | --- |
-| Cloudflare edge | `cache_level: aggressive` | caches HTML, not just assets |
-| Browsers | `browser_cache_ttl: 14400` | a visitor can hold a page for **4 hours** |
+| Cloudflare edge | `cache_level: basic` (Standard) | was `aggressive`, which cached HTML and not just assets |
+| Browsers | `browser_cache_ttl: 0` → the origin's own `max-age=600` | was `14400`, so a visitor could hold a page for **4 hours** |
+| Development Mode | **off** | used to be switched on by hand as a workaround; it expires on its own |
 
-So after a switch, always do one of these, or people will keep seeing the old site:
+Because the browser TTL now follows the 10 minutes GitHub Pages sends, an edit reaches visitors
+within ~10 minutes instead of 4 hours, and the edge no longer outranks the origin.
 
-- **Development Mode** (zone → Caching → Development Mode → On) — bypasses the edge cache and
-  **expires by itself after about 3 hours**. This is the safe option while testing.
-- **Purge Everything** (zone → Caching → Configuration → Purge Everything) — clears the edge,
-  but a browser that already has the page may still show it until its own TTL runs out.
+Redirects are evaluated **before** the cache anyway, so switching maintenance on or off is not
+blocked by caching. A purge is still worth doing if you want it to be instant for everyone:
+
+- **Purge Everything** (zone → Caching → Configuration → Purge Everything) — clears the edge.
+  A browser that already holds the page keeps it until its own 10-minute TTL runs out.
+- **Development Mode** (zone → Caching → Development Mode → On) — bypasses the edge cache while it is
+  on and **expires by itself after about 3 hours**. Only useful for debugging; leave it off otherwise.
 
 Verify with a cache-busting request, which always reaches the origin:
 
