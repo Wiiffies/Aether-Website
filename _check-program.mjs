@@ -122,6 +122,10 @@ for (const code of ["SESSION_REQUIRED", "EMAIL_UNVERIFIED", "NOT_TESTER"]) {
 }
 must(/id="beta-copy"/.test(denied) && /navigator\.clipboard\.writeText/.test(denied),
   "beta.html: no way to copy the Beta address the server reported");
+// A 403 without a code is an older Worker. It is still a refusal, and reporting it as "the status
+// could not be read" would tell a visitor their account is fine when the server said it is not.
+must(/ACCESS_REFUSED/.test(denied),
+  "beta.html: a 403 that carries no code (an older Worker) is no longer distinguished from a page that could not read the status");
 must(/dl-locked-why/.test(page) && /EMAIL_UNVERIFIED/.test(page),
   "program.html: a Tester blocked only by an unconfirmed address is not told which one thing to fix");
 must(/data-user-filter/.test(admin) && /Testers only/.test(admin),

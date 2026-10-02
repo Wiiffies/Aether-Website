@@ -98,7 +98,10 @@
       show($("beta-denied"), true);
       // Three refusals, three fixes. The server names which one this is (code SESSION_REQUIRED,
       // EMAIL_UNVERIFIED or NOT_TESTER); the wording here only has to tell the tester what to do next.
-      const code = (err && err.code) || (err && err.status === 401 ? "SESSION_REQUIRED" : "");
+      // A 403 with no code is an older Worker that only knows the one sentence, and it is still an
+      // access refusal - it must not be reported as "the status could not be read", which would tell a
+      // visitor their account is fine when the server just said it is not.
+      const code = (err && err.code) || (err && err.status === 401 ? "SESSION_REQUIRED" : (err && err.status === 403 ? "ACCESS_REFUSED" : ""));
       const why = $("beta-denied-why");
       const note = $("beta-denied-note");
       if (code === "SESSION_REQUIRED") {
@@ -110,6 +113,9 @@
       } else if (code === "NOT_TESTER") {
         why.textContent = "This account is not a Tester yet.";
         note.textContent = "A normal customer account cannot open the Beta. A Tester flag is granted by an administrator in the admin panel — it can never be set from the browser. If you would like to test, ask through the contact page.";
+      } else if (code === "ACCESS_REFUSED") {
+        why.textContent = (err && err.message) || "This account cannot open the Beta.";
+        note.textContent = "Access needs a Tester account with a confirmed email address. If you expected to be a Tester, confirm the address on your account page first, then ask us through the contact page — nothing here is a broken page.";
       } else {
         why.textContent = (err && err.message) || "This account cannot open the Beta.";
         note.textContent = "The Beta status could not be read. This is not about your account — reload the page in a moment and it will be checked again.";
