@@ -1082,6 +1082,63 @@ check("a normal order with an unsupported coin is still refused -> 400", r.statu
 r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 30, pay_currency: "doge", type: "discord_bot", package: "BASIC", promoCode: "TESTFULL" } });
 check("a free order ignores the coin entirely - no payment, no payout address", r.status === 200 && r.json.free === true && !r.json.payAddress && r.json.priceAmount === 0, r.json);
 
+console.log("\n--- transactional email: one designed shell, a real button ---");
+// A fake Cloudflare Email Sending binding so these checks can read what would actually be
+// delivered. It is attached last on purpose: from here on the provider is "cloudflare".
+const sentMails = [];
+env.EMAIL = { send: async (payload) => { sentMails.push(payload); return { messageId: "test-mail-" + sentMails.length }; } };
+const mailsTo = (addr) => sentMails.filter((m) => JSON.stringify(m.to).toLowerCase().includes(addr));
+
+r = await call("POST", "/api/auth/register", { body: { email: "mailbox@example.com", password: "mailboxpass1" } });
+check("registering delivers the confirmation mail", r.status === 200 && mailsTo("mailbox@example.com").length === 1, { status: r.status, mails: sentMails.length });
+const verifyMail = mailsTo("mailbox@example.com")[0] || {};
+const verifyHtml = String(verifyMail.html || "");
+const verifyLink = (verifyHtml.match(/href="(https:\/\/[^"]*\/verify-email\.html\?token=[a-f0-9]+)"/) || [])[1] || "";
+const verifyText = String(verifyMail.text || "");
+check("the confirmation mail gives the link a real button, not a bare URL in a table cell",
+  !!verifyLink && /Confirm my email/.test(verifyHtml), { link: verifyLink, subject: verifyMail.subject });
+check("the plain link stays under the button, so a client that strips buttons still works",
+  !!verifyLink && verifyHtml.split(verifyLink).length === 3, { occurrences: verifyHtml.split(verifyLink).length - 1 });
+check("the text alternative still carries the link", !!verifyLink && verifyText.includes(verifyLink), verifyText.slice(0, 80));
+check("the shell is branded and dated, not a raw HTML dump",
+  /Aether/.test(verifyHtml) && /get-aether\.de/.test(verifyHtml) && /questions@get-aether\.de/.test(verifyHtml) && /\d{4}-\d\d-\d\dT/.test(verifyHtml), verifyHtml.slice(0, 120));
+check("no placeholder survived into the delivered mail", !/\$\{/.test(verifyHtml) && !/\$\{/.test(verifyText), verifyHtml.slice(0, 120));
+
+// An address is user input and it lands in the mail body: markup in it must arrive as text.
+r = await call("POST", "/api/auth/register", { body: { email: "evil<script>@example.com", password: "mailboxpass2" } });
+const hostileHtml = String((mailsTo("evil<script>@example.com")[0] || {}).html || "");
+check("an address containing markup cannot inject HTML into the mail",
+  r.status === 200 && hostileHtml.length > 0 && !/<script>/.test(hostileHtml) && /&lt;script&gt;/.test(hostileHtml), { status: r.status });
+
+r = await call("POST", "/api/auth/forgot", { body: { email: "mailbox@example.com" } });
+const resetMail = mailsTo("mailbox@example.com").find((m) => /Reset/i.test(String(m.subject))) || {};
+const resetHtml = String(resetMail.html || "");
+check("the reset mail is the same designed shell with a button, not a pasted URL",
+  r.status === 200 && /Choose a new password/.test(resetHtml) && /href="https:\/\/[^"]*\/reset-password\.html\?token=[a-f0-9]+"/.test(resetHtml), { status: r.status, subject: resetMail.subject });
+
+console.log("\n--- checkout: the email gate, and the operator's own account ---");
+// Turn on exactly what production has: an email provider exists, so the unconfirmed-address gate
+// applies. A normal account is refused; the account named by ADMIN_EMAILS is not, because it is
+// configured server-side and signed in with a password - locking the operator out of their own
+// checkout while testing is a bug, not a safeguard.
+env.REQUIRE_EMAIL_VERIFICATION = "true";
+r = await call("POST", "/api/auth/register", { body: { email: "unconfirmed@example.com", password: "unconfirmed1" } });
+const unconfirmedToken = r.json.token;
+check("the gate is on for this section", r.json.emailVerificationRequired === true && r.json.emailVerified === false, r.json);
+r = await call("POST", "/api/invoice", { token: unconfirmedToken, body: { amount: 30, pay_currency: "btc", type: "discord_bot", package: "BASIC" } });
+check("an unconfirmed normal account is refused checkout -> 403 EMAIL_UNVERIFIED", r.status === 403 && r.json.code === "EMAIL_UNVERIFIED", r.json);
+const keepAdmins = env.ADMIN_EMAILS;
+env.ADMIN_EMAILS = keepAdmins + ",boss@example.com";
+r = await call("POST", "/api/auth/register", { body: { email: "boss@example.com", password: "bosspass123" } });
+const bossToken = r.json.token;
+check("the operator account is admin and still unconfirmed", r.json.isAdmin === true && r.json.emailVerified === false, r.json);
+r = await call("POST", "/api/invoice", { token: bossToken, body: { amount: 30, pay_currency: "btc", type: "discord_bot", package: "BASIC" } });
+check("an unconfirmed admin can still check out (reaches the payment step, no 403)", r.status === 503 && typeof r.json.orderId === "string", { status: r.status, body: r.json });
+r = await call("POST", "/api/orders", { token: bossToken });
+check("the operator's order is filed to their own account", r.status === 200 && (r.json.orders || []).some((o) => o.order_id), r.json);
+env.ADMIN_EMAILS = keepAdmins;
+env.REQUIRE_EMAIL_VERIFICATION = "";
+
 console.log("\n--- misc ---");
 r = await call("GET", "/api/nope");
 check("unknown route -> 404", r.status === 404, r.json);

@@ -253,3 +253,33 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
       `index.html` byte-identical to `maintenance.html`)
 - [ ] MANUAL: publish the DNSSEC DS record at the registrar (see `LAUNCH_BRIEF.md` §5)
 - [ ] MANUAL: move DMARC to `p=quarantine` once every sender's SPF/DKIM is in place
+
+## 16. Checkout UI, transactional mail, admin checkout exemption (2026-10-02, late)
+- [x] **"I can't order with my account" was two separate bugs, and neither was the admin role.**
+      (a) `public/checkout.js` only asked `/api/me` when `sessionStorage` held a token. The session
+      cookie is HttpOnly and `sessionStorage` is per tab, so signing in and then opening the shop in a
+      new tab (or reopening the browser) showed "An account is required to buy" while the server knew
+      exactly who was signed in. The modal and `bindAccountFields` now always ask the server, which
+      answers from the cache when it has one.
+- [x] (b) The admin row in D1 was unverified, so `verifiedGate()` refused checkout. It now exempts an
+      `ADMIN_EMAILS` account: that account is configured server-side and signs in with a password, so a
+      confirmation mail adds nothing to it, and locking the operator out of his own checkout while
+      testing is a bug rather than a safeguard. Sensitive admin actions still use `adminVerifiedGate()`.
+- [x] An unconfirmed address is a fixable state now: the modal shows "Confirm your email to finish
+      checkout" with a *Resend confirmation email* button and names the address, and the Worker's
+      `403 EMAIL_UNVERIFIED` opens that same panel (it used to print a sentence with no next step).
+- [x] The pay modal was rebuilt: rounded cards, a brand chip, "Total due", short labels, and a result
+      state that **replaces the form** instead of dropping a panel under the coin buttons and the promo
+      box. It also sets `white-space:normal` when rendering rich panels — a template literal's
+      indentation was rendering as large blank gaps inside the free-order panel.
+- [x] Every transactional mail shares one designed shell (brand header, eyebrow, lead line, hairline
+      rows, a white CTA button with the plain link kept underneath, a titled footer). Verification,
+      password reset and the Beta-domain confirmation pass an optional `cta:{label,url}` to
+      `orderHtml()`; the text alternative carries the link as well.
+- [x] The desktop app is no longer advertised publicly while the project is private / in testing: the
+      `Program` nav entry was removed from all 18 pages and `program.html` is `noindex,nofollow`. It
+      stays reachable from `account.html` and `beta.html` for testers, and the tester-download guards
+      (`_check-program.mjs`) are untouched and green.
+- [x] `checkout.js` `?v=10` → `?v=11` on all 13 pages that load it.
+- [x] 334 Worker checks (was 321: 13 new for the mail shell and the checkout gate)
+- [ ] Consider re-linking `program.html` in the nav once the project is public and a build exists.

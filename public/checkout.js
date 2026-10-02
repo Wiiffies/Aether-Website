@@ -89,7 +89,7 @@
     accountInflight = (async()=>{
       try{
         const r = await apiFetch("/api/me");
-        if(r && r.user){ setAccount({ id:r.user.id, email:r.user.email, discord:r.user.discord||"", isAdmin:!!r.isAdmin }); return accountCache; }
+        if(r && r.user){ setAccount({ id:r.user.id, email:r.user.email, discord:r.user.discord||"", isAdmin:!!r.isAdmin, emailVerified:r.emailVerified !== false, verificationRequired:!!r.emailVerificationRequired }); return accountCache; }
         return account();
       }catch(e){
         const m = String((e && e.message) || "");
@@ -134,8 +134,10 @@
       doc.querySelectorAll("[data-account-optional]").forEach(n=>{ n.style.display = "none"; });
     };
     apply(account());
-    if(getToken()) loadAccount(false).then(a=>{ apply(a); if(onReady) onReady(a); }).catch(()=>{ if(onReady) onReady(account()); });
-    else if(onReady) onReady(account());
+    // Always ask the server (it answers from the cache when there is one). The session cookie is
+    // HttpOnly, so a visitor with cookies but an empty sessionStorage -- a new tab, or a browser
+    // reopened after the tab closed -- IS signed in, and asking them to sign in again is a lie.
+    loadAccount(false).then(a=>{ apply(a); if(onReady) onReady(a); }).catch(()=>{ if(onReady) onReady(account()); });
     return account();
   }
   // Turns an HTTP failure into one human sentence. Rate limits get their own wording so a
@@ -267,32 +269,35 @@
     const defEmail = esc(opts.defaultEmail || accountEmail() || "");
     const defDiscord = esc(opts.defaultDiscord || accountDiscord() || "");
     overlay.innerHTML = `
-      <div style="width:min(520px,100%);background:#0b0b0c;border:1px solid #2a2e33;border-radius:10px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.6);margin:auto">
-        <div style="padding:20px 22px;border-bottom:1px solid #242529;display:flex;align-items:center;justify-content:space-between;gap:12px">
-          <div>
-            <div style="font:10px 'DM Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#85878b">Checkout — NOWPayments</div>
-            <div style="font-size:17px;font-weight:600;letter-spacing:-.04em;margin-top:6px">${esc(opts.title||"Confirm order")}</div>
-          </div>
-          <button type="button" data-close style="width:32px;height:32px;border-radius:6px;border:1px solid #333;background:#111214;color:#fff;cursor:pointer;display:grid;place-items:center">✕</button>
-        </div>
-        <div style="padding:18px 22px">
-          <div style="border:1px solid #242529;border-radius:6px;padding:14px 14px;background:rgba(255,255,255,.02)">
-            <div style="font:10px 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#85878b;margin-bottom:10px">Order summary</div>
-            <div style="font-size:12px;line-height:1.7;color:#c8c9cc">${opts.breakdownHtml || ""}</div>
-            <div style="margin-top:12px;padding-top:12px;border-top:1px solid #242529;display:flex;align-items:baseline;justify-content:space-between">
-              <span style="font:10px 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#85878b">Total</span>
-              <span data-total style="font-size:22px;font-weight:600;letter-spacing:-.05em">${eur(opts.amount)}</span>
+      <div style="width:min(560px,100%);background:#0b0b0c;border:1px solid #24262b;border-radius:16px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.65);margin:auto">
+        <div style="padding:22px 24px 18px;border-bottom:1px solid #1d1f23;display:flex;align-items:flex-start;justify-content:space-between;gap:14px">
+          <div style="display:flex;gap:12px;align-items:flex-start;min-width:0">
+            <span style="flex:0 0 auto;width:34px;height:34px;border-radius:10px;border:1px solid #26282d;background:#141519;display:grid;place-items:center;font-size:15px">&#9889;</span>
+            <div style="min-width:0">
+              <div style="font:10px 'DM Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#85878b">Secure checkout</div>
+              <div style="font-size:17px;font-weight:600;letter-spacing:-.03em;margin-top:5px;line-height:1.3">${esc(opts.title||"Confirm order")}</div>
             </div>
-            <div style="margin-top:8px;font-size:10px;line-height:1.6;color:#6f7277">Crypto via NOWPayments — select BTC / LTC / ETH. Hosting / domain / DB not included.</div>
+          </div>
+          <button type="button" data-close aria-label="Close" style="flex:0 0 auto;width:32px;height:32px;border-radius:9px;border:1px solid #26282d;background:#141519;color:#c8c9cc;font-size:13px;cursor:pointer;display:grid;place-items:center">&#10005;</button>
+        </div>
+        <div style="padding:20px 24px 24px">
+          <div style="border:1px solid #1d1f23;border-radius:12px;padding:16px;background:#0f1013">
+            <div style="font:10px 'DM Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#85878b;margin-bottom:10px">Order summary</div>
+            <div style="font-size:12px;line-height:1.75;color:#c8c9cc">${opts.breakdownHtml || ""}</div>
+            <div style="margin-top:14px;padding-top:14px;border-top:1px solid #1d1f23;display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+              <span style="font:10px 'DM Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#85878b">Total due</span>
+              <span data-total style="font-size:24px;font-weight:600;letter-spacing:-.045em;color:#fff">${eur(opts.amount)}</span>
+            </div>
+            <div style="margin-top:8px;font-size:10px;line-height:1.6;color:#6f7277">Crypto via NOWPayments — BTC / LTC / ETH. Hosting, domain and database are not included.</div>
           </div>
 
-          <div style="margin-top:16px;display:grid;gap:12px">
+          <div data-pay-fields style="margin-top:16px;display:grid;gap:12px">
             <label style="display:flex;flex-direction:column;gap:6px">
               <span style="font:10px 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#85878b">Pay with <span style="color:#ff6b6b">*</span></span>
               <div style="display:flex;gap:8px">
-                <button type="button" data-coin="btc" style="flex:1;padding:10px 0;border-radius:6px;border:1px solid #2a2e33;background:#111214;color:#fff;font-size:12px;font-weight:600;cursor:pointer">₿ BTC</button>
-                <button type="button" data-coin="ltc" style="flex:1;padding:10px 0;border-radius:6px;border:1px solid #2a2e33;background:#111214;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Ł LTC</button>
-                <button type="button" data-coin="eth" style="flex:1;padding:10px 0;border-radius:6px;border:1px solid #2a2e33;background:#111214;color:#fff;font-size:12px;font-weight:600;cursor:pointer">♦ ETH</button>
+                <button type="button" data-coin="btc" style="flex:1;padding:12px 0;border-radius:9px;border:1px solid #2a2e33;background:#111214;color:#fff;font-size:13px;font-weight:600;cursor:pointer">₿ BTC</button>
+                <button type="button" data-coin="ltc" style="flex:1;padding:12px 0;border-radius:9px;border:1px solid #2a2e33;background:#111214;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Ł LTC</button>
+                <button type="button" data-coin="eth" style="flex:1;padding:12px 0;border-radius:9px;border:1px solid #2a2e33;background:#111214;color:#fff;font-size:13px;font-weight:600;cursor:pointer">♦ ETH</button>
               </div>
               <span data-coin-hint style="font:10px 'DM Mono',monospace;color:#7a7d82;margin-top:2px">Select BTC, LTC or ETH</span>
             </label>
@@ -301,8 +306,8 @@
               <input data-field="email" type="email" value="${defEmail}" placeholder="you@example.com" autocomplete="email" style="width:100%;background:#111214;border:1px solid #2a2e33;color:#fff;border-radius:4px;padding:11px 12px;font-size:12px;font-family:Manrope,Arial,sans-serif;outline:none">
             </label>
             <label style="display:flex;flex-direction:column;gap:6px">
-              <span style="font:10px 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#85878b">Discord Username <span style="color:#7a7d82;font-weight:400">— leave blank if you don’t have Discord</span></span>
-              <input data-field="discord" value="${defDiscord}" placeholder="yourname — leave blank if you don’t have Discord" autocomplete="username" style="width:100%;background:#111214;border:1px solid #2a2e33;color:#fff;border-radius:4px;padding:11px 12px;font-size:12px;font-family:Manrope,Arial,sans-serif;outline:none">
+              <span style="font:10px 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#85878b">Discord username <span style="color:#7a7d82;font-weight:400;text-transform:none;letter-spacing:0">optional — leave blank if you don’t have Discord</span></span>
+              <input data-field="discord" value="${defDiscord}" placeholder="yourname" autocomplete="username" style="width:100%;background:#111214;border:1px solid #2a2e33;color:#fff;border-radius:8px;padding:11px 12px;font-size:12px;font-family:Manrope,Arial,sans-serif;outline:none">
             </label>
             ${opts.promo ? `
             <label style="display:flex;flex-direction:column;gap:6px">
@@ -315,9 +320,9 @@
             </label>` : ``}
           </div>
 
-          <div style="margin-top:14px;display:flex;gap:10px">
-            <button type="button" data-confirm style="flex:1;padding:12px 14px;border-radius:6px;border:1px solid #fff;background:#fff;color:#000;font-size:12px;font-weight:600;cursor:pointer">Pay with Crypto →</button>
-            <button type="button" data-close style="padding:12px 14px;border-radius:6px;border:1px solid #333;background:transparent;color:#fff;font-size:12px;cursor:pointer">Cancel</button>
+          <div data-pay-actions style="margin-top:18px;display:flex;gap:10px">
+            <button type="button" data-confirm style="flex:1;padding:13px 16px;border-radius:10px;border:1px solid #fff;background:#fff;color:#08080a;font-family:Manrope,Arial,sans-serif;font-size:13px;font-weight:700;cursor:pointer">Pay with Crypto →</button>
+            <button type="button" data-close style="padding:13px 16px;border-radius:10px;border:1px solid #2a2e33;background:transparent;color:#c8c9cc;font-family:Manrope,Arial,sans-serif;font-size:13px;cursor:pointer">Cancel</button>
           </div>
           <div data-msg style="margin-top:10px;font-size:11px;line-height:1.6;color:#9aa0a6;white-space:pre-wrap"></div>
           ${!isConfigured() ? `<div style="margin-top:10px;padding:10px 12px;border:1px solid #442;border-radius:6px;background:#1a1510;color:#c9a87a;font-size:11px;line-height:1.6">Worker not configured yet — <code style="color:#fff">public/aether-config.js → apiBase</code> is empty. Checkout needs the API to create a payment.</div>` : ``}
@@ -339,20 +344,36 @@
     let resolvedAccountEmail = "";
     const acctRow = document.createElement("div");
     acctRow.style.cssText = "display:none;flex-direction:column;gap:6px";
-    acctRow.innerHTML = `<span style="font:10px 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#85878b">Email &mdash; from your account</span>
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:#111214;border:1px solid #2a7a3a;border-radius:6px;padding:10px 12px">
+    acctRow.innerHTML = `<span style="font:10px 'DM Mono',monospace;letter-spacing:.11em;text-transform:uppercase;color:#85878b">Signed in</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:#0f1418;border:1px solid #24402c;border-radius:10px;padding:11px 12px">
         <span style="font-size:12px;color:#8ee0a0;word-break:break-all;min-width:0">&#10003; <b data-acct-chip style="color:#fff"></b></span>
-        <button type="button" data-acct-change style="padding:4px 9px;border-radius:4px;border:1px solid #333;background:#1a1d20;color:#c8c9d8;font:10px 'DM Mono',monospace;cursor:pointer;white-space:nowrap">Change</button>
+        <button type="button" data-acct-change style="padding:5px 10px;border-radius:6px;border:1px solid #2a2e33;background:#191c21;color:#c8c9d8;font:10px 'DM Mono',monospace;cursor:pointer;white-space:nowrap">Switch</button>
       </div>
-      <span style="font:10px 'DM Mono',monospace;line-height:1.6;color:#7a7d82">Invoice, order updates and chat stay tied to this account.</span>`;
+      <span style="font:10px 'DM Mono',monospace;line-height:1.7;color:#7a7d82">Your invoice, order updates and chat stay tied to this account.</span>`;
     const acctChip = acctRow.querySelector("[data-acct-chip]");
     emailWrap.parentNode.insertBefore(acctRow, emailWrap);
+    // --- not signed in: one clean card, and the single button that fixes it --------------------
     const accountNotice = document.createElement("div");
-    accountNotice.style.cssText = "padding:12px;border:1px solid #3a3a1e;border-radius:6px;background:rgba(255,204,0,.06);font:11px 'DM Mono',monospace;line-height:1.7;color:#e8d48a";
-    accountNotice.innerHTML = `<b style="color:#fff">An account is required to buy.</b><br>Your orders, invoices and chat history live in your account &mdash; there is no guest checkout.<br><span data-goto-account style="display:inline-block;margin-top:9px;padding:8px 12px;border-radius:6px;border:1px solid #fff;background:#fff;color:#000;font-weight:700">Create an account / sign in</span>`;
-    accountNotice.style.cursor = "pointer";
-    accountNotice.addEventListener("click", ()=>{ location.href = accountUrl(); });
+    accountNotice.style.cssText = "border:1px solid #26282d;border-radius:12px;background:#141419;padding:16px;font-family:Manrope,Arial,sans-serif";
+    accountNotice.innerHTML = `<div style="display:flex;gap:12px;align-items:flex-start">
+        <span style="flex:0 0 auto;width:30px;height:30px;border-radius:9px;background:#1d1f24;display:grid;place-items:center;font-size:14px">&#128274;</span>
+        <div style="min-width:0">
+          <div style="font-size:13px;font-weight:700;color:#fff">Sign in to buy</div>
+          <div style="margin-top:5px;font-size:12px;line-height:1.7;color:#9aa0a6">Checkout is account-only &mdash; your orders, invoices and chat history live in your account, so there is no guest checkout.</div>
+        </div>
+      </div>
+      <button type="button" data-goto-account style="width:100%;margin-top:14px;padding:12px 14px;border-radius:9px;border:1px solid #fff;background:#fff;color:#08080a;font-family:Manrope,Arial,sans-serif;font-size:13px;font-weight:700;cursor:pointer">Create an account / sign in &rarr;</button>`;
+    accountNotice.querySelector("[data-goto-account]").addEventListener("click", ()=>{ location.href = accountUrl(); });
     emailWrap.parentNode.insertBefore(accountNotice, emailWrap.nextSibling);
+    // --- signed in, but the address is still unconfirmed: the Worker refuses that checkout --------
+    const verifyNotice = document.createElement("div");
+    verifyNotice.style.cssText = "display:none;border:1px solid #4a3a12;border-radius:12px;background:rgba(255,204,0,.05);padding:15px;font-family:Manrope,Arial,sans-serif";
+    verifyNotice.innerHTML = `<div style="font-size:13px;font-weight:700;color:#fff">Confirm your email to finish checkout</div>
+      <div style="margin-top:6px;font-size:12px;line-height:1.7;color:#c9b577">This account has not confirmed its address yet, and checkout only opens for a confirmed account.</div>
+      <button type="button" data-resend style="margin-top:12px;padding:10px 14px;border-radius:8px;border:1px solid #3a3a1e;background:#191a10;color:#e8d48a;font-family:Manrope,Arial,sans-serif;font-size:12px;font-weight:700;cursor:pointer">Resend confirmation email</button>`;
+    verifyNotice.querySelector("[data-resend]").addEventListener("click", (ev)=> resendVerification(ev.currentTarget));
+    accountNotice.parentNode.insertBefore(verifyNotice, accountNotice.nextSibling);
+    let needsVerify = false;
     function useAccount(acct){
       if(!overlay.isConnected) return false;
       const em = (acct && isEmail(acct.email)) ? String(acct.email).trim() : "";
@@ -364,17 +385,23 @@
       emailWrap.style.display = "none";
       accountNotice.style.display = "none";
       acctRow.style.display = "flex";
+      // A normal unconfirmed account is refused by the Worker (403 EMAIL_UNVERIFIED). An admin
+      // account is exempt there, so it is never nagged about a confirmation mail it does not need.
+      needsVerify = !acct.isAdmin && acct.emailVerified === false && acct.verificationRequired;
+      verifyNotice.style.display = needsVerify ? "" : "none";
       confirmBtn.disabled = false;
-      confirmBtn.textContent = "Pay with Crypto \u2192";
-      confirmBtn.style.opacity = "";
+      confirmBtn.textContent = needsVerify ? "Confirm your email first" : "Pay with Crypto \u2192";
+      confirmBtn.style.opacity = needsVerify ? ".6" : "";
       confirmBtn.style.cursor = "pointer";
       if(!discordInput.value.trim() && acct.discord) discordInput.value = String(acct.discord).trim();
       return true;
     }
     function useAccountRequired(){
       accountMode = false;
+      needsVerify = false;
       resolvedAccountEmail = "";
       acctRow.style.display = "none";
+      verifyNotice.style.display = "none";
       accountNotice.style.display = "";
       emailWrap.style.display = "none";
       // Kept clickable on purpose: clicking "Sign in to buy" sends the visitor to the portal.
@@ -383,11 +410,12 @@
       confirmBtn.style.opacity = ".6";
       confirmBtn.style.cursor = "pointer";
     }
-    acctRow.querySelector("[data-acct-change]").textContent = "Switch account";
     acctRow.querySelector("[data-acct-change]").addEventListener("click", ()=>{ location.href = accountUrl(); });
     if(!useAccount(account())) useAccountRequired();
-    // token present but nothing cached yet: upgrade the modal as soon as /api/me answers
-    if(!accountMode && getToken()){ loadAccount(false).then(a=>{ if(a && !accountMode) useAccount(a); }).catch(()=>{}); }
+    // The session cookie is HttpOnly, so a signed-in visitor can have no token in this tab (a new
+    // tab, or a browser reopened after the tab closed). Only the server can tell -- and skipping the
+    // question is exactly how a signed-in customer was told to sign in to a site they were on.
+    loadAccount(false).then(a=>{ if(a && !accountMode) useAccount(a); }).catch(()=>{});
     let payCurrency = (opts.defaultCoin||"").toLowerCase().trim();
     function setCoin(c){
       payCurrency=c;
@@ -412,6 +440,48 @@
     overlay.querySelectorAll("[data-close]").forEach(b=> b.addEventListener("click", close));
     const confirm = overlay.querySelector("[data-confirm]");
     const msg = overlay.querySelector("[data-msg]");
+    const fieldsEl = overlay.querySelector("[data-pay-fields]");
+    const actionsEl = overlay.querySelector("[data-pay-actions]");
+    // Once an order exists the form is over: leaving the coin buttons and the promo box around a
+    // finished order is what made the result state read like a debug panel. The panel replaces it,
+    // and `white-space:normal` stops the template literal's indentation from rendering as gaps.
+    function showResult(html){
+      if(fieldsEl) fieldsEl.style.display = "none";
+      // The result panels carry their own Close / Check status buttons, so the form's action row
+      // would only be a second, redundant Cancel next to them.
+      if(actionsEl) actionsEl.style.display = "none";
+      msg.textContent = "";
+      msg.style.whiteSpace = "normal";
+      msg.innerHTML = html;
+      if(overlay.scrollTo) try{ overlay.scrollTo({ top: overlay.scrollHeight, behavior: "smooth" }); }catch{}
+      return msg;
+    }
+    // --- an unconfirmed address is a fixable state, not a sentence to read and give up on -------
+    async function resendVerification(btn){
+      if(!btn) return;
+      const label = btn.textContent;
+      btn.disabled = true; btn.textContent = "Sending…";
+      try{
+        const r = await apiFetch("/api/auth/resend-verification", { method:"POST", body:{} });
+        btn.textContent = (r && r.message) ? r.message : "Sent ✓";
+        btn.style.borderColor = "#2a7a3a"; btn.style.color = "#8ee0a0";
+      }catch(e){
+        btn.disabled = false; btn.textContent = label;
+        msg.textContent = e.message || "Could not send the confirmation email right now.";
+        msg.style.color = "#ff8a8a";
+      }
+    }
+    function showVerifyMsg(){
+      msg.style.color = "#e8eaed";
+      // Not showResult(): the fields stay put, because confirming the address is what unlocks them.
+      msg.style.whiteSpace = "normal";
+      msg.innerHTML = `<div style="padding:14px;border:1px solid #4a3a12;border-radius:10px;background:rgba(255,204,0,.05)">`
+        + `<div style="font-size:13px;font-weight:700;color:#fff">Confirm your email before you pay</div>`
+        + `<div style="margin-top:6px;font-size:12px;line-height:1.7;color:#c9b577">A confirmation link goes to <b style="color:#fff">${esc(resolvedAccountEmail)}</b>. Open it and come back to this tab — checkout unlocks by itself.</div>`
+        + `<button type="button" data-resend style="margin-top:12px;padding:10px 14px;border-radius:8px;border:1px solid #3a3a1e;background:#191a10;color:#e8d48a;font-family:Manrope,Arial,sans-serif;font-size:12px;font-weight:700;cursor:pointer">Resend confirmation email</button></div>`;
+      const b = msg.querySelector("[data-resend]");
+      if(b) b.addEventListener("click", ()=> resendVerification(b));
+    }
 
     // --- optional promo code ------------------------------------------------------------------
     // The Worker decides the discount; this field only asks. The total shown here is the server's
@@ -465,6 +535,7 @@
       const fresh = account();
       if(fresh) useAccount(fresh);
       if(!accountMode || !isEmail(resolvedAccountEmail)){ location.href = accountUrl(); return; }
+      if(needsVerify){ showVerifyMsg(); return; }
       const email = resolvedAccountEmail;
       const discord = (discordInput.value||"").trim();
       if(!payCurrency && currentTotal > 0){ msg.textContent="Please select BTC, LTC or ETH."; msg.style.color="#ff8a8a"; return; }
@@ -487,7 +558,7 @@
           const purchaseId = result.purchaseId || "";
           const promoCode = result.promoApplied || (appliedPromo && appliedPromo.code) || "";
           msg.style.color = "#8ee0a0";
-          msg.innerHTML = `
+          showResult(`
             <div style="padding:12px;border:1px solid #2a7a3a;border-radius:8px;background:rgba(46,160,67,.08)">
               <div style="font:10px 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#8ee0a0;margin-bottom:8px">✓ Order placed — no payment required</div>
               <div style="font-size:12px;line-height:1.6;color:#e8eaed">A 100% promo covered the whole amount, so no crypto payment was created and nothing is charged.</div>
@@ -498,7 +569,7 @@
               </div>
               <div style="margin-top:10px;font-size:10px;line-height:1.6;color:#7a7d82">It is recorded in your account — the portal shows it like any other order.</div>
               <div style="margin-top:10px"><button type="button" data-close-payment style="padding:10px 14px;border-radius:6px;border:1px solid #333;background:transparent;color:#fff;font-size:11px;cursor:pointer">Close</button></div>
-            </div>`;
+            </div>`);
           confirm.textContent = "Order placed ✓";
           confirm.style.display = "none";
           const closeFree = msg.querySelector("[data-close-payment]");
@@ -513,7 +584,7 @@
           const orderId=result.orderId||result.order_id||"";
           const paymentId=result.paymentId||result.payment_id||result.invoiceId||"";
           msg.style.color="#c8d0d8";
-          msg.innerHTML = `
+          showResult(`
             <div style="padding:12px;border:1px solid #2a7a3a;border-radius:8px;background:rgba(46,160,67,.08)">
               <div style="font:10px 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#8ee0a0;margin-bottom:8px">✓ Payment created — send exact amount</div>
               <div style="font-size:13px;font-weight:700;letter-spacing:-.02em;color:#fff">Send <span style="color:#8ee0a0">${esc(String(amt))} ${esc(cur)}</span> to:</div>
@@ -533,7 +604,7 @@
                 <button type="button" data-close-payment style="padding:10px 14px;border-radius:6px;border:1px solid #333;background:transparent;color:#fff;font-size:11px;cursor:pointer">Close</button>
               </div>
               <div style="margin-top:8px;font:10px 'DM Mono',monospace;color:#60636a">Payment ID ${esc(String(paymentId))} — this page will auto-redirect only after payment is <b style="color:#8ee0a0">finished/confirmed</b>.</div>
-            </div>`;
+            </div>`);
           confirm.textContent="Payment created ✓ — waiting for confirmation";
           confirm.disabled=true;
           confirm.style.display="none";
@@ -606,10 +677,12 @@
           close();
         }
       } catch(e){
+        confirm.disabled = false;
+        confirm.textContent = needsVerify ? "Confirm your email first" : "Pay with Crypto →";
+        // The Worker names this refusal; turn it into the button that fixes it.
+        if(e && e.code === "EMAIL_UNVERIFIED"){ needsVerify = true; showVerifyMsg(); return; }
         msg.textContent = e.message || "Something went wrong";
         msg.style.color = "#ff8a8a";
-        confirm.disabled = false;
-        confirm.textContent = "Pay with Crypto →";
       }
     });
     return { close, overlay };

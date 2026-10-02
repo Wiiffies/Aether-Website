@@ -309,18 +309,48 @@ async function verifyIpnSignature(payloadObj, signature, secret){
 }
 
 // ---------- email template ----------
-function orderHtml({ title, fields, note }){
-  const rows=fields.map(([k,v])=>`
-    <tr><td style="padding:8px 12px;border:1px solid #222;color:#9aa0a6;font:11px 'DM Mono',monospace;text-transform:uppercase;letter-spacing:.08em;width:160px">${escapeHtml(k)}</td>
-        <td style="padding:8px 12px;border:1px solid #222;color:#e8eaed;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word">${escapeHtml(v)}</td></tr>`).join("");
+// One shell for every transactional mail. Inline styles only (a mail client strips <style>), the same
+// dark palette as the site, and - whenever a mail asks the reader to *do* something - a real button
+// instead of a bare URL printed into a table cell. The plain link still appears under the button,
+// because a client that refuses to render a button must never be the only way through.
+const MAIL_INK = "#e8eaed", MAIL_BODY = "#a2a6ad", MAIL_MUTE = "#8a8d93", MAIL_FAINT = "#666a72", MAIL_LINE = "#212227";
+const MAIL_MONO = "'DM Mono',Courier,monospace";
+function mailButton(url, label){
+  const u = escapeHtml(url);
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;margin:0"><tr>`
+    + `<td align="center" bgcolor="#ffffff" style="border-radius:9px;background:#ffffff">`
+    + `<a href="${u}" style="display:inline-block;padding:13px 26px;font:700 14px Manrope,Arial,sans-serif;color:#08080a;text-decoration:none;border-radius:9px">${escapeHtml(label)} &rarr;</a>`
+    + `</td></tr></table>`
+    + `<div style="margin-top:15px;font-size:11px;line-height:1.7;color:${MAIL_FAINT}">Button not working? Paste this into your browser:<br>`
+    + `<span style="color:#c3c8cf;word-break:break-all;font:10px ${MAIL_MONO}">${u}</span></div>`;
+}
+function orderHtml({ title, fields, note, cta, lead, eyebrow }){
+  const rows = (fields || []).map(([k,v], i)=>`<tr>`
+    + `<td style="padding:11px 14px 11px 0;border-top:${i ? "1px solid " + MAIL_LINE : "none"};color:${MAIL_MUTE};font:10px ${MAIL_MONO};text-transform:uppercase;letter-spacing:.09em;width:148px;vertical-align:top">${escapeHtml(k)}</td>`
+    + `<td style="padding:11px 0;border-top:${i ? "1px solid " + MAIL_LINE : "none"};color:${MAIL_INK};font-size:13px;line-height:1.65;white-space:pre-wrap;word-break:break-word;vertical-align:top">${escapeHtml(v)}</td>`
+    + `</tr>`).join("");
   return `
-  <div style="background:#000;padding:24px;font-family:Manrope,Arial,sans-serif;color:#e8eaed">
-    <div style="max-width:640px;margin:0 auto;background:#0b0b0c;border:1px solid #242529;border-radius:8px;overflow:hidden">
-      <div style="padding:20px 22px;border-bottom:1px solid #242529"><div style="font:10px 'DM Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#85878b">Aether</div>
-      <div style="font-size:20px;font-weight:600;letter-spacing:-.04em;margin-top:8px">${escapeHtml(title)}</div></div>
-      <table style="width:100%;border-collapse:collapse">${rows}</table>
-      ${note? `<div style="padding:14px 22px;color:#9aa0a6;font-size:11px;line-height:1.6;border-top:1px solid #242529">${escapeHtml(note)}</div>` : ""}
-      <div style="padding:12px 22px;color:#60636a;font:10px 'DM Mono',monospace">Sent via Aether Worker \u2022 ${new Date().toISOString()}</div>
+  <div style="margin:0;padding:28px 14px;background:#08080a;font-family:Manrope,-apple-system,'Segoe UI',Arial,sans-serif;color:${MAIL_INK}">
+    <div style="max-width:600px;margin:0 auto;background:#101014;border:1px solid #232429;border-radius:16px;overflow:hidden">
+      <div style="height:3px;background:#ffffff;font-size:0;line-height:0">&nbsp;</div>
+      <div style="padding:26px 28px 18px">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%"><tr>
+          <td style="font:10px ${MAIL_MONO};letter-spacing:.16em;text-transform:uppercase;color:${MAIL_MUTE}">Aether</td>
+          <td align="right" style="font:10px ${MAIL_MONO};letter-spacing:.08em;color:${MAIL_FAINT}">get-aether.de</td>
+        </tr></table>
+        ${eyebrow ? `<div style="margin-top:20px;font:10px ${MAIL_MONO};letter-spacing:.12em;text-transform:uppercase;color:${MAIL_MUTE}">${escapeHtml(eyebrow)}</div>` : ""}
+        <div style="margin-top:${eyebrow ? "8px" : "20px"};font-size:22px;font-weight:600;letter-spacing:-.03em;line-height:1.3;color:#fff">${escapeHtml(title)}</div>
+        ${lead ? `<div style="margin-top:10px;font-size:13px;line-height:1.7;color:${MAIL_BODY}">${escapeHtml(lead)}</div>` : ""}
+      </div>
+      <div style="padding:0 28px 26px">
+        ${rows ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;margin-top:6px">${rows}</table>` : ""}
+        ${cta ? `<div style="margin-top:22px">${mailButton(cta.url, cta.label)}</div>` : ""}
+      </div>
+      ${note ? `<div style="padding:16px 28px;border-top:1px solid ${MAIL_LINE};color:${MAIL_MUTE};font-size:11px;line-height:1.75">${escapeHtml(note)}</div>` : ""}
+      <div style="padding:16px 28px 20px;border-top:1px solid ${MAIL_LINE};background:#0d0d11;color:${MAIL_FAINT};font:10px ${MAIL_MONO};line-height:1.95">
+        Aether &middot; questions@get-aether.de<br>
+        Service message about your account &middot; ${new Date().toISOString()}
+      </div>
     </div>
   </div>`;
 }
@@ -638,6 +668,11 @@ function unverifiedResponse(env, request){
 }
 function verifiedGate(auth, env, request){
   if (!verificationRequired(env)) return null;
+  // The operator's own account is named by ADMIN_EMAILS and signed in with a password, so a
+  // confirmation mail cannot add anything to it - and locking the operator out of their own checkout
+  // while testing is a bug, not a safeguard. Sensitive admin actions still go through
+  // adminVerifiedGate(), which keeps requiring a confirmed address.
+  if (effectiveRole(env, auth.user) === ROLE_ADMIN) return null;
   if (isVerifiedUser(auth.user)) return null;
   return unverifiedResponse(env, request);
 }
@@ -1040,7 +1075,14 @@ async function handleResendVerification(request, env){
   const token = await issueAuthToken(env, auth.user.id, "verify", 24*3600*1000);
   const link = `${siteUrl(env)}/verify-email.html?token=${token}`;
   try {
-    await sendEmail(env, { to: auth.user.email, subject:"Confirm your Aether account", html: orderHtml({ title:"Confirm your email", fields:[["Account", auth.user.email],["Link", link]], note:"This link is valid for 24 hours and single use. If you did not create this account you can ignore this email." }), text:`Confirm your Aether account:\n${link}\n\nValid for 24 hours.` });
+    await sendEmail(env, { to: auth.user.email, subject:"Confirm your Aether account", html: orderHtml({
+      eyebrow:"One last step",
+      title:"Confirm your email",
+      lead:`Tap the button to confirm ${auth.user.email}. A confirmed account can check out and reach the whole portal.`,
+      fields:[["Account", auth.user.email],["Link", "Valid for 24 hours - single use"]],
+      cta:{ label:"Confirm my email", url: link },
+      note:"If you did not create this account you can ignore this email - nothing happens until the link is opened.",
+    }), text:`Confirm your Aether account\n\nOpen this link to confirm ${auth.user.email}:\n${link}\n\nValid for 24 hours and single use.` });
   } catch(e){
     console.error("resend verification failed", e && e.message);
     return json({ error:"The email could not be sent right now - try again in a few minutes, or contact questions@get-aether.de." }, 502, env, request);
@@ -1412,7 +1454,14 @@ async function handleAdminBeta(request, env, url){
     let emailed = false;
     if (emailConfigured(env)) {
       try {
-        await sendEmail(env, { to: auth.user.email, subject:"Confirm the Aether Beta domain change", html: orderHtml({ title:"Confirm the Beta domain change", fields:[["Admin", auth.user.email],["New Beta URL", "https://" + host + bp],["Confirm link", link],["Valid for", "30 minutes - single use"]], note:"If you did not request this, ignore this email: nothing changes until the link is opened and confirmed." }), text:`Confirm the Aether Beta domain change:\n${link}\n\nValid for 30 minutes and single use.` });
+        await sendEmail(env, { to: auth.user.email, subject:"Confirm the Aether Beta domain change", html: orderHtml({
+          eyebrow:"Admin action",
+          title:"Confirm the Beta domain change",
+          lead:"A new Beta address is waiting for your confirmation. Nothing changes until the button is used.",
+          fields:[["Admin", auth.user.email],["New Beta URL", "https://" + host + bp],["Link", "Valid for 30 minutes - single use"]],
+          cta:{ label:"Confirm the change", url: link },
+          note:"If you did not request this, ignore this email: nothing changes until the link is opened and confirmed.",
+        }), text:`Confirm the Aether Beta domain change\n\nOpen this link to confirm https://${host}${bp}:\n${link}\n\nValid for 30 minutes and single use.` });
         emailed = true;
       } catch(e){ console.error("beta domain email failed", e && e.message); }
     }
@@ -1532,7 +1581,14 @@ async function handleRegister(request, env){
     try {
       const vtoken = await issueAuthToken(env, userId, "verify", 24*3600*1000);
       const link = `${siteUrl(env)}/verify-email.html?token=${vtoken}`;
-      await sendEmail(env, { to: email, subject:"Confirm your Aether account", html: orderHtml({ title:"Confirm your email", fields:[["Account", email],["Link", link]], note:"This link is valid for 24 hours. If you did not create this account you can ignore this email." }), text:`Confirm your Aether account:\n${link}\n\nValid for 24 hours.` });
+      await sendEmail(env, { to: email, subject:"Confirm your Aether account", html: orderHtml({
+        eyebrow:"Welcome to Aether",
+        title:"Confirm your email",
+        lead:`Your account is ready. Confirm ${email} and checkout, orders and support chat all open up.`,
+        fields:[["Account", email],["Link", "Valid for 24 hours - single use"]],
+        cta:{ label:"Confirm my email", url: link },
+        note:"If you did not create this account you can ignore this email - nothing happens until the link is opened.",
+      }), text:`Confirm your Aether account\n\nOpen this link to confirm ${email}:\n${link}\n\nValid for 24 hours and single use.` });
     } catch(e){ console.warn("verification email failed", e && e.message); }
   }
   // Claim guest orders that were placed with this email before the account existed.
@@ -1728,7 +1784,14 @@ async function handleForgotPassword(request, env){
           await deliverResetLink(env, row.email, link, {
             to: row.email,
             subject:"Reset your Aether password",
-            html: orderHtml({ title:"Reset your password", fields:[["Account", row.email],["Link", link],["Valid for", "30 minutes \u2014 single use"]], note:"If you did not ask for this, ignore this email: your password stays unchanged. Signing in elsewhere is not affected until the link is used." }),
+            html: orderHtml({
+              eyebrow:"Password reset",
+              title:"Choose a new password",
+              lead:`Someone asked to reset the password for ${row.email}. If that was you, pick a new one now.`,
+              fields:[["Account", row.email],["Link", "Valid for 30 minutes - single use"]],
+              cta:{ label:"Choose a new password", url: link },
+              note:"If you did not ask for this, ignore this email: your password stays unchanged. Signing in elsewhere is not affected until the link is used.",
+            }),
             text:`Reset your Aether password:\n${link}\n\nValid for 30 minutes and single use. If you did not request it, ignore this email.`,
           });
         } else {
