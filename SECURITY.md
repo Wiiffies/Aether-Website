@@ -233,6 +233,48 @@ Three zone settings were silently working against the repo, and all three are no
 Redirect rules are evaluated **before** the cache, so switching maintenance modes never depended on
 these; what they fix is seeing your own edits.
 
+### 3d. Added 2026-10-02: markup the browser was quietly recovering from, and Tester refusals that say which door is shut
+
+**Every page shipped a malformed end tag.** Fourteen pages wrote `</a</nav>` and two wrote the worse
+`</a<a href=…>`. HTML has no syntax error to report here: the parser reads `</a</nav>` as one end tag
+named `a</nav`, finds nothing to close, **drops it**, and leaves the link and the `<nav>` open. Nothing
+looked broken in a review or a desktop screenshot, but the consequences were real:
+
+- the `<nav>` never closed, so the header CTA and the **hamburger button ended up inside it** — and
+  since `.nav { display:none }` below 700 px, the mobile menu button had **no box at all**: the site was
+  unnavigable on a phone;
+- on `account.html` the malformed tag consumed the whole `#nav-beta` element, so the Beta link rendered as
+  the bare text `AccountBeta`, `document.getElementById("nav-beta")` returned `null`, and the swallowed
+  `TypeError` left the Tester's Beta card saying *"Loading the current Beta address…"* forever — while
+  the link it offered pointed at the relative `beta.html` instead of the configured Beta host;
+- `admin.html` lost its Admin nav link the same way.
+
+All sixteen are fixed, and `_check-markup.mjs` now runs in all three workflows to keep them fixed: no
+end tag followed by another `<`, every element with a required end tag balanced (after the inline
+scripts are emptied, so template strings are not mistaken for markup), and no duplicated `id`. It
+caught all sixteen on the pre-fix tree.
+
+Two supporting changes went with it: `show(el, on)` on `account.html`, `admin.html` and `beta.html`
+now tolerates a missing element instead of throwing (one renamed id could previously abort the rest of
+a page's script), and `account.html` writes the Beta address **before** revealing the card.
+
+**The Tester gate now names its refusal.** `requireTester` answered one sentence — *"Beta access
+requires a Tester account with a verified email"* — for three different situations with three
+different fixes, so a signed-out visitor, a Tester whose address was unconfirmed and an ordinary
+customer were all told the same thing, and two of them were told something untrue about their own
+account. `requireTesterOrExplain` now answers with the reason and a code the pages branch on:
+`SESSION_REQUIRED`, `NOT_TESTER` or `EMAIL_UNVERIFIED` (statuses unchanged at 403, so nothing that
+relied on the old shape moves). The **role is checked before the address** on purpose: the sentence
+*"Tester access is already on this account"* may only be said to an account that has the role.
+
+A role grant is still a real grant — `POST /api/admin/users/:id/role` now answers with a `warnings`
+array (always present, empty when there is nothing to say) instead of refusing. The one warning it can
+carry states that an unconfirmed address still blocks the Beta and the build, which is exactly the
+state an admin creates when they grant Tester by hand to a fresh signup.
+
+`public/checkout.js` passes the server's `code` through on an error (`err.code`, `?v=9`), so a page can
+distinguish those cases without pattern-matching English.
+
 ## 4. Still to do manually in the Cloudflare dashboard
 
 1. **Turnstile — done 2026-10-01.** The widget "Aether signup + password reset (get-aether.de)"

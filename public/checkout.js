@@ -157,6 +157,9 @@
     if(!res.ok){
       const err = new Error(friendlyError(j, res.status));
       err.status = res.status;
+      // A machine-readable reason travels with the error so a page can tell "signed out" from "email
+      // not confirmed" from "not a Tester" and answer with the one instruction that fits.
+      err.code = (j && j.code) || "";
       throw err;
     }
     return j;

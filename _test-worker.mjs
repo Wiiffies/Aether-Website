@@ -629,8 +629,20 @@ r = await call("POST", "/api/admin/users/" + memberRow.id + "/role", { token: ad
 check("the API refuses to grant Admin", r.status === 400, r.json);
 r = await call("POST", "/api/admin/users/" + adminId + "/role", { token: adminToken, body: { role: "user" } });
 check("admin accounts cannot be demoted through the API -> 400", r.status === 400, r.json);
+// The gate says which door is shut: signed out, address unconfirmed, or no role. One sentence for all
+// three told two of those people something untrue about their own account.
+r = await call("GET", "/api/program", { token: freshSession });
+check("a signed-in customer without the role is told exactly that -> NOT_TESTER", r.status === 403 && r.json.code === "NOT_TESTER", r.json);
+r = await call("GET", "/api/program");
+check("a signed-out visitor is told to sign in -> SESSION_REQUIRED", r.status === 403 && r.json.code === "SESSION_REQUIRED", r.json);
+r = await call("GET", "/api/beta/status", { token: freshSession });
+check("the Beta refuses a non-Tester with the same specific code", r.status === 403 && r.json.code === "NOT_TESTER", r.json);
+r = await call("GET", "/api/admin/users", { token: adminToken });
+check("the account list reports whether verification is enforced on this deployment",
+  r.status === 200 && r.json.emailVerificationRequired === false, r.json && r.json.emailVerificationRequired);
 r = await call("POST", "/api/admin/users/" + memberRow.id + "/role", { token: adminToken, body: { role: "tester" } });
 check("admin grants Tester", r.status === 200 && r.json.role === "tester", r.json);
+check("a grant with nothing outstanding answers with an empty warnings list", Array.isArray(r.json.warnings) && r.json.warnings.length === 0, r.json.warnings);
 check("the role is stored server-side", env.DB.db.prepare("SELECT role FROM users WHERE id = ?").get(memberRow.id).role === "tester");
 r = await call("GET", "/api/beta/access", { token: freshSession });
 check("tester is allowed into the Beta (server-side decision)", r.status === 200 && r.json.allowed === true && r.json.role === "tester", r.json);
@@ -876,6 +888,24 @@ r = await call("POST", "/api/conversations", { token: unverifiedToken, body: { m
 check("unverified account cannot open a conversation -> 403", r.status === 403, r.json);
 r = await call("GET", "/api/beta/status", { token: unverifiedToken });
 check("unverified account cannot reach the Beta -> 403", r.status === 403, r.json);
+// ...and it must not stop at "cannot" when the account only has to open one mail: the refusal names the
+// single thing standing in the way, which is what the Beta page then repeats to the tester.
+r = await call("POST", "/api/auth/register", { body: { email: "unvertester@example.com", password: "unvertester1" } });
+check("a Tester with an unconfirmed address is refused for that reason and no other", r.status === 200, r.json);
+const unvTester = env.DB.db.prepare("SELECT id FROM users WHERE email = ?").get("unvertester@example.com");
+env.DB.db.prepare("UPDATE users SET role = 'tester' WHERE id = ?").run(unvTester.id);
+r = await call("GET", "/api/program", { token: r.json.token });
+check("Tester + unconfirmed address -> EMAIL_UNVERIFIED, not NOT_TESTER", r.status === 403 && r.json.code === "EMAIL_UNVERIFIED", r.json);
+// Sensitive admin changes need a confirmed admin address too, and this section is the one place where a
+// mail provider is configured. The test env has no inbox, so the admin is confirmed directly.
+env.DB.db.prepare("UPDATE users SET email_verified = 1 WHERE email = ?").run("admin@example.com");
+r = await call("POST", "/api/admin/users/" + unvTester.id + "/role", { token: adminToken, body: { role: "tester" } });
+check("re-granting the same role says it is already done instead of inventing a change", r.status === 200 && r.json.unchanged === true, r.json);
+r = await call("POST", "/api/admin/users/" + unvTester.id + "/role", { token: adminToken, body: { role: "user" } });
+check("revoking a role needs no warning (nothing is left blocked by an unconfirmed address)", r.status === 200 && (r.json.warnings || []).length === 0, r.json);
+r = await call("POST", "/api/admin/users/" + unvTester.id + "/role", { token: adminToken, body: { role: "tester" } });
+check("granting Tester to an unconfirmed account warns instead of pretending it is done",
+  r.status === 200 && r.json.role === "tester" && (r.json.warnings || []).length === 1 && /confirm/i.test(r.json.warnings[0]), r.json);
 r = await call("POST", "/api/auth/resend-verification", {});
 check("resend without a session -> 401", r.status === 401, r.json);
 const unvId = env.DB.db.prepare("SELECT id FROM users WHERE email = ?").get("unverified@example.com").id;

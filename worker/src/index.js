@@ -745,16 +745,18 @@ function programPausedMsg(){ return "Downloads are paused right now - nothing is
 // GET /api/program - what exists, for an allowed tester only. The metadata is read from the Worker's
 // own environment, so nobody can edit a version number or a checksum in the page that shows them.
 async function handleProgramInfo(request, env){
-  const auth = await requireTester(request, env);
-  if (!auth) return json({ error:"A program build requires a Tester account with a verified email." }, 403, env, request);
+  const gate = await requireTesterOrExplain(request, env);
+  if (!gate.auth) return gate.refusal;
+  const auth = gate.auth;
   const paused = programPaused(env);
   const ready = programReady(env) && !paused;
   return json({ ok:true, available:ready, build: ready ? programBuild(env) : null, reason: ready ? null : (paused ? programPausedMsg() : noBuildYet()), paused, role: effectiveRole(env, auth.user), expiresIn: PROGRAM_TICKET_SECONDS }, 200, env, request);
 }
 // POST /api/program/download - mint the single-use ticket that actually fetches the file.
 async function handleProgramDownload(request, env){
-  const auth = await requireTester(request, env);
-  if (!auth) return json({ error:"A program build requires a Tester account with a verified email." }, 403, env, request);
+  const gate = await requireTesterOrExplain(request, env);
+  if (!gate.auth) return gate.refusal;
+  const auth = gate.auth;
   // The request that follows is a browser navigation, and the only credential a navigation can carry
   // here is a cookie. When the browser is not sending the session cookie the ticket would be handed
   // out dead, so the honest answer names what to change instead of minting one that cannot work.
@@ -982,13 +984,23 @@ function betaFlags(env){
   try { const j = JSON.parse(String(raw)); if (j && typeof j === "object") return Object.assign({}, defaults, j); } catch {}
   return defaults;
 }
-// Tester gate: session + (verified email when verification is enforced) + Tester/Admin role.
-async function requireTester(request, env){
+// Tester gate: session + (verified email when verification is enforced) + Tester/Admin role, and it
+// says which of the three doors is shut. One sentence - "Beta access requires a Tester account with a
+// verified email" - is true for a signed-out visitor, for a Tester who has not confirmed their address
+// and for an ordinary customer: three different problems with three different fixes, and the person
+// reading it cannot tell which one is theirs. Each refusal names its reason and carries a code a page
+// can branch on. The HTTP statuses are unchanged (403), so nothing that already depends on the shape
+// of these answers moves.
+async function requireTesterOrExplain(request, env){
   const auth = await requireAuth(request, env);
-  if (!auth) return null;
-  if (verificationRequired(env) && !isVerifiedUser(auth.user)) return null;
-  if (!isTesterRole(env, auth.user)) return null;
-  return auth;
+  if (!auth) return { auth: null, refusal: json({ error:"Sign in first - the Beta area and the desktop build both need an account.", code:"SESSION_REQUIRED" }, 403, env, request) };
+  const verified = !verificationRequired(env) || isVerifiedUser(auth.user);
+  // The role is asked about first, and that order is the point: "Tester access is already on this
+  // account" may only ever be said to an account that has it. Checking the address first told every
+  // unconfirmed customer that they were already a Tester.
+  if (!isTesterRole(env, auth.user)) return { auth: null, refusal: json({ error:"This account does not have the Tester role yet. Ask us through the contact page and we will add it to the account you write from." + (verified ? "" : " Tester access also needs a confirmed email address, so confirm yours while you wait."), code:"NOT_TESTER" }, 403, env, request) };
+  if (!verified) return { auth: null, refusal: json({ error:"Confirm your email address first. Tester access is already on this account; the Beta and the build unlock as soon as the address is confirmed, and nothing has to be granted again.", code:"EMAIL_UNVERIFIED" }, 403, env, request) };
+  return { auth, refusal: null };
 }
 
 // ---------- audit log ----------
@@ -1179,8 +1191,9 @@ async function handleBetaAccess(request, env){
   return json({ ok:true, authenticated:true, allowed, role: effectiveRole(env, auth.user), emailVerified: isVerifiedUser(auth.user), emailVerificationRequired: verificationRequired(env), beta }, 200, env, request);
 }
 async function handleBetaStatus(request, env){
-  const auth = await requireTester(request, env);
-  if (!auth) return json({ error:"Beta access requires a Tester account with a verified email." }, 403, env, request);
+  const gate = await requireTesterOrExplain(request, env);
+  if (!gate.auth) return gate.refusal;
+  const auth = gate.auth;
   const cfg = await betaConfig(env);
   const flags = await betaFlagsFor(env);
   let feedback = 0;
@@ -1196,8 +1209,9 @@ async function handleBetaStatus(request, env){
   }, 200, env, request);
 }
 async function handleBetaFeedback(request, env){
-  const auth = await requireTester(request, env);
-  if (!auth) return json({ error:"Beta access requires a Tester account with a verified email." }, 403, env, request);
+  const gate = await requireTesterOrExplain(request, env);
+  if (!gate.auth) return gate.refusal;
+  const auth = gate.auth;
   if (!hasDb(env)) return json({ error:"Beta storage is not configured" }, 503, env, request);
   let body; try{ body = await request.json(); }catch{ return json({ error:"Invalid JSON" }, 400, env, request); }
   const text = cleanMessage(body.message || body.body || "");
@@ -1213,8 +1227,9 @@ async function handleBetaFeedback(request, env){
 // A Beta deployment on another hostname cannot read the production cookie, so a Tester can mint
 // a short-lived single-use ticket and redeem it there for a normal session.
 async function handleBetaTicket(request, env){
-  const auth = await requireTester(request, env);
-  if (!auth) return json({ error:"Beta access requires a Tester account with a verified email." }, 403, env, request);
+  const gate = await requireTesterOrExplain(request, env);
+  if (!gate.auth) return gate.refusal;
+  const auth = gate.auth;
   const cfg = await betaConfig(env);
   const ticket = await issueAuthToken(env, auth.user.id, "beta", 120*1000, JSON.stringify({ host: cfg.host }));
   await audit(env, auth.user, "beta.ticket", cfg.host, "single-use, 120s");
@@ -1252,17 +1267,27 @@ async function handleAdminRole(request, env, url){
     return json({ error:"Role must be 'user' or 'tester' - the Admin role comes from the Worker configuration, never from the API." }, 400, env, request);
   const id = Number(m[1]);
   let target;
-  try { target = await env.DB.prepare("SELECT id, email, role FROM users WHERE id = ?").bind(id).first(); }
-  catch { target = await env.DB.prepare("SELECT id, email FROM users WHERE id = ?").bind(id).first(); }
+  try { target = await env.DB.prepare("SELECT id, email, role, email_verified FROM users WHERE id = ?").bind(id).first(); }
+  catch { target = await env.DB.prepare("SELECT id, email, role FROM users WHERE id = ?").bind(id).first(); }
   if (!target) return json({ error:"User not found" }, 404, env, request);
   if (isAdminEmail(env, target.email)) return json({ error:"That account is an Administrator - Admin access is controlled by the Worker configuration, not by this panel." }, 400, env, request);
   if (Number(id) === Number(auth.user.id)) return json({ error:"You cannot change your own role." }, 400, env, request);
   const before = storedRole(target);
-  if (before === next) return json({ ok:true, id, email: target.email, role: next, unchanged:true }, 200, env, request);
+  // Granting Tester is not the whole story when verification is enforced: an unconfirmed address still
+  // stops the Beta and the download, and the panel is the one place that can say so before the admin
+  // tells a tester to try again. This is a note, not a refusal - the grant is real and takes effect the
+  // moment the address is confirmed.
+  const warnings = [];
+  if (next === ROLE_TESTER && verificationRequired(env) && !isVerifiedUser(target))
+    warnings.push("This account still has to confirm its email address: until it does, the Beta and the desktop build stay locked, and nothing has to be granted again afterwards.");
+  // `warnings` is always an array, empty when there is nothing to say: a client should never have to
+  // tell "nothing to report" apart from "this worker is older than the field".
+  const body2 = { warnings };
+  if (before === next) return json(Object.assign({ ok:true, id, email: target.email, role: next, unchanged:true }, body2), 200, env, request);
   try { await env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(next, id).run(); }
   catch { return json({ error:"Role storage is not configured yet (database migration pending)." }, 503, env, request); }
-  await audit(env, auth.user, next === ROLE_TESTER ? "tester.grant" : "tester.revoke", String(target.email), before + " -> " + next);
-  return json({ ok:true, id, email: target.email, role: next }, 200, env, request);
+  await audit(env, auth.user, next === ROLE_TESTER ? "tester.grant" : "tester.revoke", String(target.email), before + " -> " + next + (warnings.length ? " (email not confirmed)" : ""));
+  return json(Object.assign({ ok:true, id, email: target.email, role: next }, body2), 200, env, request);
 }
 
 // ---------- admin: customer conversations (authorized support access) ----------
@@ -1821,7 +1846,9 @@ async function handleAdminUsers(request, env, url){
   const userList = (users.results || []).map(u => Object.assign({}, publicUser(env, u), { email_verified: Number(u.email_verified || 0) ? 1 : 0 }));
   const stats = await env.DB.prepare("SELECT user_id, COUNT(*) AS orders, SUM(CASE WHEN status IN ('finished','confirmed','sending','paid') THEN 1 ELSE 0 END) AS paid FROM orders GROUP BY user_id").all();
   const msgs  = await env.DB.prepare("SELECT user_id, COUNT(*) AS messages FROM messages GROUP BY user_id").all();
-  return json({ ok:true, users: userList, stats: stats.results || [], messageStats: msgs.results || [], assignableRoles: ASSIGNABLE_ROLES.slice(), adminEmailsConfigured: adminEmails(env).length }, 200, env, request);
+  // `emailVerificationRequired` is the server's own answer, so the panel can say whether an
+  // unconfirmed address actually blocks a Tester instead of guessing at it in the browser.
+  return json({ ok:true, users: userList, stats: stats.results || [], messageStats: msgs.results || [], assignableRoles: ASSIGNABLE_ROLES.slice(), adminEmailsConfigured: adminEmails(env).length, emailVerificationRequired: verificationRequired(env) }, 200, env, request);
 }
 async function handleAdminMessages(request, env, url){
   if (!hasDb(env)) return json({ error:"DB missing" }, 503, env, request);

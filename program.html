@@ -31,6 +31,7 @@
 
     <div id="dl-locked" hidden>
       <p class="sub" style="margin:0 0 16px">The beta build is handed out to testers first. Sign in with an account that has the Tester role and the download shows up right here — the server decides that, not this page.</p>
+      <div class="acc-note warn acc-hide" id="dl-locked-why" style="margin:0 0 16px"></div>
       <div class="acc-row"><a class="button button-primary" href="account.html">Sign in <span>↗</span></a><a class="outline-button" href="contact.html">Ask to join the beta</a></div>
     </div>
 
@@ -104,7 +105,7 @@ Linux    sha256sum &lt;file&gt;</pre>
 
 <footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
 <script src="public/aether-config.js?v=9"></script>
-<script src="public/checkout.js?v=8"></script>
+<script src="public/checkout.js?v=9"></script>
 <script>
 (() => {
   const C = window.AetherCheckout;
@@ -211,9 +212,26 @@ Linux    sha256sum &lt;file&gt;</pre>
     try {
       info = await C.portal.programInfo();
     } catch (err) {
-      // 401 signed out and 403 not a tester both mean the same thing to a visitor, and both are the
-      // locked card.
-      if (err && (err.status === 401 || err.status === 403)) { show("locked"); return; }
+      // Being refused is not one state: a signed-out visitor has to sign in, an unconfirmed Tester
+      // only has to open the mail, and anyone else needs the role. The server says which refusal it is
+      // (`code`), so this card can repeat the one instruction that actually helps instead of a generic
+      // "testers only" that reads like a dead end.
+      if (err && (err.status === 401 || err.status === 403)) {
+        show("locked");
+        const why = document.getElementById("dl-locked-why");
+        const code = (err && err.code) || (err && err.status === 401 ? "SESSION_REQUIRED" : "");
+        if (why && code === "EMAIL_UNVERIFIED") {
+          // The heading above this card says "testers-only", which would be the wrong reason for this
+          // visitor: they are a tester. Say what is actually missing.
+          C.ui.setMsg(sub, "Your Tester account needs one confirmation.", "");
+          why.textContent = "Your account already has the Tester role — the build waits on one thing: the email address on this account is not confirmed yet. Confirm it from your account page and this page unlocks, with nothing to re-grant.";
+          why.classList.remove("acc-hide");
+        } else if (why && code === "SESSION_REQUIRED") {
+          why.textContent = "You are signed out. Sign in — the download appears here the moment the server sees a Tester account.";
+          why.classList.remove("acc-hide");
+        }
+        return;
+      }
       // Anything else means the build status could not be read. For a program with no published build
       // the truthful visitor-facing state is still "not available yet", so it shows the same card as
       // a published-but-pending build and says plainly that the status is unconfirmed - rather than

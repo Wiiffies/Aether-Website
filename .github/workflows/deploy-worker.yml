@@ -49,6 +49,8 @@ jobs:
         run: node _test-worker.mjs
       - name: Tester download intact
         run: node _check-program.mjs
+      - name: Page markup is well formed
+        run: node _check-markup.mjs
       - name: Pages stay loadable under the deployed CSP
         run: node _check-headers.mjs
       - name: Skip notice when the token is absent

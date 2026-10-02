@@ -46,6 +46,18 @@ the production cookie):
 
 The ticket is single-use, expiring, and still requires a Tester account with a verified email.
 
+## If the Beta refuses you
+
+| The page says | What it means | What to do |
+| --- | --- | --- |
+| "You are not signed in." | no session at all | sign in with the account that has the Tester role |
+| "Your email address is not confirmed yet." | the role is already on the account; the address is not confirmed | confirm it from `account.html` ("Resend" is there) — nothing has to be granted again |
+| "This account is not a Tester yet." | no Tester role (a new account never has one) | ask through `contact.html` from the account you want the role on |
+
+The three answers come from the Worker (`code`: `SESSION_REQUIRED`, `EMAIL_UNVERIFIED`,
+`NOT_TESTER`) and are re-decided on every request, so no page and no DevTools session can talk
+past them.
+
 ## Configuring the Beta address
 
 The address is server-side configuration (D1 `settings.beta_host` / `settings.beta_path`, with

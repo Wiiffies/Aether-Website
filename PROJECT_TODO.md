@@ -84,6 +84,11 @@ Single source of truth for the customer-portal / Beta work. Status legend:
 - [x] Single-use 120s beta ticket -> redeem for a session on another Beta hostname
 - [x] Beta feedback stored in `beta_feedback` (never production tables)
 - [x] Obscure Beta path treated as obscurity only, never as security
+- [x] Tester gate names its refusal (2026-10-02): `SESSION_REQUIRED` / `EMAIL_UNVERIFIED` / `NOT_TESTER`, role checked before the address so "Tester access is already on this account" is only said to an account that has it
+- [x] A role grant answers with `warnings[]` (advisory, never a refusal) when the account still has to confirm its address before the Beta and the build unlock
+- [x] Tester pages answer each refusal with the one instruction that fits: `beta.html` and `program.html` both explain the unconfirmed-address case instead of a generic "testers only"
+- [x] Tester account surface: Beta link in the nav, the server-reported Beta address written before the card is revealed, a copy control, and a direct link to the build from `account.html` and `beta.html`
+- [x] Admin panel: Tester count, an All/Testers-only filter, an accurate `colspan`, and no delete button for an account the Worker would refuse to delete
 
 ## 6. Beta domain configuration (admin panel)
 

@@ -12,7 +12,7 @@
 <meta name="twitter:title" content="Aether — Your account">
 <meta name="twitter:description" content="Sign in to your Aether account: purchases, order chats with the team, email confirmation and account settings — all in one place.">
 <meta name="twitter:image" content="https://get-aether.de/public/og.png"><link rel="icon" href="public/aether-logo.png" type="image/png"><link rel="stylesheet" href="public/aether.css?v=7"><link rel="stylesheet" href="public/pages.css?v=7"><link rel="stylesheet" href="public/portal.css?v=7"><link rel="stylesheet" href="public/ui.css?v=7">
-</head><body><header class="site-header"><a class="brand" href="index.html"><img src="public/aether-logo.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="program.html">Program</a><a href="account.html" class="active">Account</a<a href="beta.html" id="nav-beta" class="acc-hide">Beta</a></nav><a class="header-cta" href="shop.html">Shop <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header><main class="page-main acc-wrap">
+</head><body><header class="site-header"><a class="brand" href="index.html"><img src="public/aether-logo.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="program.html">Program</a><a href="account.html" class="active">Account</a><a href="beta.html" id="nav-beta" class="acc-hide">Beta</a></nav><a class="header-cta" href="shop.html">Shop <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header><main class="page-main acc-wrap">
 <span class="page-kicker">Aether account</span>
 <h1>Your orders.<br><em>Your chat.</em></h1>
 <p class="page-lead">Sign in to see every order you placed, chat with us about it in one place, and manage your account. There is no guest checkout: buying happens inside your account, so every order you place is listed here with its invoice and chat automatically.</p>
@@ -121,8 +121,9 @@
   <div class="acc-card acc-hide" id="acc-beta-card">
     <h2>Beta testing area <span class="beta-chip">BETA</span></h2>
     <p class="sub">Your account has the Tester role, so the Beta environment is open to you. Access is re-checked by the server on every request — the link below is not the security boundary.</p>
-    <div class="acc-row"><a class="acc-btn" id="acc-beta-link" href="beta.html">Open the Beta →</a></div>
+    <div class="acc-row"><a class="acc-btn" id="acc-beta-link" href="beta.html">Open the Beta →</a><a class="acc-btn ghost" href="program.html">Download the build →</a></div>
     <div class="acc-note" id="acc-beta-note">Loading the current Beta address…</div>
+    <div class="acc-note">The desktop build is handed out on the Program page from the Worker's own copy of the version and checksum, and only to an account with this role.</div>
   </div>
 
   <div class="acc-card" id="acc-security">
@@ -144,7 +145,7 @@
 </section>
 </main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
 <script src="public/aether-config.js?v=9"></script>
-<script src="public/checkout.js?v=8"></script>
+<script src="public/checkout.js?v=9"></script>
 <script src="public/aether.js?v=7" defer></script>
 <script>
 (() => {
@@ -156,7 +157,10 @@
   let mode = "login";
   let openOrder = null, poll = null;
 
-  function show(el, on){ el.classList.toggle("acc-hide", !on); }
+  // A missing element is not worth abandoning the rest of the page for: every id this script touches
+  // is declared in the markup above, so a null here means the page was edited, not that the account
+  // is broken.
+  function show(el, on){ if (el) el.classList.toggle("acc-hide", !on); }
   function msg(el, text, kind){ el.className = "acc-msg" + (kind ? " " + kind : ""); el.textContent = text || ""; }
   function money(amount, currency){ return "€" + Number(amount || 0).toFixed(0) + " " + String(currency || "eur").toUpperCase(); }
   function statusClass(s){
@@ -512,12 +516,14 @@
     try {
       const access = await A.portal.betaAccess();
       if (access.allowed) {
-        show($("acc-beta-card"), true);
-        show($("nav-beta"), true);
         const url = (access.beta && access.beta.url) || "beta.html";
         const localBeta = /betatester\./i.test(location.hostname) || /beta\.html$/i.test(location.pathname);
+        // The address is written before anything is revealed: revealed first, a hiccup here would
+        // leave the card at "Loading the current Beta address…" while a tester looks straight at it.
         $("acc-beta-link").href = localBeta ? "beta.html" : url;
         $("acc-beta-note").textContent = localBeta ? "You are on the Beta deployment." : "Current Beta address: " + url;
+        show($("acc-beta-card"), true);
+        show($("nav-beta"), true);
       } else { show($("acc-beta-card"), false); show($("nav-beta"), false); }
     } catch { /* not signed in far enough for the beta probe — the card stays hidden */ }
     const params = new URLSearchParams(location.search);

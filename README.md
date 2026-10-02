@@ -71,11 +71,12 @@ who is allowed to do anything — every authorisation decision happens in the Wo
 | `Aether Logo trasnparent new.png` | The original 1.2 MB brand asset: still the Discord embed thumbnail, and the source `_make-logo.mjs` crops from |
 | `worker/src/index.js` | The entire API: auth, orders, invoices, IPN, chat, roles, Beta, admin |
 | `worker/wrangler.toml` | Bindings and defaults for a `wrangler`-based deploy |
-| `_test-worker.mjs` | 209-check test suite (runs the real Worker against an in-memory D1) |
+| `_test-worker.mjs` | 278-check test suite (runs the real Worker against an in-memory D1) |
 | `_dev-server.mjs` | Local full stack: static site + Worker + in-memory D1 |
 | `_build_chunks.mjs` | ASCII guard + gzip/base64 chunker used by the deploy recipe |
 | `_check-inline-js.mjs`, `_check-email-regex.mjs` | Small static checks that have already caught real bugs |
 | `_check-assets.mjs` | Publishing-metadata guard: every shared asset is versioned and all references to the same asset agree, `public/og.png` at 1200x630, description + `og:image` on every public page |
+| `_check-markup.mjs` | Markup guard: no end tag is followed by another `<` (a missing `>` makes the parser drop the tag — that is how the nav stopped closing on every page), every element with a required end tag is balanced, no duplicate `id` |
 | `_make-logo.mjs` | Regenerates the site logo from the original brand asset — no image libraries, just `zlib` |
 | `_make-og.mjs` | Regenerates `public/og.png` (1200x630 dark card + the brand mark) from the same asset |
 
@@ -83,10 +84,12 @@ who is allowed to do anything — every authorisation decision happens in the Wo
 
 ```bash
 node _dev-server.mjs      # http://127.0.0.1:5501 — static site AND /api/* through the real Worker
-node _test-worker.mjs     # 209 checks, no credentials needed
+node _test-worker.mjs     # 278 checks, no credentials needed
 node _check-inline-js.mjs *.html
+node _check-markup.mjs
 node _check-email-regex.mjs
 node _check-assets.mjs
+# add REQUIRE_EMAIL_VERIFICATION=true to exercise the unconfirmed-address paths
 ```
 
 `_dev-server.mjs` runs the Worker against an in-memory SQLite D1 and prints a random local admin

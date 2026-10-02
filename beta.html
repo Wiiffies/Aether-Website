@@ -10,7 +10,7 @@
   <section id="beta-denied" class="acc-card acc-hide">
     <h2>Beta access required</h2>
     <p class="sub" id="beta-denied-why">—</p>
-    <div class="acc-note">A normal customer account cannot open the Beta. A Tester flag is granted by an administrator in the admin panel — it can never be set from the browser.</div>
+    <div class="acc-note" id="beta-denied-note">A normal customer account cannot open the Beta. A Tester flag is granted by an administrator in the admin panel — it can never be set from the browser.</div>
     <div class="acc-row"><a class="acc-btn" href="account.html">Go to my account</a><a class="acc-btn ghost" href="index.html">Back to the site</a></div>
     <div class="acc-msg" id="beta-denied-msg" role="alert"></div>
   </section>
@@ -36,6 +36,7 @@
       <div class="acc-row">
         <button class="acc-btn ghost" id="beta-ticket" type="button">Mint a beta session ticket</button>
         <a class="acc-btn ghost" href="account.html#chat">Open the new chat</a>
+        <a class="acc-btn ghost" href="program.html">Download the latest build</a>
       </div>
       <div class="acc-note" id="beta-ticket-note">A ticket is single-use, expires in 120 seconds, and can only be redeemed by the same Tester account. It exists so an independently deployed Beta host can start a session without sharing the production cookie.</div>
     </div>
@@ -55,12 +56,18 @@
     <div class="acc-card">
       <h2>Environment</h2>
       <dl class="acc-kv" id="beta-kv"></dl>
+      <div class="acc-row" style="margin-top:14px">
+        <a class="acc-btn ghost mini" id="beta-open" href="beta.html" target="_blank" rel="noopener noreferrer">Open this Beta in a new tab ↗</a>
+        <button class="acc-btn ghost mini" id="beta-copy" type="button">Copy Beta URL</button>
+        <span class="acc-msg" id="beta-env-msg" role="status" aria-live="polite"></span>
+      </div>
+      <div class="acc-note">The address above is the one the Worker reports for this deployment. It is not the security boundary — every request to it is re-checked against your session, your confirmed address and your role.</div>
     </div>
   </section>
 </main>
 <footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether · Beta environment</span></footer>
 <script src="public/aether-config.js?v=9"></script>
-<script src="public/checkout.js?v=8"></script>
+<script src="public/checkout.js?v=9"></script>
 <script src="public/aether.js?v=7" defer></script>
 <script>
 (() => {
@@ -68,7 +75,7 @@
   if (!A) { alert("Checkout script failed to load — please refresh."); return; }
   const $ = (id) => document.getElementById(id);
   const esc = (s) => A.esc(s == null ? "" : s);
-  function show(el, on){ el.classList.toggle("acc-hide", !on); }
+  function show(el, on){ if (el) el.classList.toggle("acc-hide", !on); }
   function msg(el, text, kind){ A.ui.setMsg(el, text, kind); }
   function when(ts){
     if (!ts && ts !== 0) return "—";
@@ -87,12 +94,29 @@
     let status;
     try { status = await A.portal.betaStatus(); }
     catch (err) {
+      show($("beta-dash"), false);
       show($("beta-denied"), true);
-      $("beta-denied-why").textContent = err && err.status === 401
-        ? "You are not signed in. Sign in with a Tester account first."
-        : (err && err.message) || "This account cannot open the Beta.";
+      // Three refusals, three fixes. The server names which one this is (code SESSION_REQUIRED,
+      // EMAIL_UNVERIFIED or NOT_TESTER); the wording here only has to tell the tester what to do next.
+      const code = (err && err.code) || (err && err.status === 401 ? "SESSION_REQUIRED" : "");
+      const why = $("beta-denied-why");
+      const note = $("beta-denied-note");
+      if (code === "SESSION_REQUIRED") {
+        why.textContent = "You are not signed in.";
+        note.textContent = "Sign in with the account that was given the Tester role — the role is read from the server on every request, never from this page.";
+      } else if (code === "EMAIL_UNVERIFIED") {
+        why.textContent = "Your email address is not confirmed yet.";
+        note.textContent = "Tester access is already on this account and the role is not the problem. Confirm the address from your account page and the Beta, the build and the chat all unlock — nothing has to be granted again. If the confirmation mail never arrived, use Resend there.";
+      } else if (code === "NOT_TESTER") {
+        why.textContent = "This account is not a Tester yet.";
+        note.textContent = "A normal customer account cannot open the Beta. A Tester flag is granted by an administrator in the admin panel — it can never be set from the browser. If you would like to test, ask through the contact page.";
+      } else {
+        why.textContent = (err && err.message) || "This account cannot open the Beta.";
+        note.textContent = "The Beta status could not be read. This is not about your account — reload the page in a moment and it will be checked again.";
+      }
       return;
     }
+    show($("beta-denied"), false);
     show($("beta-dash"), true);
     $("beta-who").textContent = `${status.user.email} · role ${status.role} · ${status.beta.env} environment`;
     renderFlags(status.flags);
@@ -104,7 +128,20 @@
       ["Features reported", (status.features || []).join(", ") || "—"],
       ["Feedback stored", String(status.feedback_count) + " item(s)"],
     ].map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v == null || v === "" ? "—" : v)}</dd>`).join("");
+    // The controls follow the address the server reported, so "open" and "copy" can never point
+    // somewhere other than the environment described above them.
+    betaUrl = String(status.beta.url || "");
+    const open = $("beta-open");
+    if (open) open.href = betaUrl || "beta.html";
   }
+
+  let betaUrl = "";
+  $("beta-copy").addEventListener("click", async () => {
+    const note = $("beta-env-msg");
+    if (!betaUrl) { msg(note, "No Beta address reported yet.", "err"); return; }
+    try { await navigator.clipboard.writeText(betaUrl); msg(note, "Beta address copied.", "ok"); }
+    catch { msg(note, "Copying needs permission here — select the address above instead.", "err"); }
+  });
 
   $("beta-refresh").addEventListener("click", () => { msg($("beta-msg"), "Refreshing…"); boot().then(() => msg($("beta-msg"), "Updated.", "ok")).catch(e => msg($("beta-msg"), e.message, "err")); });
   $("beta-logout").addEventListener("click", async () => { await A.auth.logout(); location.href = "account.html"; });

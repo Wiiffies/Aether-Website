@@ -95,6 +95,40 @@ for (const key of ["version", "size", "sha", "url", "download", "platform"]) {
 must(!/api\/program\/file/.test(read("public/checkout.js")),
   "public/checkout.js: hardcodes the file endpoint — the path is handed out by the API so it can change without a page deploy");
 
+// ---------- 7. the Tester's own pages stay honest ----------
+// A Tester account reaches the Beta, the build and their own chats, and the three ways that access can
+// be refused (signed out, address unconfirmed, no role) have three different fixes. A page that answers
+// all of them with "testers only" tells two of those people something untrue about their account, and a
+// page that half-renders (the Beta address stuck on "Loading…" because one element went missing) tells
+// a Tester the feature is broken. These are the cheapest possible guards on all of it.
+const account = read("account.html");
+const denied = read("beta.html");
+const admin = read("admin.html");
+for (const [file, body] of [["account.html", account], ["admin.html", admin], ["beta.html", denied]]) {
+  must(/function show\(el, on\)\{ if \(el\)/.test(body),
+    file + ": `show(el, on)` must tolerate a missing element (`if (el)`) — otherwise one renamed id silently aborts the rest of the page's script, which is exactly how the Beta address stayed on \"Loading…\"");
+}
+must(/id="nav-beta"/.test(account) && /<a[^>]*id="nav-beta"[^>]*href="beta.html"/.test(account) || /<a[^>]*href="beta.html"[^>]*id="nav-beta"/.test(account),
+  "account.html: the Beta nav link is gone — a tester has no way back to the Beta area from the nav");
+must(/id="acc-beta-card"/.test(account) && /acc-beta-link/.test(account),
+  "account.html: the Tester card (or its link) is gone");
+must(/href="program.html"[^>]*>Download the build|href="program\.html"/.test(account),
+  "account.html: a Tester is not pointed at the build any more");
+for (const code of ["SESSION_REQUIRED", "EMAIL_UNVERIFIED", "NOT_TESTER"]) {
+  must(denied.includes(code),
+    "beta.html: no handling for the " + code + " refusal — a Tester who only has to confirm their address is told something that is not true about their account");
+  must(worker.includes(code) && /requireTesterOrExplain/.test(worker),
+    "worker/src/index.js: the Tester gate no longer distinguishes " + code + " — every refusal collapses back into one sentence");
+}
+must(/id="beta-copy"/.test(denied) && /navigator\.clipboard\.writeText/.test(denied),
+  "beta.html: no way to copy the Beta address the server reported");
+must(/dl-locked-why/.test(page) && /EMAIL_UNVERIFIED/.test(page),
+  "program.html: a Tester blocked only by an unconfirmed address is not told which one thing to fix");
+must(/data-user-filter/.test(admin) && /Testers only/.test(admin),
+  "admin.html: the Tester filter is gone — an admin can no longer see at a glance who has the role");
+must(/r\.warnings/.test(admin) && /warnings/.test(worker) && /emailVerificationRequired/.test(worker),
+  "admin.html + worker: the grant no longer reports that an unconfirmed address still blocks the Beta and the build");
+
 if (problems.length) {
   console.error("\n" + problems.join("\n"));
   console.error("\nFAIL: the tester download has regressed.");
@@ -102,4 +136,5 @@ if (problems.length) {
 }
 console.log("download page: no location, no ticket in a URL, no build metadata from public config");
 console.log("download server: https-only source, ticket bound to the minting session, checksum verified before sending");
-console.log("OK: the tester download is intact.");
+console.log("tester pages: three refusal reasons answered separately, build linked, Beta address copyable, role grants honest about unconfirmed addresses");
+console.log("OK: the tester download and the tester account pages are intact.");

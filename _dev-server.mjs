@@ -63,6 +63,11 @@ const env = {
   SITE_URL: `http://127.0.0.1:${PORT}`,
   PROMO_CODES: '{"WELCOME10":{"type":"percent","value":10}}',
   ADMIN_EMAILS: adminEmail,
+  // Force the verified-email gate without configuring a mail provider, so the "your address is not
+  // confirmed" paths can be exercised locally:
+  //   REQUIRE_EMAIL_VERIFICATION=true node _dev-server.mjs
+  // Empty means "decide it the way production does" (on when a provider is configured).
+  REQUIRE_EMAIL_VERIFICATION: process.env.REQUIRE_EMAIL_VERIFICATION || "",
   // Program builds (program.html). Passed through from the shell so the tester-only download can be
   // exercised locally:
   //   PROGRAM_URL=http://127.0.0.1:5501/public/aether-logo.png PROGRAM_VERSION=0.1.0-beta.1 \
@@ -89,6 +94,11 @@ const worker = (await import("./worker/src/index.js")).default;
     body: JSON.stringify({ email: adminEmail, password: adminPassword, discord: "localdev" }),
   }), env, {});
   if (res.status !== 200) console.error("Could not create the local admin account:", res.status, await res.text());
+  // The demo admin has no inbox to confirm from, and the Worker (correctly) requires a confirmed admin
+  // address for the sensitive changes it guards - granting Tester, changing the Beta domain. Without
+  // this, forcing the verification gate on locally would lock the only privileged account out of the
+  // panel that the gate is being tested through.
+  env.DB.prepare("UPDATE users SET email_verified = 1 WHERE email = ?").bind(adminEmail).run();
 }
 
 // ---------- static files ----------

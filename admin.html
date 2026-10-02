@@ -1,7 +1,7 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="theme-color" content="#08080a"><title>Aether — Admin</title>
 <meta name="description" content="Aether admin panel — the staff console for orders, conversations, beta flags and settings.">
 <meta name="robots" content="noindex,nofollow"><link rel="icon" href="public/aether-logo.png" type="image/png"><link rel="stylesheet" href="public/aether.css?v=7"><link rel="stylesheet" href="public/pages.css?v=7"><link rel="stylesheet" href="public/portal.css?v=7"><link rel="stylesheet" href="public/ui.css?v=7">
-</head><body><header class="site-header"><a class="brand" href="index.html"><img src="public/aether-logo.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="program.html">Program</a><a href="account.html">Account</a<a href="admin.html" class="active">Admin</a></nav><a class="header-cta" href="account.html">Account <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header><main class="page-main acc-wrap">
+</head><body><header class="site-header"><a class="brand" href="index.html"><img src="public/aether-logo.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="program.html">Program</a><a href="account.html">Account</a><a href="admin.html" class="active">Admin</a></nav><a class="header-cta" href="account.html">Account <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header><main class="page-main acc-wrap">
 <span class="page-kicker">Aether control room</span>
 <h1>Everything.<br><em>In one place.</em></h1>
 <p class="page-lead">Every order, every account and every direct message — the support inbox without leaving the site. Only accounts listed in <code>ADMIN_EMAILS</code> can open this page.</p>
@@ -61,6 +61,10 @@
     <div class="acc-card">
       <h2>Accounts</h2>
       <p class="sub" id="ad-users-sub">Every registered account with its role, email verification and counts. Tester access is granted here and enforced by the Worker; the Admin role itself comes from <code>ADMIN_EMAILS</code> and can never be granted through this panel.</p>
+      <div class="acc-row" id="ad-user-filters" style="margin:0 0 12px">
+        <button class="acc-btn mini" data-user-filter="all" type="button" aria-pressed="true">All accounts</button>
+        <button class="acc-btn ghost mini" data-user-filter="tester" type="button" aria-pressed="false">Testers only</button>
+      </div>
       <div class="acc-scroll"><table class="acc-table plain" id="ad-users"><thead><tr><th>#</th><th>Email</th><th>Discord</th><th>Email verified</th><th>Role</th><th>Joined</th><th>Orders</th><th>Paid</th><th>Msgs</th><th></th></tr></thead><tbody><tr><td colspan="10" class="acc-empty">Loading…</td></tr></tbody></table></div>
     </div>
   </div>
@@ -149,7 +153,7 @@
 </section>
 </main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
 <script src="public/aether-config.js?v=9"></script>
-<script src="public/checkout.js?v=8"></script>
+<script src="public/checkout.js?v=9"></script>
 <script src="public/aether.js?v=7" defer></script>
 <script>
 (() => {
@@ -159,7 +163,7 @@
   const esc = (s) => A.esc(s == null ? "" : s);
   let allOrders = [], openOrder = null;
 
-  function show(el, on){ el.classList.toggle("acc-hide", !on); }
+  function show(el, on){ if (el) el.classList.toggle("acc-hide", !on); }
   function msg(el, text, kind){ el.className = "acc-msg" + (kind ? " " + kind : ""); el.textContent = text || ""; }
   function money(a, c){ return "€" + Number(a || 0).toFixed(0) + " " + String(c || "eur").toUpperCase(); }
   function statusClass(s){
@@ -263,35 +267,80 @@
     const hit = list.find(x => Number(x.user_id) === Number(id));
     return hit ? Number(hit[key]) : 0;
   }
+  // The fetched list is kept in memory, so switching between the two views does not re-ask the API:
+  // the role buttons change the data, and a filter is a view of it rather than a new question.
+  let allUsers = [];
+  let userStats = [];
+  let userMessageStats = [];
+  let userFilter = "all";
+  function isTesterRow(u){ return u.role === "tester" || u.role === "admin"; }
+  function renderUsers(){
+    const body = $("ad-users").querySelector("tbody");
+    const list = userFilter === "tester" ? allUsers.filter(isTesterRow) : allUsers;
+    if (!list.length) {
+      body.innerHTML = `<tr><td colspan="10" class="acc-empty">${userFilter === "tester"
+        ? 'No Tester accounts yet — grant one with “Grant Tester” in the full list.'
+        : "No accounts yet."}</td></tr>`;
+      return;
+    }
+    body.innerHTML = list.map(u => {
+      const isAdminRow = u.role === "admin";
+      const roleBtn = isAdminRow
+        ? '<span class="role-chip admin">config</span>'
+        : (u.role === "tester"
+          ? `<button class="acc-btn ghost mini" data-role="user" data-id="${esc(u.id)}" data-email="${esc(u.email)}" type="button">Remove Tester</button>`
+          : `<button class="acc-btn ghost mini" data-role="tester" data-id="${esc(u.id)}" data-email="${esc(u.email)}" type="button">Grant Tester</button>`);
+      const verified = u.emailVerified ? '<span class="acc-badge paid">verified</span>' : '<span class="acc-badge pending">unverified</span>';
+      // The Worker refuses to delete an administrator, so the button is not offered for one: a control
+      // whose only possible answer is an error is not a control.
+      const removeBtn = isAdminRow
+        ? '<span class="mono" style="font-size:11px;color:#7a7d82" title="Administrators come from ADMIN_EMAILS, so there is nothing to delete here">protected</span>'
+        : `<button class="acc-btn danger mini" data-del="${esc(u.id)}" data-email="${esc(u.email)}" type="button">Remove</button>`;
+      return `<tr>
+      <td class="mono">${esc(u.id)}</td>
+      <td>${esc(u.email)}</td>
+      <td class="mono">${esc(u.discord || "—")}</td>
+      <td>${verified}</td>
+      <td><span class="role-chip ${esc(u.role)}">${esc(u.role)}</span></td>
+      <td class="mono">${esc(when(u.created_at))}</td>
+      <td class="mono">${esc(countFor(userStats, u.id, "orders"))}</td>
+      <td class="mono">${esc(countFor(userStats, u.id, "paid"))}</td>
+      <td class="mono">${esc(countFor(userMessageStats, u.id, "messages"))}</td>
+      <td class="acc-row">${roleBtn}${removeBtn}</td>
+    </tr>`; }).join("");
+    body.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => removeUser(b.dataset.del, b.dataset.email)));
+    body.querySelectorAll("[data-role]").forEach(b => b.addEventListener("click", () => setRole(b.dataset.id, b.dataset.email, b.dataset.role)));
+  }
+  function renderUserFilters(){
+    document.querySelectorAll("[data-user-filter]").forEach(b => {
+      const on = b.dataset.userFilter === userFilter;
+      // The filled button is the active view; the outline is the one you can switch to. No new CSS:
+      // that is exactly what acc-btn and acc-btn ghost already mean.
+      b.className = on ? "acc-btn mini" : "acc-btn ghost mini";
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+  document.querySelectorAll("[data-user-filter]").forEach(b => b.addEventListener("click", () => {
+    userFilter = b.dataset.userFilter === "tester" ? "tester" : "all";
+    renderUserFilters();
+    renderUsers();
+  }));
   async function loadUsers(){
     const body = $("ad-users").querySelector("tbody");
     try {
       const r = await A.admin.users();
-      const users = r.users || [];
-      $("ad-users-sub").textContent = `${users.length} registered account${users.length === 1 ? "" : "s"}. Deleting removes the login and detaches their orders (kept for records).`;
-      if (!users.length) { body.innerHTML = '<tr><td colspan="8" class="acc-empty">No accounts yet.</td></tr>'; return; }
-      body.innerHTML = users.map(u => {
-        const isAdminRow = u.role === "admin";
-        const roleBtn = isAdminRow
-          ? '<span class="role-chip admin">config</span>'
-          : (u.role === "tester"
-            ? `<button class="acc-btn ghost mini" data-role="user" data-id="${esc(u.id)}" data-email="${esc(u.email)}" type="button">Remove Tester</button>`
-            : `<button class="acc-btn ghost mini" data-role="tester" data-id="${esc(u.id)}" data-email="${esc(u.email)}" type="button">Grant Tester</button>`);
-        const verified = u.emailVerified ? '<span class="acc-badge paid">verified</span>' : '<span class="acc-badge pending">unverified</span>';
-        return `<tr>
-        <td class="mono">${esc(u.id)}</td>
-        <td>${esc(u.email)}</td>
-        <td class="mono">${esc(u.discord || "—")}</td>
-        <td>${verified}</td>
-        <td><span class="role-chip ${esc(u.role)}">${esc(u.role)}</span></td>
-        <td class="mono">${esc(when(u.created_at))}</td>
-        <td class="mono">${esc(countFor(r.stats || [], u.id, "orders"))}</td>
-        <td class="mono">${esc(countFor(r.stats || [], u.id, "paid"))}</td>
-        <td class="mono">${esc(countFor(r.messageStats || [], u.id, "messages"))}</td>
-        <td class="acc-row">${roleBtn}<button class="acc-btn danger mini" data-del="${esc(u.id)}" data-email="${esc(u.email)}" type="button">Remove</button></td>
-      </tr>`; }).join("");
-      body.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => removeUser(b.dataset.del, b.dataset.email)));
-      body.querySelectorAll("[data-role]").forEach(b => b.addEventListener("click", () => setRole(b.dataset.id, b.dataset.email, b.dataset.role)));
+      allUsers = r.users || [];
+      userStats = r.stats || [];
+      userMessageStats = r.messageStats || [];
+      const testers = allUsers.filter(isTesterRow).length;
+      // Whether an unconfirmed address actually blocks anything is the server's answer, and the server
+      // is the only thing that knows: say it only when it is true.
+      const waiting = r.emailVerificationRequired ? allUsers.filter(u => isTesterRow(u) && !u.emailVerified).length : 0;
+      $("ad-users-sub").textContent = `${allUsers.length} registered account${allUsers.length === 1 ? "" : "s"} · ${testers} with Tester access`
+        + (waiting ? ` · ${waiting} still to confirm their email before the Beta and the build unlock` : "")
+        + ". Deleting removes the login and detaches their orders (kept for records).";
+      renderUserFilters();
+      renderUsers();
     } catch (err) {
       body.innerHTML = `<tr><td colspan="10" class="acc-empty">${esc(err.message || "Could not load accounts")}</td></tr>`;
     }
@@ -299,11 +348,14 @@
   // Tester permission is stored and enforced server-side; this only asks the API to change it.
   async function setRole(id, email, role){
     const label = role === "tester" ? "Grant Tester access to" : "Remove Tester access from";
-    if (!confirm(`${label} ${email}?\n\nThe Worker enforces the role on every Beta request.`)) return;
+    if (!confirm(`${label} ${email}?\n\nTester access opens the Beta area and the desktop build (server-rechecked on every request).`)) return;
     msg($("ad-msg"), `${label} ${email}…`);
     try {
       const r = await A.admin.setRole(id, role);
-      msg($("ad-msg"), `${email} is now role ${r.role}.`, "ok");
+      // The API answers with what the grant does not yet cover (an unconfirmed address, for example), so
+      // the panel repeats it instead of leaving the admin to find out from a tester who cannot get in.
+      const warning = (r.warnings || []).join(" ");
+      msg($("ad-msg"), `${email} is now role ${r.role}.${warning ? " " + warning : ""}`, warning ? "" : "ok");
       await loadUsers();
       await loadBeta();
     } catch (err) { msg($("ad-msg"), err.message || "Role change failed", "err"); }

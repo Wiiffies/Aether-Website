@@ -46,6 +46,8 @@ jobs:
           node-version: "22"
       - name: Inline JavaScript parses
         run: node _check-inline-js.mjs *.html
+      - name: Page markup is well formed
+        run: node _check-markup.mjs
       - name: Email regex sanity
         run: node _check-email-regex.mjs
       - name: Shared assets + OG metadata
