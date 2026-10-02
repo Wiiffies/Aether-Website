@@ -18,9 +18,12 @@ Legend: `[ ]` = to do, `[x]` = done and verified.
 ## 0. The Worker is deployed (done 2026-10-02)
 
 - [x] **`CLOUDFLARE_API_TOKEN` exists and `deploy-worker.yml` deployed `aether-api`** — the Worker
-      code is **live** (deployment `a4665481-…`, version `d4d59a60`, 2026-10-02 12:55 UTC, from
-      `worker/src/index.js` at 169 580 bytes / `166a1264462292748b4c6e5865cd15b03360fd035f1bb6b6acbb108aadeeee59`).
-      `/api/program` went from 404 to 403 `SESSION_REQUIRED`, which is the new build answering.
+      code is **live** (latest: deployment `27774d20-…`, version `10cb9483`, 2026-10-02 19:26 UTC,
+      from `worker/src/index.js` at 174 069 bytes /
+      `39e3f2965a7b16534215f1106ca3adf950a9e353ddbdb714102f042337f81a2c`; an earlier build the same
+      day was `a4665481-…` / `166a1264…`).
+      `/api/program` went from 404 to 403 `SESSION_REQUIRED`, and `GET /api/ipn` now answers
+      405 + `Allow: POST` instead of a misleading 404 — both are the new build answering.
 
   **Two traps this step taught us** (both now handled, both worth knowing):
 
