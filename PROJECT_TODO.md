@@ -283,3 +283,13 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
 - [x] `checkout.js` `?v=10` → `?v=11` on all 13 pages that load it.
 - [x] 334 Worker checks (was 321: 13 new for the mail shell and the checkout gate)
 - [ ] Consider re-linking `program.html` in the nav once the project is public and a build exists.
+- [x] The pay modal no longer puts the wrong answer on screen: while the session check is in flight
+      it shows a neutral "Checking your session…" (button disabled) instead of "Sign in to buy", and a
+      single miss is not final — the sign-in card shows immediately and two quiet retries upgrade the
+      modal the moment the server recognizes the session. `?v=11` → `?v=12`.
+- [x] **Deploys are visible immediately now.** GitHub Pages serves HTML with `Cache-Control:
+      max-age=600`, so a browser could keep the pre-deploy page — and its old `checkout.js` — for ten
+      minutes, which is what made a correct fix look broken. A Cloudflare **Response Header Transform
+      Rule** sets `Cache-Control: no-cache` on `/` and `*.html`, so the HTML always revalidates (304
+      off `last-modified`) while the versioned assets keep caching. Same mechanism as the earlier
+      `checkout.js?v=6` incident, now closed for good.

@@ -410,12 +410,37 @@
       confirmBtn.style.opacity = ".6";
       confirmBtn.style.cursor = "pointer";
     }
+    // An empty cache is NOT "signed out". The session cookie is HttpOnly, so a fresh tab (or a
+    // reopened browser) carries no trace of a session in JavaScript, and only the server can say who
+    // is signed in. So the wait gets its own state: rendering "Sign in to buy" for the few hundred
+    // milliseconds before /api/me answers put the wrong answer on screen, which is exactly how a
+    // signed-in customer was told to sign in to a site they were already on.
+    function useChecking(){
+      accountMode = false;
+      needsVerify = false;
+      resolvedAccountEmail = "";
+      acctRow.style.display = "none";
+      verifyNotice.style.display = "none";
+      accountNotice.style.display = "none";
+      emailWrap.style.display = "none";
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = "Checking your session\u2026";
+      confirmBtn.style.opacity = ".5";
+      confirmBtn.style.cursor = "default";
+    }
+    // One answer is not enough either: a dropped request, a cold start or a momentary 5xx must not
+    // turn into a wrong sentence. The first miss shows the sign-in card (honest and immediate) and
+    // two quiet retries follow, upgrading the modal the moment the server does know the session.
+    function detectAccount(attempts, stillChecking){
+      const miss = ()=>{
+        if(accountMode || !overlay.isConnected) return;
+        if(stillChecking) useAccountRequired();
+        if(attempts > 1) setTimeout(()=> detectAccount(attempts - 1, false), 1500);
+      };
+      loadAccount(false).then(a=>{ if(accountMode || !overlay.isConnected) return; if(a) useAccount(a); else miss(); }).catch(miss);
+    }
     acctRow.querySelector("[data-acct-change]").addEventListener("click", ()=>{ location.href = accountUrl(); });
-    if(!useAccount(account())) useAccountRequired();
-    // The session cookie is HttpOnly, so a signed-in visitor can have no token in this tab (a new
-    // tab, or a browser reopened after the tab closed). Only the server can tell -- and skipping the
-    // question is exactly how a signed-in customer was told to sign in to a site they were on.
-    loadAccount(false).then(a=>{ if(a && !accountMode) useAccount(a); }).catch(()=>{});
+    if(!useAccount(account())){ useChecking(); detectAccount(3, true); }
     let payCurrency = (opts.defaultCoin||"").toLowerCase().trim();
     function setCoin(c){
       payCurrency=c;
