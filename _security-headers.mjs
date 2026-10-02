@@ -5,7 +5,11 @@
 //   1. The edge — a Cloudflare **Response Header Transform** rule on the zone (phase
 //      `http_response_headers_transform`) sets exactly these values on every HTML/asset response for
 //      get-aether.de and www, and deliberately skips `/api/*`, where the Worker sets its own
-//      (stricter) headers.
+//      (stricter) headers. **A second rule in the same phase sets `Cache-Control: no-cache` on HTML
+//      only** (never on the versioned assets): GitHub Pages pins its own `max-age=600` on HTML, which
+//      hid a deploy from returning visitors for ten minutes and made a correct fix look broken. It
+//      is deliberately separate from this file — this file is the security policy, that rule is
+//      about deploy visibility — but the two must not be collapsed into one.
 //   2. `_dev-server.mjs` — so the policy can be exercised locally before it is ever live, instead of
 //      discovering a broken page after deploying it.
 //
