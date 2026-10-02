@@ -57,6 +57,8 @@ jobs:
         run: node _check-program.mjs
       - name: Page markup is well formed
         run: node _check-markup.mjs
+      - name: A deploy from wrangler.toml changes code only
+        run: node _check-deploy-config.mjs
       - name: Pages stay loadable under the deployed CSP
         run: node _check-headers.mjs
       - name: Skip notice when the token is absent

@@ -3,13 +3,25 @@ main = "src/index.js"
 compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Routes (live): the API is served from the same origin as the site, so the session cookie stays
-# first-party. `api.get-aether.de/*` is kept for legacy links and the NOWPayments IPN callback.
+# A deploy sets whatever this file declares, and `--keep-vars` only stops it from *deleting* the rest.
+# So a variable that lives in the dashboard must NOT appear here with an empty value: deploying
+# `ADMIN_EMAIL = ""` over the live "alex.real.apple@gmail.com" would leave the Worker with no admin
+# at all (every /api/admin/* route answers 403) until someone noticed. `keep_vars = true` makes any
+# deploy keep the dashboard's values, which is what we want for the three that are set there.
+keep_vars = true
+
+# Routes: the API is served from the same origin as the site, so the session cookie stays first-party.
+# These two are what the zone actually has (checked 2026-10-02). A deploy sets the routes this file
+# declares, so a pattern that is not meant to change today must not be listed here.
 routes = [
   { pattern = "get-aether.de/api/*", zone_name = "get-aether.de" },
   { pattern = "www.get-aether.de/api/*", zone_name = "get-aether.de" },
-  { pattern = "api.get-aether.de/*", zone_name = "get-aether.de" },
 ]
+# NOT live, and deliberately not deployed by accident: this host is where the NOWPayments dashboard's
+# IPN callback (`https://api.get-aether.de/api/ipn`) and any legacy links point, but nothing routes it
+# to the Worker yet, so those requests reach no origin. Add this line as a deliberate, separate step
+# (it changes live routing), then verify an IPN with the signature check in /api/ipn:
+#   { pattern = "api.get-aether.de/*", zone_name = "get-aether.de" },
 
 # D1 — authenticated orders + per-order chat (orders/messages stay here, email+Discord still fire)
 [[d1_databases]]
@@ -36,13 +48,16 @@ CANCEL_URL = "https://get-aether.de/payment-cancel.html"
 # Set via Dashboard → Workers → aether-api → Settings → Variables → PROMO_CODES, or as a Worker Secret.
 # Example: {"WELCOME10":{"type":"percent","value":10},"SAVE5":{"type":"fixed","value":5}}
 # Until set, /api/promo returns {valid:false}.
-PROMO_CODES = ""
+# Also dashboard-only, for the same reason as the admin addresses above:
+# PROMO_CODES = '{"CODE":{"type":"percent","value":10}}'
 
 # Admin accounts — the ONLY source of admin rights (never a database column, never the frontend).
 # `ADMIN_EMAIL` takes a single address, `ADMIN_EMAILS` a comma-separated list; both are read and
 # unioned. Empty = nobody is admin (every /api/admin/* route returns 403).
-ADMIN_EMAIL = ""
-ADMIN_EMAILS = ""
+# Deliberately NOT declared here: this file is public and an empty declaration would overwrite the live
+# value on the next deploy. Set them in Dashboard -> Workers -> aether-api -> Settings -> Variables.
+# ADMIN_EMAIL  = "<the admin address>"
+# ADMIN_EMAILS = "<comma-separated list>"
 
 # Optional behaviour switches — all have safe code defaults, all can also be set in the dashboard.
 # SITE_URL = "https://get-aether.de"                 # links in verification/reset emails
