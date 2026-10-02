@@ -7,6 +7,10 @@ name: Deploy aether-api worker
 #
 # Repo configuration this workflow expects (Settings → Secrets and variables → Actions):
 #   secret   CLOUDFLARE_API_TOKEN   scoped token: Workers Scripts:Edit + Workers KV Storage:Edit + D1:Edit
+#            A misspelled copy (`CLOUDFLARE_API_TOKE`, one character short) is also accepted below, because
+#            GitHub secrets are write-only and cannot be renamed: the correctly spelled name always wins,
+#            and a warning is printed whenever the fallback is what actually deployed. Delete the fallback
+#            line once the real name exists.
 #   variable CLOUDFLARE_ACCOUNT_ID  the account the worker lives in (not a secret)
 #   secrets  RESEND_API_KEY, TURNSTILE_SECRET, NOWPAYMENTS_API_KEY,
 #            NOWPAYMENTS_IPN_SECRET, NOWPAYMENTS_IPN_SECRET_2, DISCORD_WEBHOOK_URL
@@ -35,6 +39,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      # Set only when the correctly spelled secret is missing and the misspelled one is present.
+      CLOUDFLARE_API_TOKEN_TYPO: ${{ secrets.CLOUDFLARE_API_TOKEN == '' && secrets.CLOUDFLARE_API_TOKE || '' }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
@@ -54,13 +60,17 @@ jobs:
       - name: Pages stay loadable under the deployed CSP
         run: node _check-headers.mjs
       - name: Skip notice when the token is absent
-        if: ${{ env.CLOUDFLARE_API_TOKEN == '' }}
+        if: ${{ env.CLOUDFLARE_API_TOKEN == '' && env.CLOUDFLARE_API_TOKEN_TYPO == '' }}
         run: echo "::notice::CLOUDFLARE_API_TOKEN is not configured - skipping the worker deploy (checks still ran)."
+      - name: Warn when the misspelled secret is doing the deploying
+        if: ${{ env.CLOUDFLARE_API_TOKEN_TYPO != '' }}
+        run: |
+          echo "::warning::Deploying with the misspelled secret CLOUDFLARE_API_TOKE. Recreate the token as CLOUDFLARE_API_TOKEN in Settings -> Secrets and variables -> Actions, then delete the fallback from this workflow: GitHub secrets cannot be renamed, and only the correctly spelled name is documented anywhere else."
       - name: Deploy worker
-        if: ${{ env.CLOUDFLARE_API_TOKEN != '' }}
+        if: ${{ env.CLOUDFLARE_API_TOKEN != '' || env.CLOUDFLARE_API_TOKEN_TYPO != '' }}
         uses: cloudflare/wrangler-action@v3
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_API_TOKE }}
           accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: worker
           command: deploy --name ${{ inputs.environment || 'aether-api' }} --keep-vars
