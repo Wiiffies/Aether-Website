@@ -17,7 +17,7 @@ this directory.
 | `RESEND_API_KEY` | secret | outgoing mail via Resend — the fallback transport; when no transport exists every response reports `email:false` and the verification gate stands down honestly |
 | `EMAIL` | binding (optional) | Cloudflare Email Sending, preferred over Resend: no secret at all. Attach with `{"type":"send_email","name":"EMAIL"}` in the script metadata once `get-aether.de` is onboarded in Email Service; `/api/health` then reports `emailProvider:"cloudflare"` |
 | `NOWPAYMENTS_API_KEY` | secret | Payment API (never the Invoice API) |
-| `NOWPAYMENTS_IPN_SECRET`, `NOWPAYMENTS_IPN_SECRET_2` | secret | both are checked against the `x-nowpayments-sig` HMAC |
+| `NOWPAYMENTS_IPN_SECRET`, `NOWPAYMENTS_IPN_SECRET_2` | secret | both are checked against the `x-nowpayments-sig` HMAC (recursively sorted keys, compact JSON, HMAC-SHA512 — the vendor's algorithm; trailing whitespace is trimmed). The dashboard secret must match; `GET /api/admin/ipn` reports the last accepted/rejected callback without ever printing a secret |
 | `DISCORD_WEBHOOK_URL` | secret | order/chat notifications |
 | `TURNSTILE_SECRET` | secret | captcha on register/forgot/reset; **set 2026-10-01** — the site key in `public/aether-config.js` must be live before this exists |
 | `CONTACT_TO`, `CONTACT_FROM`, `SUCCESS_URL`, `CANCEL_URL`, `SITE_URL` | vars | mail routing and link building |
@@ -41,7 +41,7 @@ this directory.
 ## Test and run locally
 
 ```bash
-node ../_test-worker.mjs     # 209 checks against an in-memory D1 stub — run before every deploy
+node ../_test-worker.mjs     # 301 checks against an in-memory D1 stub — run before every deploy
 node ../_dev-server.mjs      # static site + this Worker on http://127.0.0.1:5501
 ```
 

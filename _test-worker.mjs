@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+import { createHmac } from "node:crypto";
 
 // ---------- D1-compatible stub over node:sqlite ----------
 function norm(a) { return a.map(v => (v === undefined ? null : typeof v === "boolean" ? (v ? 1 : 0) : v)); }
@@ -55,6 +56,7 @@ async function call(method, path, opt = {}) {
   if (opt.body !== undefined) headers["content-type"] = "application/json";
   if (opt.token) headers.authorization = "Bearer " + opt.token;
   if (opt.cookie) headers.cookie = opt.cookie;
+  if (opt.headers) Object.assign(headers, opt.headers);
   if (opt.contentLength) headers["content-length"] = String(opt.contentLength);
   const res = await worker.fetch(new Request((opt.host || "https://api.get-aether.de") + path, {
     method, headers, body: opt.body === undefined ? undefined : JSON.stringify(opt.body),
@@ -923,6 +925,105 @@ check("and their purchases", r.status === 200, r.json);
 delete env.RESEND_API_KEY;
 r = await call("GET", "/api/orders", { token: unverifiedToken });
 check("with no mail provider the gate stands down (no honest lockout)", r.status === 200, r.json);
+
+console.log("\n--- NOWPayments IPN: route, signature, status, notifications ---");
+// The callback is POST-only, and the vendor algorithm is the reference here: recursively sorted keys,
+// compact JSON, HMAC-SHA512 with the IPN secret - implemented independently of the worker, so a
+// future change that drifts from the documented scheme fails here instead of in production.
+const npSort = (v) => Array.isArray(v)
+  ? v.map(npSort)
+  : (v && typeof v === "object" ? Object.keys(v).sort().reduce((o, k) => { o[k] = npSort(v[k]); return o; }, {}) : v);
+const npSig = (payload, secret) => createHmac("sha512", secret).update(JSON.stringify(npSort(payload))).digest("hex");
+
+r = await call("GET", "/api/ipn");
+check("GET on the IPN callback explains the method instead of reading as a dead route",
+  r.status === 405 && r.headers.get("allow") === "POST" && r.json.ipnCallbackUrl === "https://api.get-aether.de/api/ipn", { status: r.status, allow: r.headers.get("allow"), body: r.json });
+check("the method answer never echoes a secret", !/secret/i.test(JSON.stringify(r.json)), r.json);
+
+const ipnOrderId = "aether_ipn_test_order";
+env.DB.db.prepare("INSERT INTO orders (order_id, purchase_id, payment_id, amount, currency, type, status, email, user_id) VALUES (?,?,?,?,?,?,?,?,?)")
+  .run(ipnOrderId, "AETH-IPN-TEST-1", "555000111", 42, "eur", "discord_bot", "waiting", "test@example.com", 1);
+const ipnDbStatus = () => { const row = env.DB.db.prepare("SELECT status FROM orders WHERE order_id = ?").get(ipnOrderId); return row ? row.status : null; };
+const ipnPayload = (status, extra) => Object.assign({
+  payment_id: 555000111, payment_status: status, pay_address: "bc1qprobeexampleaddress",
+  price_amount: 42, price_currency: "eur", pay_amount: 0.0005, actually_paid: 0,
+  pay_currency: "btc", order_id: ipnOrderId, order_description: "Aether order",
+  purchase_id: "AETH-IPN-TEST-1", outcome_amount: 42, outcome_currency: "eur",
+  customer_email: "test@example.com", created_at: "2026-10-02T10:00:00.000Z", updated_at: "2026-10-02T10:00:30.000Z",
+}, extra || {});
+
+const ipnMails = [];
+const ipnDiscordPosts = [];
+const realFetchIpn = globalThis.fetch;
+env.EMAIL = { send: async (m) => { ipnMails.push(m); return { messageId: "ipn-" + ipnMails.length }; } };
+env.DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/7/ipn-token";
+globalThis.fetch = async (url, init) => { const u = String(url); if (u.includes("discord.com/api/webhooks")) ipnDiscordPosts.push(init && init.body ? String(init.body) : ""); return { ok: true, status: 200, text: async () => "{}" }; };
+const customerMails = () => ipnMails.filter(m => (Array.isArray(m.to) ? m.to : [m.to]).includes("test@example.com") && /Payment received/.test(String(m.subject || "")));
+env.NOWPAYMENTS_IPN_SECRET = "ipn-secret-test";
+env.NOWPAYMENTS_IPN_SECRET_2 = "ipn-secret-test-2";
+
+r = await call("POST", "/api/ipn", { body: ipnPayload("confirmed") });
+check("POST without a signature is rejected while a secret is set", r.status === 401 && JSON.stringify(r.json) === '{"error":"Bad signature"}', r.json);
+r = await call("POST", "/api/ipn", { body: ipnPayload("confirmed"), headers: { "x-nowpayments-sig": "deadbeef" } });
+check("a wrong signature is rejected", r.status === 401, r.json);
+const tamperedSigned = ipnPayload("confirmed");
+const tamperedBody = ipnPayload("confirmed", { price_amount: 99999 });
+r = await call("POST", "/api/ipn", { body: tamperedBody, headers: { "x-nowpayments-sig": npSig(tamperedSigned, "ipn-secret-test") } });
+check("a payload edited after signing is rejected", r.status === 401, r.json);
+check("nothing was written for rejected callbacks", ipnDbStatus() === "waiting" && ipnMails.length === 0 && ipnDiscordPosts.length === 0, { status: ipnDbStatus(), mails: ipnMails.length, discord: ipnDiscordPosts.length });
+
+const waiting = ipnPayload("waiting");
+r = await call("POST", "/api/ipn", { body: waiting, origin: "https://evil.example", headers: { "x-nowpayments-sig": npSig(waiting, "ipn-secret-test-2") } });
+check("a server-to-server callback is exempt from the browser-origin guard (and the second secret covers rotation)",
+  r.status === 200 && r.json.ok === true && r.json.status === "waiting", r.json);
+check("a non-paid callback notifies ops but never mails the customer", ipnDiscordPosts.length === 1 && customerMails().length === 0 && ipnDbStatus() === "waiting", { discord: ipnDiscordPosts.length, customer: customerMails().length, status: ipnDbStatus() });
+
+const confirmed = ipnPayload("confirmed");
+r = await call("POST", "/api/ipn", { body: confirmed, origin: "", headers: { "x-nowpayments-sig": npSig(confirmed, "ipn-secret-test") } });
+check("a correctly signed confirmation is accepted, answering only ok + status", r.status === 200 && JSON.stringify(r.json) === '{"ok":true,"status":"confirmed"}', r.json);
+check("the order status moves to paid", ipnDbStatus() === "paid", ipnDbStatus());
+check("the customer gets exactly one receipt", customerMails().length === 1 && customerMails()[0].to[0] === "test@example.com", customerMails().length);
+check("ops is notified of the same callback (email + Discord)",
+  ipnMails.some(m => (Array.isArray(m.to) ? m.to : [m.to]).includes("questions@get-aether.de")) && ipnDiscordPosts.length === 2, { mails: ipnMails.length, discord: ipnDiscordPosts.length });
+
+r = await call("POST", "/api/ipn", { body: confirmed, headers: { "x-nowpayments-sig": npSig(confirmed, "ipn-secret-test") } });
+check("a replayed callback is accepted but does not mail a second receipt", r.status === 200 && customerMails().length === 1, { status: r.status, customer: customerMails().length });
+const finished = ipnPayload("finished", { actually_paid: 0.0005 });
+r = await call("POST", "/api/ipn", { body: finished, headers: { "x-nowpayments-sig": npSig(finished, "ipn-secret-test") } });
+check("the next status (finished) also refuses to resend the receipt", r.status === 200 && customerMails().length === 1 && ipnDbStatus() === "paid", { customer: customerMails().length, status: ipnDbStatus() });
+
+const partial = ipnPayload("partially_paid", { actually_paid: 10 });
+r = await call("POST", "/api/ipn", { body: partial, headers: { "x-nowpayments-sig": npSig(partial, "ipn-secret-test") } });
+check("partially_paid is recorded as its own status", r.status === 200 && ipnDbStatus() === "partially_paid", ipnDbStatus());
+const failed = ipnPayload("failed");
+r = await call("POST", "/api/ipn", { body: failed, headers: { "x-nowpayments-sig": npSig(failed, "ipn-secret-test") } });
+check("failed is recorded as failed", r.status === 200 && ipnDbStatus() === "failed", ipnDbStatus());
+
+const unicodePayload = ipnPayload("finished", { order_description: "Aether \u2014 caf\u00e9 \uD83C\uDF89" });
+r = await call("POST", "/api/ipn", { body: unicodePayload, headers: { "x-nowpayments-sig": npSig(unicodePayload, "ipn-secret-test") } });
+check("a payload with non-ASCII text verifies with the documented Node algorithm (raw JSON.stringify)", r.status === 200, r.json);
+
+r = await call("GET", "/api/admin/ipn", { token: freshSession });
+check("a non-admin cannot read the IPN diagnostics -> 403", r.status === 403, r.json);
+r = await call("GET", "/api/admin/ipn", { token: adminToken });
+check("the admin view reports the configured secrets and the last accepted callback",
+  r.status === 200 && r.json.secretConfigured === true && r.json.secret2Configured === true && r.json.lastAccepted && r.json.lastAccepted.status === "finished" && r.json.lastAccepted.signed === true, r.json);
+check("the admin view reports the last rejected signature", r.status === 200 && !!r.json.lastRejected && r.json.lastRejected.reason === "bad_signature", r.json ? r.json.lastRejected : null);
+check("the diagnostics never contain the secret itself", !JSON.stringify(r.json).includes("ipn-secret-test"), JSON.stringify(r.json).slice(0, 200));
+
+env.NOWPAYMENTS_IPN_SECRET = "  ipn-secret-test\n";
+const whitespace = ipnPayload("waiting");
+r = await call("POST", "/api/ipn", { body: whitespace, headers: { "x-nowpayments-sig": npSig(whitespace, "ipn-secret-test") } });
+check("a secret stored with trailing whitespace still verifies (dashboard paste)", r.status === 200, r.json);
+
+delete env.NOWPAYMENTS_IPN_SECRET;
+delete env.NOWPAYMENTS_IPN_SECRET_2;
+const unsigned = ipnPayload("waiting");
+r = await call("POST", "/api/ipn", { body: unsigned });
+check("with no secret configured the endpoint still answers 200 (documented fallback; health says ipnSignature:false)", r.status === 200 && r.json.ok === true, r.json);
+globalThis.fetch = realFetchIpn;
+delete env.EMAIL;
+delete env.DISCORD_WEBHOOK_URL;
 
 console.log("\n--- misc ---");
 r = await call("GET", "/api/nope");

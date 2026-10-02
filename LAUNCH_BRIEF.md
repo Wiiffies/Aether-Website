@@ -223,7 +223,9 @@ panel and `/beta.html`. The notice itself says so and links to your account — 
 ## 8. The prompt to paste into ChatGPT
 
 Copy everything inside the block. It is written to be pasted cold into a new ChatGPT chat, so it
-carries its own context and tells the assistant to ask you for the values it cannot know.
+carries its own context and tells the assistant to ask you for the values it cannot know. It was
+refreshed on 2026-10-02, after the Worker went live, so it no longer asks anyone to deploy the
+Worker from scratch — it starts from what is actually true today.
 
 ```text
 You are helping me finish the production setup for my website. I am not a deep
@@ -243,9 +245,17 @@ THE PROJECT
 - Cloudflare zone get-aether.de id: 74675dbf0eec6c0cba4b9674a9cd7431
 - Payments: NOWPayments. Sign-in: email + password, sessions in a __Host- cookie,
   Turnstile on signup. Email sending: not configured yet.
-- The Worker is deployed by GitHub Actions (.github/workflows/deploy-worker.yml),
-  which needs the repository secret CLOUDFLARE_API_TOKEN. That secret does not exist
-  yet, so the deploy step is skipped and the Worker is still running an older build.
+- The Worker is deployed by GitHub Actions
+  (.github/workflows/deploy-worker.yml) and it IS live as of 2026-10-02 12:55 UTC. Proof:
+  https://get-aether.de/api/health returns a JSON object with "ok":true, and
+  https://get-aether.de/api/program returns 403 for an anonymous request (it used to
+  return 404 on the older build). The repository secret is currently misspelled
+  CLOUDFLARE_API_TOKE and the workflow carries a temporary fallback for that; item 3 below
+  fixes the spelling.
+- Watch out for the account switcher: I have a second, unrelated Cloudflare account. My
+  first API token was created in it and every call failed with "Authentication error
+  [code: 10000]" until I recreated the token in the account id above. If a dashboard screen
+  does not match that id, that is almost certainly why.
 - The zone is already hardened and the site is in SOFT maintenance mode: HSTS (1 year,
   includeSubDomains, nosniff), a Content-Security-Policy plus X-Frame-Options,
   X-Content-Type-Options, Referrer-Policy, Permissions-Policy and COOP applied to every
@@ -258,40 +268,54 @@ THE PROJECT
   HARD = everything public closed). SOFT is the one that is on.
 
 WHAT I WANT TO FINISH, IN THIS ORDER
-1. Create the CLOUDFLARE_API_TOKEN (Workers Scripts:Edit, Workers KV Storage:Edit,
-   D1:Edit, account-scoped) and add it as the GitHub repo secret, then run the
-   "Deploy aether-api worker" workflow and prove the new code is live by checking
-   https://get-aether.de/api/health (expect a JSON object with "ok":true) and
-   https://get-aether.de/api/program (expect HTTP 403 for an anonymous request; a
-   404 means the old build is still live).
-2. Make email sending work for account verification and password reset. Two options:
+1. Make email sending work for account verification and password reset. Two options:
    Cloudflare Email Sending (attach a Send Email binding named EMAIL to the Worker)
    or Resend (secret RESEND_API_KEY). Tell me which one you recommend for a small
    project on Cloudflare's free tier and walk me through it. Success = /api/health
-   reports "email":true and "resetDelivery":"email".
-3. Publish a desktop-app beta build for a private tester group: host the file
+   reports "email":true and "resetDelivery":"email". Right now resets are only
+   delivered over Discord, so tell me who can and cannot recover an account until
+   this is on, and whether turning it on blocks anyone from signing in.
+2. Publish a desktop-app beta build for a private tester group: host the file
    somewhere private (an R2 bucket with no public access is fine), then set these
    Worker variables: PROGRAM_URL (must be https), PROGRAM_VERSION, PROGRAM_PLATFORM,
    PROGRAM_SIZE, PROGRAM_SHA256 (64 lowercase hex characters, the real checksum of
-   the file), PROGRAM_NAME. Success = signing in as an account with the Tester role
-   at https://get-aether.de/program.html shows the build and the download works, and
-   an anonymous request to /api/program still gets 403.
+   that exact file), and optionally PROGRAM_NAME and PROGRAM_NOTES. Success = signing
+   in as an account with the Tester role at https://get-aether.de/program.html shows
+   the build and the download works, and an anonymous request to /api/program still
+   gets 403. Tell me how to compute that checksum on Windows.
+3. Fix the misspelled GitHub secret: recreate my Cloudflare API token in the correct
+   Cloudflare account (the id above) with Workers Scripts:Edit, D1:Edit and
+   account-scoped permissions, save it in GitHub as CLOUDFLARE_API_TOKEN, delete the
+   old CLOUDFLARE_API_TOKE, and prove the "Deploy aether-api worker" workflow still
+   runs green afterwards.
 4. Set up a NOWPayments donation link and put the URL into donateUrl in
-   public/aether-config.js.
-5. Finish DNSSEC. Cloudflare already has it enabled and reports this DS record for my
+   public/aether-config.js so the donate page stops saying "not configured yet".
+5. Sanity-check that a real purchase completes end to end. The callback URL
+   https://api.get-aether.de/api/ipn is already correct: that hostname is a Worker
+   custom domain on aether-api, so it reaches the Worker even though wrangler.toml
+   only declares the get-aether.de/api/* and www.get-aether.de/api/* routes. POST
+   /api/ipn is live and rejects a bad signature with 401; GET now answers 405 with
+   allow: POST instead of a misleading 404. The one thing I cannot check for myself:
+   the IPN secret in the NOWPayments dashboard must equal the Worker secret
+   NOWPAYMENTS_IPN_SECRET (GitHub holds no copy, so the CI sync never overwrites it).
+   Walk me through one careful test purchase on the cheapest item, and show me how to
+   read GET /api/admin/ipn afterwards to confirm the callback verified
+   (lastAccepted.signed = true) or to diagnose a mismatch (lastRejected).
+6. Finish DNSSEC. Cloudflare already has it enabled and reports this DS record for my
    domain:
    get-aether.de. 3600 IN DS 2371 13 2 031AAD25DC73AEB6B8889DD733B7F4807785B40C9DBD04C188408438C5CFB6ED
    Walk me through publishing it at my registrar (I will tell you which one), what to
    paste in each field (key tag 2371, algorithm 13, digest type 2, and the digest), how to
    verify it, and what to do immediately if the site stops resolving after I add it.
-6. Explain my DMARC setup: _dmarc currently reads
+7. Explain my DMARC setup: _dmarc currently reads
    "v=DMARC1; p=none; rua=mailto:questions@get-aether.de; fo=1". Tell me how to read the
    reports it sends to questions@get-aether.de, and give me the exact order of steps to
    move it to p=quarantine and then p=reject without breaking my own password-reset and
    verification emails.
-7. Show me how to switch between the two maintenance rules on Cloudflare (zone -> Rules
+8. Show me how to switch between the two maintenance rules on Cloudflare (zone -> Rules
    -> Overview -> "Maintenance (SOFT)..." and "Maintenance (HARD)..."), how to turn both
-   off, and how to purge the cache afterwards so nobody keeps seeing the notice.
+   off, and how to purge the cache afterwards so nobody keeps seeing the notice. Then tell
+   me when it is safe to turn maintenance off, given everything above.
 
 HOW I WANT TO WORK
 - One step at a time. Wait for me to paste the result before moving on.

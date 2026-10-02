@@ -275,6 +275,33 @@ state an admin creates when they grant Tester by hand to a fresh signup.
 `public/checkout.js` passes the server's `code` through on an error (`err.code`, `?v=9`), so a page can
 distinguish those cases without pattern-matching English.
 
+### 3e. Added 2026-10-02: the IPN callback is reachable, and it can say whether it verified
+
+`GET /api/ipn` used to fall through to the generic 404, which made a correctly configured
+NOWPayments callback look like a missing route. The callback is **POST-only by design**; it is now
+answered with `405` and `allow: POST` plus the callback URL in the body, so a browser probe explains
+itself.
+
+The callback hostname was never a routing problem: `api.get-aether.de` is a **Worker custom domain**
+on `aether-api`, so it reaches the Worker without appearing in `wrangler.toml` (which is why the two
+declared `get-aether.de/api/*` routes are still the only routes, and why a code deploy cannot change
+how callbacks are routed).
+
+Signature verification keeps the vendor's documented scheme — recursively sorted keys, compact JSON,
+HMAC-SHA512 over the sorted body, compared to `x-nowpayments-sig` — with both configured secrets
+still accepted for rotation. The secret is now `trim()`ed before use (NOWPayments' own PHP sample
+does the same), because a secret pasted with a trailing newline would otherwise reject every
+callback silently.
+
+Two behaviour changes worth stating: the **customer receipt is tied to the transition into `paid`**,
+so NOWPayments' per-status notifications (`confirmed` → `sending` → `finished`) and its retries no
+longer mail the same receipt several times (the ops email and Discord still fire for every
+callback); and each accepted/rejected callback is recorded in the D1 `settings` table
+(`ipn_last_ok`, `ipn_last_bad`). `GET /api/admin/ipn` (admin-only) exposes those records with
+booleans and timestamps only — it reports *whether* a secret is configured, never its value, and
+never the raw payload. Rejected attempts are throttled to one stored row per minute, so an
+unauthenticated junk POST cannot turn every 401 into a D1 write.
+
 ## 4. Still to do manually in the Cloudflare dashboard
 
 1. **Turnstile — done 2026-10-01.** The widget "Aether signup + password reset (get-aether.de)"

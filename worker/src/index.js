@@ -3,6 +3,8 @@
  * - POST /api/order   -> validates + emails you + Discord webhook + auto-replies
  * - POST /api/invoice -> creates NOWPayments Payment + pending email + beautiful Discord, returns payAddress
  * - POST /api/ipn     -> NOWPayments IPN callback, verifies HMAC-512, emails + Discord
+ * - GET  /api/ipn     -> 405 + the exact POST callback URL (a browser probe is not a dead route)
+ * - GET  /api/admin/ipn -> admin-only: last accepted/rejected IPN + whether a secret is set
  * - GET  /api/health  -> {ok,resend,nowpayments,ipnSecret,discord,db}
  * - GET  /api/promo?code=&amount= -> validate promo (PROMO_CODES env JSON)
  * - GET  /api/payment/:paymentId  -> verify payment via NOWPayments (so success can't be faked)
@@ -288,9 +290,12 @@ function sortedStringify(obj){
   return `{${keys.map(k=>`${JSON.stringify(k)}:${sortedStringify(obj[k])}`).join(",")}}`;
 }
 async function verifyIpnSignature(payloadObj, signature, secret){
-  if(!secret||!signature) return false;
+  // The secret is pasted from the NOWPayments dashboard, so a trailing newline or space is a real
+  // (and silent) way to make every signature fail; NOWPayments' own PHP sample trims it as well.
+  const key = String(secret == null ? "" : secret).trim();
+  if(!key||!signature) return false;
   const msg=sortedStringify(payloadObj);
-  const expected=await hmacSha512(secret, msg);
+  const expected=await hmacSha512(key, msg);
   return signature.toLowerCase()===expected.toLowerCase();
 }
 
@@ -1450,6 +1455,30 @@ async function handleAdminAudit(request, env){
   return json({ ok:true, audit: rows.results || [] }, 200, env, request);
 }
 
+// The IPN health view reads only what handleIpn already stored: whether callbacks arrive, whether
+// their HMAC verified, and when. It reports whether a secret is configured - never its value - so
+// a dashboard/Worker secret drift can be spotted before a real payment does.
+async function handleAdminIpn(request, env){
+  if(request.method !== "GET") return json({ error:"Method not allowed" }, 405, env, request);
+  const parse = (raw) => { try { const j = JSON.parse(raw || ""); return j && typeof j === "object" ? j : null; } catch { return null; } };
+  const okRaw = await getSetting(env, "ipn_last_ok");
+  const badRaw = await getSetting(env, "ipn_last_bad");
+  const secretConfigured = !!String(env.NOWPAYMENTS_IPN_SECRET || "").trim();
+  const secret2Configured = !!String(env.NOWPAYMENTS_IPN_SECRET_2 || "").trim();
+  return json({
+    ok:true,
+    ipnCallbackUrl:FIXED_IPN_URL,
+    method:"POST",
+    secretConfigured,
+    secret2Configured,
+    lastAccepted: parse(okRaw),
+    lastRejected: parse(badRaw),
+    note: secretConfigured
+      ? "Set this same IPN secret in the NOWPayments dashboard (Payment settings -> Instant Payment Notifications). After a test IPN or a real payment, lastAccepted updates when the HMAC verified; lastRejected means a callback arrived but did not match."
+      : "No NOWPayments IPN secret is set on this Worker, so callbacks are accepted without signature verification. Set NOWPAYMENTS_IPN_SECRET here and the same value in the dashboard.",
+  }, 200, env, request);
+}
+
 // ---------- promo handler ----------
 async function handlePromo(request, env, url){
   const code = (url.searchParams.get("code") || url.searchParams.get("promo") || "").trim();
@@ -2135,15 +2164,36 @@ async function handleInvoice(request, env){
   }
 }
 
+// The admin IPN view reads these two rows. Only facts about the attempt are stored - never the raw
+// body, never the signature - and a rejected attempt is throttled to one row a minute so a stranger
+// POSTing garbage cannot turn every 401 into a D1 write.
+async function recordIpn(env, ok, info){
+  if(!hasDb(env)) return;
+  const key = ok ? "ipn_last_ok" : "ipn_last_bad";
+  const now = Date.now();
+  try {
+    if(!ok){
+      const prev = await getSetting(env, key);
+      let prevAt = 0;
+      try { prevAt = Date.parse(JSON.parse(prev || "{}").at || "") || 0; } catch {}
+      if(prevAt && now - prevAt < 60000) return;
+    }
+    await setSetting(env, key, JSON.stringify(Object.assign({ at: new Date(now).toISOString() }, info || {})));
+  } catch {}
+}
 async function handleIpn(request, env){
   const sig=request.headers.get("x-nowpayments-sig") || request.headers.get("x-nowpayments-sig".toLowerCase()) || "";
   const raw=await request.text();
   let payload; try{ payload=JSON.parse(raw); }catch{ payload={ raw }; }
-  const secrets=[env.NOWPAYMENTS_IPN_SECRET, env.NOWPAYMENTS_IPN_SECRET_2].filter(Boolean);
+  const secrets=[env.NOWPAYMENTS_IPN_SECRET, env.NOWPAYMENTS_IPN_SECRET_2].map(s=>String(s==null?"":s).trim()).filter(Boolean);
   if(secrets.length){
     let ok=false;
     for(const s of secrets){ if(await verifyIpnSignature(payload, sig, s)){ ok=true; break; } }
-    if(!ok){ console.warn("IPN bad signature", { sig:(sig ? sig.slice(0,20) : ""), payload:raw.slice(0,500)}); return json({ error:"Bad signature" }, 401, env, request); }
+    if(!ok){
+      console.warn("IPN bad signature", { sig:(sig ? sig.slice(0,20) : ""), payload:raw.slice(0,500)});
+      await recordIpn(env, false, { reason:"bad_signature", hadSignature: !!sig, payloadBytes: raw.length });
+      return json({ error:"Bad signature" }, 401, env, request);
+    }
   } else { console.warn("IPN without NOWPAYMENTS_IPN_SECRET \u2014 accepting but you should set it"); }
 
   const status=String(payload.payment_status||payload.status||"").toLowerCase();
@@ -2157,10 +2207,19 @@ async function handleIpn(request, env){
   const isFailed=["failed","expired","refunded"].includes(status);
   const isPending=["waiting","confirming","sending"].includes(status) && !isPaid;
 
-  // Attach the customer-facing Purchase ID to every notification (support can search by it).
+  // Attach the customer-facing Purchase ID to every notification (support can search by it), and
+  // remember the status this order had before the callback: the receipt below is pinned to the
+  // transition into a paid state, not to every status change or retry NOWPayments sends.
   let ipnPurchaseId = "";
-  if (hasDb(env) && orderId && orderId !== "\u2014") {
-    try { const row = await env.DB.prepare("SELECT purchase_id FROM orders WHERE order_id = ?").bind(orderId).first(); if (row && row.purchase_id) ipnPurchaseId = String(row.purchase_id); } catch {}
+  let ipnPrevStatus = "";
+  if (hasDb(env)) {
+    try {
+      const byOrder = (orderId && orderId !== "\u2014") ? await env.DB.prepare("SELECT purchase_id, status FROM orders WHERE order_id = ?").bind(orderId).first() : null;
+      const byPay = (!byOrder && paymentId) ? await env.DB.prepare("SELECT purchase_id, status FROM orders WHERE payment_id = ?").bind(paymentId).first() : null;
+      const row = byOrder || byPay;
+      if (row && row.purchase_id) ipnPurchaseId = String(row.purchase_id);
+      if (row && row.status) ipnPrevStatus = String(row.status);
+    } catch {}
   }
 
   // update D1 order status
@@ -2213,8 +2272,11 @@ async function handleIpn(request, env){
         })
       }).catch(e=>{ console.error("IPN discord failed", e.message); })
     ]);
+    // One purchase, one receipt: NOWPayments reports confirmed, sending and finished separately and
+    // retries anything it thinks timed out, so the mail goes out when the order becomes paid.
+    const firstPaid = !hasDb(env) || ipnPrevStatus !== "paid";
     const customerEmail=payload.customer_email||payload.customerEmail;
-    if(isPaid && customerEmail && isEmail(customerEmail)){
+    if(isPaid && firstPaid && customerEmail && isEmail(customerEmail)){
       await sendEmail(env, {
         to: customerEmail,
         subject:`Payment received \u2014 ${orderId} \u2014 Aether \u2705`,
@@ -2226,6 +2288,12 @@ async function handleIpn(request, env){
       }).catch(()=>{});
     }
   }catch(e){ console.error("IPN notify failed", e.message); }
+  await recordIpn(env, true, {
+    status: status || "unknown",
+    orderId: orderId === "\u2014" ? "" : String(orderId).slice(0,80),
+    paymentId: String(paymentId||"").slice(0,40),
+    signed: secrets.length > 0,
+  });
   return json({ ok:true, status }, 200, env, request);
 }
 
@@ -2289,6 +2357,7 @@ async function handleRequest(request, env, ctx){
       // Beta configuration + Tester role management + support conversations + audit trail.
       if(apath.startsWith("/api/admin/beta")) return handleAdminBeta(request, env, aurl);
       if(apath==="/api/admin/audit"||apath==="/api/admin/audit/") return handleAdminAudit(request, env);
+      if(apath==="/api/admin/ipn"||apath==="/api/admin/ipn/") return handleAdminIpn(request, env);
       if(/^\/api\/admin\/users\/\d+\/role\/?$/.test(apath)) return handleAdminRole(request, env, aurl);
       if(apath==="/api/admin/conversations"||apath==="/api/admin/conversations/"||/^\/api\/admin\/conversations\/[^\/]+(\/(messages|status))?\/?$/.test(apath)) return handleAdminConversations(request, env, aurl);
       if(apath==="/api/admin/orders"||apath==="/api/admin/orders/") return handleAdminOrders(request, env, aurl);
@@ -2297,7 +2366,7 @@ async function handleRequest(request, env, ctx){
       if(apath==="/api/admin/users"||apath==="/api/admin/users/") return handleAdminUsers(request, env, aurl);
       if(/^\/api\/admin\/users\/\d+\/?$/.test(apath)) return handleAdminUsers(request, env, aurl);
       if(apath==="/api/admin/messages"||apath==="/api/admin/messages/") return handleAdminMessages(request, env, aurl);
-      if(apath==="/api/admin"||apath==="/api/admin/") return json({ ok:true, admin: admin.user.email, routes:["GET /api/admin/orders","GET /api/admin/orders/:id","POST /api/admin/orders/:id/message","GET /api/admin/users","DELETE /api/admin/users/:id","POST /api/admin/users/:id/role","GET /api/admin/messages","GET /api/admin/conversations","POST /api/admin/conversations/:id/messages","GET /api/admin/beta","POST /api/admin/beta/domain/request","POST /api/admin/beta/domain/confirm","POST /api/admin/beta/flags","GET /api/admin/audit"] }, 200, env, request);
+      if(apath==="/api/admin"||apath==="/api/admin/") return json({ ok:true, admin: admin.user.email, routes:["GET /api/admin/orders","GET /api/admin/orders/:id","POST /api/admin/orders/:id/message","GET /api/admin/users","DELETE /api/admin/users/:id","POST /api/admin/users/:id/role","GET /api/admin/messages","GET /api/admin/conversations","POST /api/admin/conversations/:id/messages","GET /api/admin/beta","POST /api/admin/beta/domain/request","POST /api/admin/beta/domain/confirm","POST /api/admin/beta/flags","GET /api/admin/audit","GET /api/admin/ipn"] }, 200, env, request);
       return json({ error:"Not found", path }, 404, env, request);
     }
 
@@ -2438,6 +2507,9 @@ async function handleRequest(request, env, ctx){
       const rl = await rlGuard(request, env, "invoice", 40, 3600000); if(rl) return rl;
       return handleInvoice(request, env);
     }
+    // A browser opening the callback URL sends GET. Answer that honestly instead of the generic 404,
+    // which reads like "the IPN route is missing" - it is POST-only by design.
+    if(isIpnPath(path) && request.method!=="POST") return json({ error:"Method not allowed", detail:"NOWPayments IPN callbacks are POST requests to this URL.", ipnCallbackUrl:FIXED_IPN_URL }, 405, env, request, { allow:"POST" });
     if((path==="/api/ipn"||path==="/api/nowpayments/ipn"||path==="/api/nowpayments-ipn") && request.method==="POST") return handleIpn(request, env);
     if(path==="/order" && request.method==="POST") return handleOrder(request, env);
     if((path==="/invoice"||path==="/create-invoice") && request.method==="POST") return handleInvoice(request, env);
