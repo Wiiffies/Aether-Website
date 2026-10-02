@@ -2,6 +2,7 @@
  * Aether -- Cloudflare Worker (api.get-aether.de)
  * - POST /api/order   -> validates + emails you + Discord webhook + auto-replies
  * - POST /api/invoice -> creates NOWPayments Payment + pending email + beautiful Discord, returns payAddress
+ *   type=test_purchase is the temporary server-priced EUR 0.02 test item (real payment, same checks)
  * - POST /api/ipn     -> NOWPayments IPN callback, verifies HMAC-512, emails + Discord
  * - GET  /api/ipn     -> 405 + the exact POST callback URL (a browser probe is not a dead route)
  * - GET  /api/admin/ipn -> admin-only: last accepted/rejected IPN + whether a secret is set
@@ -233,8 +234,8 @@ function resolvePromo(env, code, amount) {
   const c = String(code).trim().toUpperCase();
   const entry = promos[c] || promos[c.toLowerCase()];
   if (!entry) return { valid:false, error:"Invalid code" };
-  let type, value;
-  if (typeof entry === "object" && entry !== null) { type = String(entry.type||"").toLowerCase(); value = Number(entry.value); }
+  let type, value, test = false;
+  if (typeof entry === "object" && entry !== null) { type = String(entry.type||"").toLowerCase(); value = Number(entry.value); test = entry.test === true; }
   else if (typeof entry === "number") { type = "percent"; value = entry; }
   else if (typeof entry === "string" && entry.endsWith("%")) { type = "percent"; value = Number(entry.slice(0,-1)); }
   else { type = "fixed"; value = Number(entry); }
@@ -243,13 +244,21 @@ function resolvePromo(env, code, amount) {
   const amt = Number(amount)||0;
   let discount = 0;
   if (type === "percent") {
-    if (value > 90) value = Math.min(value, 50); // safety cap if misconfigured
-    discount = Math.round(amt * (value/100));
+    // The 50% cap is the safety net for a misconfigured code. Only an entry that explicitly opts
+    // in with test:true may go above it - and only up to 100% - which is what a test code needs.
+    if (value > 90 && !test) value = Math.min(value, 50);
+    if (test && value > 100) value = 100;
+    // Test codes keep cent precision: 100% of EUR 0.02 must be EUR 0.02, not rounded down to 0.
+    discount = test ? Math.min(amt, Math.round(amt * value) / 100) : Math.round(amt * (value/100));
   } else {
-    discount = Math.min(value, Math.max(0, amt - 1));
+    // A plain fixed code always leaves at least EUR 1 due; a test code may cover the whole price.
+    discount = test ? Math.min(value, amt) : Math.min(value, Math.max(0, amt - 1));
   }
-  const finalAmount = Math.max(1, amt - discount);
-  return { valid:true, code:c, type, value, discount, finalAmount, amount: amt };
+  // EUR 1 floor for normal orders. It never applies below EUR 1 (that is the EUR 0.02 test item, and
+  // a discount must never raise a price). A test code may bring any order to EUR 0 - handleInvoice
+  // then creates NO payment at all (status "free"), so that is a recorded test order, not a charge.
+  const finalAmount = (test || amt < 1) ? Math.max(0, amt - discount) : Math.max(1, amt - discount);
+  return { valid:true, code:c, type, value, discount, finalAmount, amount: amt, test: !!test };
 }
 
 // ---------- NOWPayments Payment API ----------
@@ -1490,11 +1499,11 @@ async function handlePromo(request, env, url){
     const a = Number(body.amount ?? amount);
     const r = resolvePromo(env, c, a);
     if (!r.valid) return json({ valid:false, error:r.error }, 200, env, request);
-    return json({ valid:true, code:r.code, type:r.type, value:r.value, discount:r.discount, finalAmount:r.finalAmount }, 200, env, request);
+    return json({ valid:true, code:r.code, type:r.type, value:r.value, discount:r.discount, finalAmount:r.finalAmount, test: !!r.test }, 200, env, request);
   }
   const r = resolvePromo(env, code, amount);
   if (!r.valid) return json({ valid:false, error:r.error, valid_codes: Object.keys(loadPromos(env)).length ? undefined : undefined }, 200, env, request);
-  return json({ valid:true, code:r.code, type:r.type, value:r.value, discount:r.discount, finalAmount:r.finalAmount }, 200, env, request);
+  return json({ valid:true, code:r.code, type:r.type, value:r.value, discount:r.discount, finalAmount:r.finalAmount, test: !!r.test }, 200, env, request);
 }
 
 // ---------- auth handlers ----------
@@ -2023,11 +2032,19 @@ async function handleOrder(request, env){
   return json({ ok:true, emailed: !(emailRes && emailRes.mocked), discord: !(results[1] && results[1].mocked) && !(results[1] && results[1].error), conversationId }, 200, env, request);
 }
 
+// The temporary payment-test product. Its price, package, description and meta are decided HERE
+// and nowhere else: the browser can only ask for it by name (type=test_purchase), so it can never
+// be priced by the client, attached to a normal package, or confused with a real order.
+const TEST_PURCHASE_TYPE = "test_purchase";
+const TEST_PURCHASE_EUR = 0.02;
 async function handleInvoice(request, env){
   let body; try{ body=await request.json(); }catch{ return json({ error:"Invalid JSON" }, 400, env, request); }
-  let amount=Number(body.amount ?? body.price_amount ?? body.estimatedPrice);
-  if(!Number.isFinite(amount)||amount<1) return json({ error:"Valid amount required" }, 400, env, request);
-  if(amount>5000) return json({ error:"Amount too large" }, 400, env, request);
+  const isTestPurchase = String(body.type||"") === TEST_PURCHASE_TYPE;
+  let amount = isTestPurchase ? TEST_PURCHASE_EUR : Number(body.amount ?? body.price_amount ?? body.estimatedPrice);
+  if(!isTestPurchase){
+    if(!Number.isFinite(amount)||amount<1) return json({ error:"Valid amount required" }, 400, env, request);
+    if(amount>5000) return json({ error:"Amount too large" }, 400, env, request);
+  }
   // 99999% -- checkout is ACCOUNT-ONLY: there is no guest purchase. The account supplies the
   // customer email and Discord, the order is filed to it, and portal chat/history follow from it.
   const earlyAuth=await requireAuth(request, env).catch(()=>null);
@@ -2040,13 +2057,18 @@ async function handleInvoice(request, env){
   const email=accountEmail || String(body.email||body.customerEmail||"").trim();
   if(!isEmail(email)) return json({ error:"Your account has no usable email address \u2014 contact questions@get-aether.de" }, 400, env, request);
   const currency=String(body.currency||body.price_currency||"eur").toLowerCase();
+  // The coin is checked below, once the real amount is known: a 100% test promo makes the order
+  // free and no payment is created for it, so a free order needs no coin. Everything that will
+  // actually create a NOWPayments payment is validated exactly as strictly as before.
   const payCurrency=String(body.pay_currency||body.payCurrency||body.coin||"").toLowerCase().trim();
-  if(!payCurrency) return json({ error:"Please select BTC, ETH or LTC" }, 400, env, request);
-  if(!["btc","eth","ltc"].includes(payCurrency)) return json({ error:"Unsupported coin \u2014 use BTC, ETH or LTC" }, 400, env, request);
-  const type=String(body.type||"custom").slice(0,40);
-  const pkg=String(body.package||body.tier||"Custom").slice(0,40);
-  const description=String(body.description||body.orderDescription||`${type} ${pkg} \u2014 Aether`).slice(0,200);
-  const meta=body.meta||{};
+  const type=isTestPurchase ? TEST_PURCHASE_TYPE : String(body.type||"custom").slice(0,40);
+  const pkg=isTestPurchase ? "Test Purchase" : String(body.package||body.tier||"Custom").slice(0,40);
+  const description=isTestPurchase
+    ? "Test Purchase - real NOWPayments payment (EUR 0.02)"
+    : String(body.description||body.orderDescription||`${type} ${pkg} \u2014 Aether`).slice(0,200);
+  // A test purchase carries no client options at all (and a normal order can never claim its type).
+  const meta=isTestPurchase ? { test:true } : (body.meta||{});
+  const extraText=isTestPurchase ? "" : String(body.extra||"").slice(0,2000);
   if(body.website||body._gotcha) return json({ ok:true, mocked:true }, 200, env, request);
 
   // promo integration
@@ -2061,6 +2083,14 @@ async function handleInvoice(request, env){
     appliedPromo = r.code;
     promoFinalAmount = r.finalAmount;
     amount = promoFinalAmount;
+  }
+  // A test:true promo may cover the whole amount. Nothing is charged then, so no NOWPayments
+  // payment is created at all: the order is recorded as "free" and the operator is told plainly.
+  // Only resolvePromo can produce EUR 0 (test:true entries), so no other code path reaches this.
+  const freeOrder = amount <= 0;
+  if (!freeOrder) {
+    if(!payCurrency) return json({ error:"Please select BTC, ETH or LTC" }, 400, env, request);
+    if(!["btc","eth","ltc"].includes(payCurrency)) return json({ error:"Unsupported coin \u2014 use BTC, ETH or LTC" }, 400, env, request);
   }
 
   const orderId=`aether_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
@@ -2084,7 +2114,7 @@ async function handleInvoice(request, env){
 
   const pendingFields=[
     ["Type", `${type} \u2014 ${pkg}`, true], ["Amount", `\u20AC${amount} (${currency.toUpperCase()})${appliedPromo ? ` \u2022 promo ${appliedPromo} \u2212\u20AC${discount}` : ""}`, true],
-    ["Crypto", payCurrency.toUpperCase(), true],
+    ["Crypto", freeOrder ? "\u2014 (free order \u2014 no payment)" : payCurrency.toUpperCase(), true],
     ["Discord", discord||"\u2014 (none)", true], ["Email", email, true], ["Order ID", orderId, false], ["Purchase ID", purchaseId || "\u2014", true], ["Submitted", submitted, true], ["Description", description, false],
   ];
   if(appliedPromo) pendingFields.splice(1,0,["Promo", `${appliedPromo} \u2212\u20AC${discount} \u2192 \u20AC${amount}`, true]);
@@ -2096,12 +2126,12 @@ async function handleInvoice(request, env){
       pendingFields.push([k, Array.isArray(v)? v.join(", "): String(v).slice(0,1000), false]);
     }
   }
-  if(body.extra) pendingFields.push(["Extra", String(body.extra).slice(0,2000), false]);
+  if(extraText) pendingFields.push(["Extra", extraText, false]);
   // store order in D1 (99999% \u2014 don't fail the payment if D1 is down, just warn)
   if (hasDb(env)) {
     try {
-      await env.DB.prepare("INSERT INTO orders (user_id, order_id, amount, currency, type, package, description, status, promo_code, discount, meta, extra, email) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)").bind(
-        linkedUserId, orderId, amount, currency, type, pkg, description, appliedPromo, discount, JSON.stringify(meta||{}).slice(0,4000), String(body.extra||"").slice(0,2000), email
+      await env.DB.prepare("INSERT INTO orders (user_id, order_id, amount, currency, type, package, description, status, promo_code, discount, meta, extra, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(
+        linkedUserId, orderId, amount, currency, type, pkg, description, freeOrder ? "free" : "pending", appliedPromo, discount, JSON.stringify(meta||{}).slice(0,4000), extraText, email
       ).run();
     } catch(e){ console.warn("D1 order insert failed", e && e.message); }
     // Store the Purchase ID separately so a database that predates the column still takes the order.
@@ -2115,22 +2145,41 @@ async function handleInvoice(request, env){
     await Promise.all([
       sendEmail(env, {
         to: toList,
-        subject:`[PENDING] ${type} ${pkg} \u2014 ${payCurrency.toUpperCase()} \u2014 \u20AC${amount} \u2014 ${discord||"\u2014"} \u2014 ${orderId}`.slice(0,180),
-        html: orderHtml({ title:`New payment started \u2014 ${payCurrency.toUpperCase()} \u2014 \u20AC${amount} \u2014 ${orderId}`, fields: pendingFields, note:`Customer started a NOWPayments Payment (pay_currency=${payCurrency.toUpperCase()}) \u2014 IPN will be sent to ${FIXED_IPN_URL}. You\u2019ll get a \u2705 PAID email when status becomes confirmed/finished.`}),
+        subject:`${freeOrder ? `[FREE TEST] No payment required \u2014 ${type} ${pkg}` : `[PENDING] ${type} ${pkg} \u2014 ${payCurrency.toUpperCase()} \u2014 \u20AC${amount}`} \u2014 ${discord||"\u2014"} \u2014 ${orderId}`.slice(0,180),
+        html: orderHtml({ title:`${freeOrder ? "Free test order \u2014 no payment required" : `New payment started \u2014 ${payCurrency.toUpperCase()}`} \u2014 \u20AC${amount} \u2014 ${orderId}`, fields: pendingFields, note: freeOrder
+          ? `A 100% test promo (${appliedPromo}) covered the whole amount, so NO crypto payment was created and nothing will be charged. This is a test order \u2014 deliver only if you mean to.`
+          : `Customer started a NOWPayments Payment (pay_currency=${payCurrency.toUpperCase()}) \u2014 IPN will be sent to ${FIXED_IPN_URL}. You\u2019ll get a \u2705 PAID email when status becomes confirmed/finished.` }),
         text: pendingFields.map(([k,v])=>`${k}: ${v}`).join("\n"), replyTo: email,
       }),
       sendDiscord(env, {
         embeds: discordEmbed({
-          title: `\u23F3 Payment started \u2014 ${payCurrency.toUpperCase()} \u00B7 \u20AC${amount} \u00B7 ${type} ${pkg}`,
+          title: `${freeOrder ? "\uD83E\uDDEA Free test order" : "\u23F3 Payment started"} \u2014 ${freeOrder ? "NO PAYMENT" : payCurrency.toUpperCase()} \u00B7 \u20AC${amount} \u00B7 ${type} ${pkg}`,
           color: DISCORD_ACCENT.pending,
           fields: pendingFields.slice(0,18),
-          description: `${escMd(discord||"\u2014")} \u00B7 ${escMd(email)} \u00B7 **${payCurrency.toUpperCase()} \u2192 \u20AC${amount}**${appliedPromo ? ` \u00B7 \uD83C\uDFF7\uFE0F ${escMd(appliedPromo)} \u2212\u20AC${discount}` : ""} \u2014 IPN \u2192 ${FIXED_IPN_URL} \u2014 you\u2019ll get a \u2705 **PAID** ping on **confirmed/finished**.`,
+          description: freeOrder
+            ? `${escMd(discord||"\u2014")} \u00B7 ${escMd(email)} \u00B7 **\u20AC0.00 due** \u00B7 \uD83C\uDFF7\uFE0F ${escMd(appliedPromo||"test promo")} covered the amount \u2014 **no payment was created and nothing is charged**. Test order only.`
+            : `${escMd(discord||"\u2014")} \u00B7 ${escMd(email)} \u00B7 **${payCurrency.toUpperCase()} \u2192 \u20AC${amount}**${appliedPromo ? ` \u00B7 \uD83C\uDFF7\uFE0F ${escMd(appliedPromo)} \u2212\u20AC${discount}` : ""} \u2014 IPN \u2192 ${FIXED_IPN_URL} \u2014 you\u2019ll get a \u2705 **PAID** ping on **confirmed/finished**.`,
           footer: `Order ${orderId} \u2022 ${submitted} \u2022 ${FIXED_IPN_URL}`,
-          author: { name: "Aether Payments \u2014 PENDING" }
+          author: { name: freeOrder ? "Aether Payments \u2014 FREE TEST" : "Aether Payments \u2014 PENDING" }
         })
       }).catch(()=>null)
     ]);
   }catch(e){ console.warn("pending notify failed", e.message); emailOk=false; }
+
+  if (freeOrder) {
+    // No payment exists, so there is nothing to pay, poll or confirm by IPN: answer the checkout
+    // directly. The order above is already recorded as "free" for admin/support visibility.
+    return json({
+      ok:true,
+      free:true,
+      orderId, purchaseId,
+      promoApplied: appliedPromo,
+      discount,
+      priceAmount: 0,
+      priceCurrency: currency,
+      emailOk,
+    }, 200, env, request);
+  }
 
   try{
     const payment=await createNowPaymentsPayment(env, { amount, currency, payCurrency, orderId, description });

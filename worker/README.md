@@ -22,7 +22,8 @@ this directory.
 | `TURNSTILE_SECRET` | secret | captcha on register/forgot/reset; **set 2026-10-01** — the site key in `public/aether-config.js` must be live before this exists |
 | `CONTACT_TO`, `CONTACT_FROM`, `SUCCESS_URL`, `CANCEL_URL`, `SITE_URL` | vars | mail routing and link building |
 | `ADMIN_EMAIL` / `ADMIN_EMAILS` | vars | the only source of admin rights — `admin` is **never** a database value |
-| `ALLOWED_ORIGIN`, `PROMO_CODES`, `REQUIRE_EMAIL_VERIFICATION`, `BETA_HOST`, `BETA_PATH`, `BETA_FLAGS`, `AETHER_ENV`, `RESET_DISCORD_EMAILS` | vars | see MASTER_PROMPT.md (`RESET_DISCORD_EMAILS` gates who may receive a reset link through the Discord webhook when no transport exists; default = admins) |
+| `ALLOWED_ORIGIN`, `REQUIRE_EMAIL_VERIFICATION`, `BETA_HOST`, `BETA_PATH`, `BETA_FLAGS`, `AETHER_ENV`, `RESET_DISCORD_EMAILS` | vars | see MASTER_PROMPT.md (`RESET_DISCORD_EMAILS` gates who may receive a reset link through the Discord webhook when no transport exists; default = admins) |
+| `PROMO_CODES` | var (JSON) | the **only** source of promo codes — never in this repo (it is public). Ordinary codes are capped at 50% and always leave at least EUR 1; only `{"type":"percent","value":100,"test":true}` may reach EUR 0, and such an order is stored `status='free'` with no payment created |
 
 **Never put a secret in `wrangler.toml`.** Secrets exist only as Worker secrets.
 
@@ -41,7 +42,7 @@ this directory.
 ## Test and run locally
 
 ```bash
-node ../_test-worker.mjs     # 301 checks against an in-memory D1 stub — run before every deploy
+node ../_test-worker.mjs     # 321 checks against an in-memory D1 stub — run before every deploy
 node ../_dev-server.mjs      # static site + this Worker on http://127.0.0.1:5501
 ```
 

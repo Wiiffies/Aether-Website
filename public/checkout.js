@@ -185,6 +185,19 @@
     return readJson(res);
   }
   function esc(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+  // Prices can be fractional (the EUR 0.02 test item), so show cents only when they exist.
+  function eur(n){ const v=Number(n)||0; return (Math.abs(v % 1) < 0.005) ? ("€"+v.toFixed(0)) : ("€"+v.toFixed(2)); }
+  // One place that asks the Worker about a promo code. The server is authoritative: whatever it
+  // answers (discount, final amount, test:true) is what the UI shows, and the invoice recomputes
+  // it again from PROMO_CODES, so a tampered page can never grant itself a discount.
+  async function promoLookup(code, amount){
+    const url = apiUrl("/api/promo?code=" + encodeURIComponent(code) + "&amount=" + encodeURIComponent(String(amount||0)));
+    if(!url) throw new Error("The Aether API is not reachable from this page — open the site over https://get-aether.de");
+    const res = await fetch(url, { headers: { "accept":"application/json" } });
+    const text = await res.text(); let j; try{ j=JSON.parse(text);}catch{ j={raw:text};}
+    if(!res.ok) throw new Error(j.error || j.message || "Promo check failed ("+res.status+")");
+    return j;
+  }
 
   // --- optional Cloudflare Turnstile ---------------------------------------------------
   // Rendered only when a PUBLIC site key is configured. The token is verified server-side by
@@ -268,7 +281,7 @@
             <div style="font-size:12px;line-height:1.7;color:#c8c9cc">${opts.breakdownHtml || ""}</div>
             <div style="margin-top:12px;padding-top:12px;border-top:1px solid #242529;display:flex;align-items:baseline;justify-content:space-between">
               <span style="font:10px 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#85878b">Total</span>
-              <span style="font-size:22px;font-weight:600;letter-spacing:-.05em">€${Number(opts.amount).toFixed(0)}</span>
+              <span data-total style="font-size:22px;font-weight:600;letter-spacing:-.05em">${eur(opts.amount)}</span>
             </div>
             <div style="margin-top:8px;font-size:10px;line-height:1.6;color:#6f7277">Crypto via NOWPayments — select BTC / LTC / ETH. Hosting / domain / DB not included.</div>
           </div>
@@ -291,6 +304,15 @@
               <span style="font:10px 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#85878b">Discord Username <span style="color:#7a7d82;font-weight:400">— leave blank if you don’t have Discord</span></span>
               <input data-field="discord" value="${defDiscord}" placeholder="yourname — leave blank if you don’t have Discord" autocomplete="username" style="width:100%;background:#111214;border:1px solid #2a2e33;color:#fff;border-radius:4px;padding:11px 12px;font-size:12px;font-family:Manrope,Arial,sans-serif;outline:none">
             </label>
+            ${opts.promo ? `
+            <label style="display:flex;flex-direction:column;gap:6px">
+              <span style="font:10px 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#85878b">Promo code <span style="color:#7a7d82;font-weight:400">— optional</span></span>
+              <div style="display:flex;gap:8px">
+                <input data-promo-input placeholder="WELCOME10" autocomplete="off" spellcheck="false" style="flex:1;background:#111214;border:1px solid #2a2e33;color:#fff;border-radius:4px;padding:10px 12px;font:12px 'DM Mono',monospace;outline:none;text-transform:uppercase">
+                <button type="button" data-promo-apply style="padding:10px 14px;border-radius:6px;border:1px solid #333;background:#1a1d20;color:#fff;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">Apply</button>
+              </div>
+              <span data-promo-msg style="font:10px 'DM Mono',monospace;color:#7a7d82;min-height:14px"></span>
+            </label>` : ``}
           </div>
 
           <div style="margin-top:14px;display:flex;gap:10px">
@@ -391,6 +413,52 @@
     const confirm = overlay.querySelector("[data-confirm]");
     const msg = overlay.querySelector("[data-msg]");
 
+    // --- optional promo code ------------------------------------------------------------------
+    // The Worker decides the discount; this field only asks. The total shown here is the server's
+    // finalAmount, and the invoice recomputes everything from PROMO_CODES again.
+    let appliedPromo = null; // {code, discount, finalAmount, test}
+    let currentTotal = Number(opts.amount) || 0; // 0 once a test code covers the whole amount
+    const totalEl = overlay.querySelector("[data-total]");
+    const promoInput = overlay.querySelector("[data-promo-input]");
+    const promoMsg = overlay.querySelector("[data-promo-msg]");
+    function setTotal(v){
+      currentTotal = Math.max(0, Number(v) || 0);
+      if(totalEl) totalEl.textContent = eur(currentTotal);
+      if(confirm && confirm.style.display !== "none"){
+        confirm.textContent = (currentTotal <= 0) ? "Place free order →" : "Pay with Crypto →";
+      }
+      // A fully discounted order creates no NOWPayments payment, so no coin has to be picked for it.
+      if(coinHint && !payCurrency){
+        coinHint.textContent = currentTotal <= 0 ? "Not needed — a free order creates no payment" : "Select BTC, LTC or ETH";
+        coinHint.style.color = "#7a7d82";
+      }
+    }
+    async function applyPromo(){
+      const code = (promoInput.value||"").trim().toUpperCase();
+      if(!promoMsg) return;
+      if(!code){ appliedPromo = null; promoMsg.textContent = ""; setTotal(opts.amount); return; }
+      promoMsg.textContent = "Checking…"; promoMsg.style.color = "#9aa0a6";
+      try{
+        const r = await promoLookup(code, opts.amount);
+        if(r && r.valid){
+          appliedPromo = { code: r.code || code, discount: r.discount, finalAmount: r.finalAmount, test: !!r.test };
+          promoMsg.textContent = "✓ " + appliedPromo.code + " — " + (r.type === "percent" ? r.value + "% off" : "−" + eur(r.value)) + (appliedPromo.test ? " (test code)" : "") + (appliedPromo.discount ? " · −" + eur(appliedPromo.discount) : "");
+          promoMsg.style.color = "#8ee0a0";
+          setTotal(r.finalAmount);
+        } else {
+          appliedPromo = null; setTotal(opts.amount);
+          promoMsg.textContent = "✕ " + ((r && r.error) || "Invalid code"); promoMsg.style.color = "#ff8a8a";
+        }
+      }catch(e){
+        appliedPromo = null; setTotal(opts.amount);
+        promoMsg.textContent = "✕ " + (e.message || "Promo check failed"); promoMsg.style.color = "#ff8a8a";
+      }
+    }
+    if(promoInput){
+      overlay.querySelector("[data-promo-apply]").addEventListener("click", applyPromo);
+      promoInput.addEventListener("keydown", e=>{ if(e.key === "Enter"){ e.preventDefault(); applyPromo(); } });
+    }
+
     confirm.addEventListener("click", async ()=>{
       // Accounts are mandatory \u2014 there is no guest checkout. The worker rejects anonymous
       // invoices with 401 ACCOUNT_REQUIRED, so anyone signed out goes to the portal instead.
@@ -399,7 +467,7 @@
       if(!accountMode || !isEmail(resolvedAccountEmail)){ location.href = accountUrl(); return; }
       const email = resolvedAccountEmail;
       const discord = (discordInput.value||"").trim();
-      if(!payCurrency){ msg.textContent="Please select BTC, LTC or ETH."; msg.style.color="#ff8a8a"; return; }
+      if(!payCurrency && currentTotal > 0){ msg.textContent="Please select BTC, LTC or ETH."; msg.style.color="#ff8a8a"; return; }
       confirm.disabled = true;
       confirm.textContent = "Creating payment…";
       msg.textContent = "";
@@ -409,8 +477,34 @@
       try{
         const result = await opts.onConfirm({
           email, discord, payCurrency,
+          promoCode: appliedPromo ? appliedPromo.code : undefined,
           setMsg:(t,k)=>{ msg.textContent=t; msg.style.color = k==="err" ? "#ff8a8a" : k==="ok" ? "#8ee0a0" : "#9aa0a6"; }
         });
+        // A test code can cover the whole amount. The Worker then creates NO payment and answers
+        // {free:true}; there is nothing to poll, so say exactly that and stop.
+        if(result && result.free){
+          const orderId = result.orderId || "";
+          const purchaseId = result.purchaseId || "";
+          const promoCode = result.promoApplied || (appliedPromo && appliedPromo.code) || "";
+          msg.style.color = "#8ee0a0";
+          msg.innerHTML = `
+            <div style="padding:12px;border:1px solid #2a7a3a;border-radius:8px;background:rgba(46,160,67,.08)">
+              <div style="font:10px 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#8ee0a0;margin-bottom:8px">✓ Order placed — no payment required</div>
+              <div style="font-size:12px;line-height:1.6;color:#e8eaed">A 100% promo covered the whole amount, so no crypto payment was created and nothing is charged.</div>
+              <div style="margin-top:8px;display:grid;gap:4px;font-size:11px;color:#9aa0a6">
+                <div><span style="color:#6f7277">Order ID:</span> <code style="color:#c8d0d8;font-size:10px;word-break:break-all">${esc(orderId)}</code></div>
+                ${purchaseId?`<div><span style="color:#6f7277">Purchase ID:</span> <code style="color:#c8d0d8;font-size:10px">${esc(purchaseId)}</code></div>`:``}
+                ${promoCode?`<div><span style="color:#6f7277">Promo:</span> <b style="color:#fff">${esc(promoCode)}</b></div>`:``}
+              </div>
+              <div style="margin-top:10px;font-size:10px;line-height:1.6;color:#7a7d82">It is recorded in your account — the portal shows it like any other order.</div>
+              <div style="margin-top:10px"><button type="button" data-close-payment style="padding:10px 14px;border-radius:6px;border:1px solid #333;background:transparent;color:#fff;font-size:11px;cursor:pointer">Close</button></div>
+            </div>`;
+          confirm.textContent = "Order placed ✓";
+          confirm.style.display = "none";
+          const closeFree = msg.querySelector("[data-close-payment]");
+          if(closeFree) closeFree.addEventListener("click", close);
+          return;
+        }
         // Payment API returns payment data (payAddress, payAmount) — show address + poll for verified payment before redirect
         if(result && (result.payAddress || result.pay_address)){
           const addr=result.payAddress||result.pay_address;
@@ -430,7 +524,7 @@
               <div style="margin-top:10px;display:grid;gap:6px;font-size:11px;line-height:1.5;color:#9aa0a6">
                 <div><span style="color:#6f7277">Order ID:</span> <code style="color:#c8d0d8;font-size:10px;word-break:break-all">${esc(orderId)}</code> <button type="button" data-copy-order style="margin-left:6px;padding:2px 6px;border-radius:4px;border:1px solid #2a2e33;background:#111214;color:#7a7d82;font-size:10px;cursor:pointer">copy</button></div>
                 ${paymentId?`<div><span style="color:#6f7277">Payment ID:</span> <code style="color:#c8d0d8;font-size:10px">${esc(String(paymentId))}</code></div>`:``}
-                <div><span style="color:#6f7277">Amount:</span> <b style="color:#fff">${esc(String(amt))} ${esc(cur)}</b> <span style="color:#6f7277">· Price: €${esc(String(opts.amount))}</span></div>
+                <div><span style="color:#6f7277">Amount:</span> <b style="color:#fff">${esc(String(amt))} ${esc(cur)}</b> <span style="color:#6f7277">· Price: ${esc(eur(result.priceAmount ?? opts.amount))}${result.discount?` (${esc(String(result.promoApplied||"promo"))} −${esc(eur(result.discount))})`:``}</span></div>
               </div>
               <div style="margin-top:10px;font-size:10px;line-height:1.6;color:#7a7d82">Send <b style="color:#c8d0d8">exactly</b> that amount — network fee on top. Keep this tab open — you'll be redirected automatically once NOWPayments confirms the payment (IPN: <code>api.get-aether.de/api/ipn</code>). Success page is only reachable after verified payment.</div>
               <div data-pay-status style="margin-top:12px;padding:10px 12px;border:1px solid #2a2e33;border-radius:6px;background:#111214;color:#9aa0a6;font-size:11px;line-height:1.6">⏳ Waiting for payment — checking every 8s…<br><span style="color:#7a7d82">Status: <b data-status-text style="color:#c8d0d8">waiting</b> · Checks: <span data-checks>0</span></span></div>
@@ -679,14 +773,7 @@
         promo_code: payload.promo_code || payload.promoCode || payload.code || undefined,
       });
     },
-    async validatePromo(code, amount){
-      const url = apiUrl("/api/promo?code=" + encodeURIComponent(code) + "&amount=" + encodeURIComponent(String(amount||0)));
-      if(!url) throw new Error("Worker not configured");
-      const res = await fetch(url, { headers: { "accept": "application/json" } });
-      const text = await res.text(); let j; try{ j=JSON.parse(text);}catch{ j={raw:text};}
-      if(!res.ok) throw new Error(j.error || j.message || "Promo check failed ("+res.status+")");
-      return j;
-    },
+    validatePromo(code, amount){ return promoLookup(code, amount); },
     // Alias used by new code
     async createPayment(payload){ return this.createInvoice(payload); },
     async submitOrder(payload){

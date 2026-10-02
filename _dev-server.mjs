@@ -61,7 +61,9 @@ const env = {
   // No ALLOWED_ORIGIN here on purpose: the worker then falls back to the real allowlist.
   ALLOW_DEV_ORIGIN: "true",
   SITE_URL: `http://127.0.0.1:${PORT}`,
-  PROMO_CODES: '{"WELCOME10":{"type":"percent","value":10}}',
+  // Includes a test:true code so the 100% + free-order path can be exercised locally. The live
+  // deployment keeps its own codes in the dashboard (PROMO_CODES), never in this repo.
+  PROMO_CODES: '{"WELCOME10":{"type":"percent","value":10},"TESTFULL":{"type":"percent","value":100,"test":true}}',
   ADMIN_EMAILS: adminEmail,
   // Force the verified-email gate without configuring a mail provider, so the "your address is not
   // confirmed" paths can be exercised locally:

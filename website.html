@@ -254,7 +254,7 @@
   <a class="back-link" href="shop.html">← Back to shop</a>
 </main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
 <script src="public/aether-config.js?v=9"></script>
-<script src="public/checkout.js?v=9"></script>
+<script src="public/checkout.js?v=10"></script>
 <script src="public/aether.js?v=7" defer></script>
 <script>
 (() => {
@@ -330,11 +330,14 @@
     const subtotal = base + pagesExtra + fPrice + revExtra + complexity + size;
     let discount = 0;
     if(appliedPromo){
-      if(appliedPromo.type==='percent') discount = Math.round(subtotal * (appliedPromo.value/100));
+      if(appliedPromo.test){
+        // Test codes may reach 100%; this mirrors the Worker's cent-precision rule exactly.
+        discount = appliedPromo.type==='percent' ? Math.min(subtotal, Math.round(subtotal * appliedPromo.value) / 100) : Math.min(appliedPromo.value, subtotal);
+      } else if(appliedPromo.type==='percent') discount = Math.round(subtotal * (appliedPromo.value/100));
       else if(appliedPromo.type==='fixed') discount = Math.min(appliedPromo.value, subtotal-1);
     }
     promoDiscount = discount;
-    const total = Math.max(1, subtotal - discount);
+    const total = appliedPromo && appliedPromo.test ? Math.max(0, subtotal - discount) : Math.max(1, subtotal - discount);
     let html = '';
     html += `<div class="price-row"><span>Base price</span><b>€50</b></div>`;
     html += `<div class="price-row ${pagesExtra?'':'muted'}"><span>Pages — ${pages} ${pages<=3?'(1–3 incl.)':`(+${pages-3} × €5)`}</span><b>${pagesExtra?`+€${pagesExtra}`:'—'}</b></div>`;
@@ -398,7 +401,7 @@
   (async()=>{
     const c=document.getElementById('web-promo').value.trim().toUpperCase();
     if(c && C && C.isConfigured()){
-      try{ const r=await C.validatePromo(c, calc().subtotal || 50); if(r && r.valid){ appliedPromo={code:c,type:r.type,value:r.value}; const m=document.getElementById('web-promo-msg'); if(m){ m.textContent='✓ '+c+' applied — −€'+promoDiscount; m.style.color='#8ee0a0'; } calc(); } }catch{}
+      try{ const r=await C.validatePromo(c, calc().subtotal || 50); if(r && r.valid){ appliedPromo={code:c,type:r.type,value:r.value,test:!!r.test}; calc(); const m=document.getElementById('web-promo-msg'); if(m){ m.textContent='✓ '+c+' applied — −€'+(promoDiscount||0); m.style.color='#8ee0a0'; } } }catch{}
     }
   })();
   document.getElementById('web-promo-apply')?.addEventListener('click', async ()=>{
@@ -410,7 +413,7 @@
     try{
       const subtotal = calc().subtotal || 50;
       const r=await C.validatePromo(code, subtotal);
-      if(r && r.valid){ appliedPromo={code, type:r.type, value:r.value}; msg.textContent='✓ '+code+' — '+(r.type==='percent'? r.value+'% off' : '−€'+r.value); msg.style.color='#8ee0a0'; }
+      if(r && r.valid){ appliedPromo={code, type:r.type, value:r.value, test:!!r.test}; msg.textContent='✓ '+code+' — '+(r.type==='percent'? r.value+'% off' : '−€'+r.value)+(r.test?' (test code)':'')+(r.discount?' · −€'+r.discount:''); msg.style.color='#8ee0a0'; }
       else { appliedPromo=null; msg.textContent='✕ '+(r.error||'Invalid code'); msg.style.color='#ff8a8a'; }
     }catch(e){ appliedPromo=null; msg.textContent='✕ '+(e.message||'Failed'); msg.style.color='#ff8a8a'; }
     calc();
@@ -552,12 +555,14 @@
       defaultEmail: (C.accountEmail ? C.accountEmail() : ''),
       defaultDiscord: d.discord,
       onConfirm: async ({email, discord, payCurrency})=>{
-        let finalAmount = d.total;
+        // Re-validate the promo (server-side), then send the PRE-discount subtotal together with
+        // the code: the Worker applies the discount exactly once. Sending an already discounted
+        // amount would discount it a second time.
         if(appliedPromo){
-          try{ const v=await C.validatePromo(appliedPromo.code, subtotal); if(v && v.valid) finalAmount = v.finalAmount ?? d.total; else throw new Error(v.error||'Invalid promo'); }catch(e){ throw new Error('Promo invalid: '+e.message); }
+          try{ const v=await C.validatePromo(appliedPromo.code, subtotal); if(!(v && v.valid)) throw new Error(v.error||'Invalid promo'); }catch(e){ throw new Error('Promo invalid: '+e.message); }
         }
         const res = await C.createInvoice({
-          amount: finalAmount,
+          amount: subtotal,
           type: 'website',
           package: 'Custom',
           discord, email,

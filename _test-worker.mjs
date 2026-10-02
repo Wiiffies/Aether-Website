@@ -44,7 +44,7 @@ const env = {
   ALLOWED_ORIGIN: "*",
   SUCCESS_URL: "https://get-aether.de/payment-success.html",
   CANCEL_URL: "https://get-aether.de/payment-cancel.html",
-  PROMO_CODES: '{"WELCOME10":{"type":"percent","value":10},"SAVE5":{"type":"fixed","value":5}}',
+  PROMO_CODES: '{"WELCOME10":{"type":"percent","value":10},"SAVE5":{"type":"fixed","value":5},"TESTFULL":{"type":"percent","value":100,"test":true},"TESTFIXED":{"type":"fixed","value":50,"test":true},"CAP100":{"type":"percent","value":100}}',
   ADMIN_EMAILS: "admin@example.com",
 };
 
@@ -1024,6 +1024,63 @@ check("with no secret configured the endpoint still answers 200 (documented fall
 globalThis.fetch = realFetchIpn;
 delete env.EMAIL;
 delete env.DISCORD_WEBHOOK_URL;
+
+console.log("\n--- promo codes + the EUR 0.02 test purchase ---");
+// The promo engine is server-side only: the browser sends a code and the Worker decides the
+// discount from PROMO_CODES. The 50% cap and the EUR 1 floor stay for normal codes; only an entry
+// that opts in with test:true may reach 100% (EUR 0), and such an order is recorded as "free".
+r = await call("GET", "/api/promo?code=TESTFULL&amount=30");
+check("a test code gives a true 100% discount", r.status === 200 && r.json.valid === true && r.json.discount === 30 && r.json.finalAmount === 0 && r.json.test === true, r.json);
+r = await call("GET", "/api/promo?code=CAP100&amount=30");
+check("a normal 100% entry is still capped at 50% (no accidental free orders)", r.json.valid === true && r.json.discount === 15 && r.json.finalAmount === 15 && r.json.test === false, r.json);
+r = await call("GET", "/api/promo?code=TESTFULL&amount=0.02");
+check("cent precision: 100% of EUR 0.02 is EUR 0.02, not rounded to zero", r.json.valid === true && r.json.discount === 0.02 && r.json.finalAmount === 0, r.json);
+r = await call("GET", "/api/promo?code=TESTFIXED&amount=0.02");
+check("a test fixed code can cover a smaller amount too", r.json.valid === true && r.json.discount === 0.02 && r.json.finalAmount === 0, r.json);
+r = await call("GET", "/api/promo?code=WELCOME10&amount=0.02");
+check("a normal code on the EUR 0.02 item never raises its price (floor does not apply below EUR 1)", r.json.valid === true && r.json.discount === 0 && r.json.finalAmount === 0.02, r.json);
+r = await call("GET", "/api/promo?code=NOPE&amount=30");
+check("unknown codes are still invalid", r.json.valid === false, r.json);
+
+// The test purchase: the server owns its price (EUR 0.02), package, description and meta.
+r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 0.02, pay_currency: "btc", type: "test_purchase", package: "PREMIUM", description: "evil", meta: { tier: "PREMIUM" } } });
+check("the test purchase reaches the normal invoice path and is priced by the server", r.status === 503 && typeof r.json.orderId === "string", { status: r.status, body: r.json });
+const testRow = env.DB.db.prepare("SELECT amount, type, package, description, meta, status, user_id FROM orders WHERE order_id = ?").get(r.json.orderId);
+check("price, package and meta are server-fixed - the posted values are ignored",
+  testRow && testRow.amount === 0.02 && testRow.type === "test_purchase" && testRow.package === "Test Purchase" && /Test Purchase/.test(testRow.description) && JSON.parse(testRow.meta).test === true && testRow.status === "pending", testRow);
+check("the test purchase is filed to the signed-in account", testRow && testRow.user_id === memberId, testRow);
+
+r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 0.02, pay_currency: "btc", type: "discord_bot" } });
+check("a normal product cannot be bought at the test price -> 400", r.status === 400, r.json);
+r = await call("POST", "/api/invoice", { body: { amount: 0.02, pay_currency: "btc", type: "test_purchase" } });
+check("the test purchase still requires an account -> 401", r.status === 401 && r.json.code === "ACCOUNT_REQUIRED", r.json);
+
+// A 100% test promo on the test item: a free order, and no NOWPayments call at all (this env has
+// no API key - a real call would fail - so a 200 proves the payment was skipped on purpose).
+r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 0.02, pay_currency: "btc", type: "test_purchase", promoCode: "TESTFULL" } });
+check("test item + 100% test code -> free order, no payment created",
+  r.status === 200 && r.json.ok === true && r.json.free === true && r.json.priceAmount === 0 && r.json.promoApplied === "TESTFULL" && typeof r.json.purchaseId === "string", r.json);
+const freeRow = env.DB.db.prepare("SELECT amount, status, promo_code, discount FROM orders WHERE order_id = ?").get(r.json.orderId);
+check("the free order is recorded honestly (status free, EUR 0, promo + discount)", freeRow && freeRow.status === "free" && freeRow.amount === 0 && freeRow.promo_code === "TESTFULL" && freeRow.discount === 0.02, freeRow);
+
+r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 30, pay_currency: "btc", type: "discord_bot", package: "BASIC", promoCode: "TESTFULL" } });
+check("the same test code on a normal item also creates a free order (deliberate and test-only)", r.status === 200 && r.json.free === true, r.json);
+const freeRow2 = env.DB.db.prepare("SELECT amount, status, discount FROM orders WHERE order_id = ?").get(r.json.orderId);
+check("an item discounted to zero is recorded as free, never as paid", freeRow2 && freeRow2.status === "free" && freeRow2.amount === 0 && freeRow2.discount === 30, freeRow2);
+
+r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 0.02, pay_currency: "btc", type: "test_purchase", promoCode: "WELCOME10" } });
+check("a normal code cannot zero the test item (whole-euro rounding) -> still payable", r.status === 503 && typeof r.json.orderId === "string", { status: r.status, body: r.json });
+
+// A free order creates no payment, so it needs no coin - and everything that does create one is
+// still validated just as strictly as before.
+r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 30, type: "discord_bot", package: "BASIC", promoCode: "TESTFULL" } });
+check("a free order needs no coin at all (nothing is created to pay)", r.status === 200 && r.json.free === true, r.json);
+r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 30, type: "discord_bot", package: "BASIC" } });
+check("a normal order without a coin is still refused -> 400", r.status === 400 && /BTC/.test(String(r.json.error)), r.json);
+r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 30, pay_currency: "doge", type: "discord_bot", package: "BASIC" } });
+check("a normal order with an unsupported coin is still refused -> 400", r.status === 400 && /Unsupported/.test(String(r.json.error)), r.json);
+r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 30, pay_currency: "doge", type: "discord_bot", package: "BASIC", promoCode: "TESTFULL" } });
+check("a free order ignores the coin entirely - no payment, no payout address", r.status === 200 && r.json.free === true && !r.json.payAddress && r.json.priceAmount === 0, r.json);
 
 console.log("\n--- misc ---");
 r = await call("GET", "/api/nope");

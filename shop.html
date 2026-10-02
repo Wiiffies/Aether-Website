@@ -99,6 +99,25 @@
         <a class="outline-button" href="website.html#web-request">Request custom website</a>
       </div>
     </section>
+
+    <!-- TEMPORARY payment test item. Remove this whole section together with the test_purchase
+         type in worker/src/index.js once the live checkout + IPN path is confirmed. -->
+    <section>
+      <div class="shop-section-head"><h2>Payment testing <em>— temporary</em></h2></div>
+      <div class="tier-grid">
+        <article class="tier-card">
+          <span class="tier-kicker">Test — €0.02</span>
+          <div class="tier-name">TEST PURCHASE</div>
+          <ul class="tier-list">
+            <li>Creates a real NOWPayments payment for exactly €0.02</li>
+            <li>Normal checkout: account, BTC/LTC/ETH, promo code, IPN and emails all apply</li>
+            <li>Testing only — not a product; it cannot be swapped for a real package</li>
+          </ul>
+          <button class="tier-cta" data-pay="test_purchase" data-package="TEST" data-amount="0.02" data-desc="Test Purchase — real payment (€0.02)">Pay €0.02 with Crypto <span>↗</span></button>
+        </article>
+      </div>
+      <p style="margin:12px 0 0;font-size:12px;line-height:1.7;color:#9aa0a6">Temporary: verifies the live payment + IPN path with a real (tiny) payment. Delete this section and the <code style="color:#c8d0d8">test_purchase</code> type in the Worker once checkout is confirmed — it is not part of the shop.</p>
+    </section>
   </section>
 
   <div class="important" style="margin-top:42px">
@@ -119,29 +138,34 @@
   </div>
 </main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
 <script src="public/aether-config.js?v=9"></script>
-<script src="public/checkout.js?v=9"></script>
+<script src="public/checkout.js?v=10"></script>
 <script src="public/aether.js?v=7" defer></script>
 <script>
 (() => {
   const C = window.AetherCheckout;
+  const PAY_LABELS = { website: 'Website', discord_bot: 'Discord Bot', test_purchase: 'Test Purchase' };
   document.querySelectorAll('[data-pay]').forEach(btn=>{
     btn.addEventListener('click', (e)=>{
       e.preventDefault();
       const amt = Number(btn.dataset.amount);
       const pkg = btn.dataset.package;
-      const type = btn.dataset.pay; // discord_bot | website
+      const type = btn.dataset.pay; // discord_bot | website | test_purchase
       const desc = btn.dataset.desc || `${type} ${pkg}`;
+      const isTest = type === 'test_purchase';
       if(!C || !C.isConfigured()){
         (C ? C.mailtoFallback({ subject: `Order — ${desc} — €${amt}`, body: `${desc}\nAmount: €${amt}\n\nEmail questions@get-aether.de with your Discord + email to pay with crypto. Worker not set up — see worker/README.md (set public/aether-config.js → apiBase).` }) : (location.href=`mailto:questions@get-aether.de?subject=${encodeURIComponent(desc)}`));
         return;
       }
-      const label = type==='website' ? 'Website' : 'Discord Bot';
+      const label = PAY_LABELS[type] || 'Aether';
       C.showPayModal({
-        title: `${label} ${pkg} — €${amt}`,
+        title: isTest ? `${label} — €${amt.toFixed(2)} payment test` : `${label} ${pkg} — €${amt}`,
         amount: amt,
-        breakdownHtml: `<div><b>${C.esc(desc)}</b><br><span style="color:#7a7d82">One-time · Source code · BTC / LTC / ETH</span></div>`,
-        onConfirm: async ({email, discord, payCurrency})=>{
-          const res = await C.createInvoice({ amount: amt, type, package: pkg, discord, email, pay_currency: payCurrency, description: desc, meta: { tier: pkg, via: 'shop' } });
+        promo: true,
+        breakdownHtml: isTest
+          ? `<div><b>${C.esc(desc)}</b><br><span style="color:#7a7d82">Real NOWPayments payment · same account, coin, promo and IPN checks as a normal order · testing only</span></div>`
+          : `<div><b>${C.esc(desc)}</b><br><span style="color:#7a7d82">One-time · Source code · BTC / LTC / ETH</span></div>`,
+        onConfirm: async ({email, discord, payCurrency, promoCode})=>{
+          const res = await C.createInvoice({ amount: amt, type, package: pkg, discord, email, pay_currency: payCurrency, description: desc, meta: isTest ? undefined : { tier: pkg, via: 'shop' }, promoCode });
           return res;
         }
       });
