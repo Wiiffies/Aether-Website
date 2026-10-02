@@ -76,6 +76,7 @@ Single source of truth for the customer-portal / Beta work. Status legend:
 
 ## 5. Tester / Beta
 
+- [x] **Worker deployed from CI (2026-10-02)** — `CLOUDFLARE_API_TOKEN` exists, `deploy-worker.yml` uploads `worker/src/index.js` (169 580 bytes, `166a1264…`), deployment `a4665481-…` / version `d4d59a60`; `/api/program` answers 403 instead of 404, and `wrangler.toml` is guarded so a deploy cannot blank `ADMIN_EMAIL` or add routes
 - [x] Server-side roles; `admin` cannot be granted through the API (configuration only)
 - [x] Admin can grant/revoke Tester; every change is audited
 - [x] Beta API (`/api/beta/*`) enforces session + verified email + Tester role

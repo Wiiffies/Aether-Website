@@ -4,7 +4,9 @@ Everything in this file is an **external action**: a dashboard click, a token, a
 lives on your account somewhere. No agent can do these for you, and nothing else in the project is
 blocked on them.
 
-The site is **in maintenance mode right now, in SOFT mode**: the shop and every marketing page 302
+The API (`aether-api`) is **live with the current Worker code** as of 2026-10-02 — including the
+tester-only download, the account-recovery hardening and the refusal codes. The site is
+**in maintenance mode right now, in SOFT mode**: the shop and every marketing page 302
 to the notice, while `/account.html` (orders, invoices and **all chat threads**), the password
 recovery pages, the payment-result pages, `/admin.html`, `/beta.html`, `/public/*` and `/api/*` all
 stay open. Section 7 below is how you switch to HARD, or reopen the site entirely.
@@ -13,39 +15,40 @@ Legend: `[ ]` = to do, `[x]` = done and verified.
 
 ---
 
-## 0. The one that unblocks the most
+## 0. The Worker is deployed (done 2026-10-02)
 
-- [ ] **Create the `CLOUDFLARE_API_TOKEN` secret in GitHub** — this is the only reason the Worker
-      code from the last session is not live yet. Until it exists, `deploy-worker.yml` runs every
-      check and then **skips the deploy**.
+- [x] **`CLOUDFLARE_API_TOKEN` exists and `deploy-worker.yml` deployed `aether-api`** — the Worker
+      code is **live** (deployment `a4665481-…`, version `d4d59a60`, 2026-10-02 12:55 UTC, from
+      `worker/src/index.js` at 169 580 bytes / `166a1264462292748b4c6e5865cd15b03360fd035f1bb6b6acbb108aadeeee59`).
+      `/api/program` went from 404 to 403 `SESSION_REQUIRED`, which is the new build answering.
 
-  1. Cloudflare dashboard → **My Profile → API Tokens → Create Token → Create Custom Token**.
-  2. Name it `aether-github-actions`.
-  3. Permissions — exactly these three, all **Account** scoped, all **Edit**:
-     - `Workers Scripts : Edit`
-     - `Workers KV Storage : Edit`
-     - `D1 : Edit`
-     - Account resources: **Include → your account** (`Wispz@outlook.de`).
-       (Leave Zone resources empty — these are account-level permissions.)
-  4. Create, copy the token **once** (it is never shown again).
-  5. GitHub → repo `Wiiffies/Aether-Website` → **Settings → Secrets and variables → Actions →
-     New repository secret** → name `CLOUDFLARE_API_TOKEN` → paste → Add.
-  6. Then: **Actions → "Deploy aether-api worker" → Run workflow → environment `aether-api`**.
+  **Two traps this step taught us** (both now handled, both worth knowing):
 
-  Verify it worked:
+  1. **A token belongs to the account you were signed into when you created it.** A token from
+     *another* Cloudflare account authenticates fine and then fails every call with
+     `Authentication error [code: 10000]`. Aether lives in **"Wispz@outlook.de's Account"**
+     (`e83c68e5e26e3e9096542df702331096`) — the zone, the D1 database and all three Workers.
+  2. **The secret name has to match exactly**, and GitHub secrets cannot be renamed or read back.
+     Yours landed as `CLOUDFLARE_API_TOKE` (one character short) and `deploy-worker.yml` accepts
+     that name as a documented fallback, printing a warning on every run. To tidy it up: create
+     `CLOUDFLARE_API_TOKEN` with the same value, delete `CLOUDFLARE_API_TOKE`, then drop the two
+     `_TYPO` lines from `.github/workflows/deploy-worker.yml`.
+
+  Permissions, if it ever needs recreating: **Workers Scripts : Edit**, **Workers KV Storage : Edit**,
+  **D1 : Edit** — all Account-scoped, Account resources **Include → Wispz@outlook.de's Account**.
+  Then: **Actions → "Deploy aether-api worker" → Run workflow → environment `aether-api`**.
 
   ```bash
   curl -s https://get-aether.de/api/health
   # expect: {"ok":true,...,"email":false,...}
   curl -s -o /dev/null -w '%{http_code}\n' https://get-aether.de/api/program
-  # expect: 403  (anonymous is refused by the Worker)
-  # a 404 means the Worker is still the old build
+  # expect: 403  (anonymous is refused by the Worker) - a 404 means CI did not deploy
   ```
 
-  > If the token creation page refuses or errors with `9109 Unauthorized`, that is the account's
-  > API-token policy, not something in this repo — try creating the token from a browser profile
-  > that is signed in as the account owner, or use the alternative: run the deploy from your own
-  > machine with `npx wrangler deploy --keep-vars` inside `worker/` after `npx wrangler login`.
+  > The deploy is **code only**: `worker/wrangler.toml` holds `keep_vars = true`, declares only the two
+  > routes the zone actually has, and never declares an empty variable, so it cannot blank the live
+  > `ADMIN_EMAIL` or re-route traffic. `_check-deploy-config.mjs` fails the workflow if any of that
+  > changes, and the run after the deploy confirmed the admin address and both routes survived.
 
 ## 1. Email that actually sends (needed for verification + reset links)
 
@@ -67,6 +70,10 @@ Legend: `[ ]` = to do, `[x]` = done and verified.
   > customer-facing email yet. Nothing is broken; it is simply not finished.
 
 ## 2. Publish a build people can download
+
+The download now exists server-side (`/api/program` answers, `/api/program/file` refuses an anonymous
+caller with `400 TICKET_REQUIRED`), so the **only** thing missing is the build itself: until the
+variables below are set, a Tester sees the honest "No build has been published yet" card.
 
 - [ ] Host the build somewhere **private** (a Cloudflare R2 bucket with no public bucket policy and
       no presigned URL, a private GitHub release asset, or any host whose URL you would not mind
