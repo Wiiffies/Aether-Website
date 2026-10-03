@@ -120,7 +120,7 @@ Single source of truth for the customer-portal / Beta work. Status legend:
 - [!] SSL/TLS mode: **Full (strict) is impossible as long as GitHub Pages is the origin** — enabling it on 2026-10-01 produced an instant site-wide **HTTP 526**; reverted to `Full` within minutes and the site came back (verified: `/`, `/shop.html`, `/account.html`, `/public/checkout.js`, `/public/aether.css` all 200). GitHub Pages answers with `CN=*.github.io` for `get-aether.de`, so strict validation can never succeed. Prerequisite before retrying: move the static site behind a Cloudflare-managed certificate (Cloudflare Pages / Worker with static assets) or let GitHub provision a cert for the domain with the proxy temporarily DNS-only. See SECURITY.md §4.3.
 - [x] `ADMIN_EMAIL=alex.real.apple@gmail.com` set and the guessed `ADMIN_EMAILS=Wispz@outlook.de` emptied (bindings re-sent with `keep_bindings:["secret_text"]`; all four secrets + D1 survived, proven by `/api/health`)
 - [x] `ALLOWED_ORIGIN` set explicitly to `https://get-aether.de,https://www.get-aether.de,https://api.get-aether.de` (wildcards are still ignored by code)
-- [ ] MANUAL: set `RESEND_API_KEY` so verification/reset emails really send
+- [x] MANUAL: `RESEND_API_KEY` is set — verification/reset/order mail really sends (live health: `email:true, emailProvider:"resend"`, 2026-10-03)
 
 ## 9. Frontend / UI
 
@@ -147,7 +147,7 @@ Single source of truth for the customer-portal / Beta work. Status legend:
 - [x] Account-only checkout redeployed 2026-10-01: sha256 `5e139dde5031dc1d75ad0f5f0baf8cd655632aa1060f7f8948762be61cce48af`, 135 412 bytes, **6 of 22 chunks** changed (16–21), verified by re-downloading the KV chunks and comparing the sha256 before upload; `aether-meta` KV updated
 - [x] Live proof of the gate: anonymous `POST /api/invoice` → `401 {"error":"Checkout requires an account…","code":"ACCOUNT_REQUIRED"}`, a disallowed origin still → 403, `/api/conversations` → 401, `/api/health` all-true after both deploys and the binding change
 - [x] Account-only **request forms** deployed 2026-10-01: sha256 `934adbfd14d17d771260d4a2f904be8edfd57aaae7bbf0b2f1d64ff970a00268`, 137 805 bytes, 23 chunks, both scripts. Live proof: anonymous `POST /api/order` with `type: discord_bot` **and** `type: website` → `401 ACCOUNT_REQUIRED` (no email typed helps), while `type: contact` with an email still returns `ok:true` — so general questions stay open but nothing that buys or requests work can be placed from an accountless browser
-- [x] Live verification after deployment: `/api/health` → `{ok:true,email:false,payments:true,ipnSignature:true,discord:true,db:true}`; anonymous `/api/conversations`, `/api/purchases/…`, `/api/beta/access` and `/api/me` all 401
+- [x] Live verification after deployment (2026-10-01, when mail was not yet configured): `/api/health` → `{ok:true,email:false,payments:true,ipnSignature:true,discord:true,db:true}`; anonymous `/api/conversations`, `/api/purchases/…`, `/api/beta/access` and `/api/me` all 401. **Superseded 2026-10-03:** health now reads `email:true, emailProvider:"resend", resetDelivery:"email"`.
 - [x] Browser-verified locally: portal dashboard (purchase + conversation history), tester `beta.html`, admin tabs (Conversations, Beta config + audit) incl. the whole Beta-domain request/confirm flow
 
 ## 11. Git + independent Beta deployment
@@ -165,7 +165,7 @@ Single source of truth for the customer-portal / Beta work. Status legend:
 - [ ] MANUAL: DNS record + worker route for the Beta hostname (`betatester.get-aether.de` + the long path)
 - [ ] MANUAL: separate Beta Worker with its own D1/KV/secrets (data isolation) before real Beta testing — today isolation is configuration, not a hard boundary
 - [ ] MANUAL: DNS record + route if the portal should live on its own `Customer.get-aether.de` hostname (today it is same-origin on get-aether.de)
-- [ ] MANUAL: `PROMO_CODES` (paste the JSON in the dashboard — the promo engine is implemented and deployed as of 2026-10-02; until it is set every code returns `{valid:false}`. Keep `TEST100` in the dashboard only, never in the repo: the sample the tests use is `TESTFULL`) and **real email** and **real email** — `ADMIN_EMAIL` and `TURNSTILE_*` are done as of 2026-10-01. Mail has two paths and needs no code change: Cloudflare Email Sending (dashboard -> Email Service -> Email Sending -> Onboard Domain -> `get-aether.de`, then attach the `EMAIL` binding; free for the account's verified destinations) or `RESEND_API_KEY` (Worker secret + GitHub secret; the workflow syncs it)
+- [x] MANUAL: `PROMO_CODES` **is set (verified live 2026-10-03)** — `WELCOME10` answers `{valid:true,discount:3,finalAmount:27}`, `TEST100` `{finalAmount:0,test:true}`. It stays in the dashboard only, never in the repo (the sample the tests use is `TESTFULL`); **drop `TEST100` before launch**. `ADMIN_EMAIL` and `TURNSTILE_*` were done 2026-10-01, and **real email is live through Resend** (health reports `email:true, emailProvider:"resend"`; `RESEND_API_KEY` is set as a Worker secret and a GitHub secret the workflow syncs). The alternative remains Cloudflare Email Sending (dashboard -> Email Service -> Email Sending -> Onboard Domain -> `get-aether.de`, then attach the `EMAIL` binding; free for the account's verified destinations) — no code change either way
 - [x] MANUAL: explicit `ALLOWED_ORIGIN` set (2026-10-01); SSL mode cannot move to `Full (strict)` until the origin stops being GitHub Pages (see §8)
 - [ ] MANUAL: second edge rate-limit rule for chat/Beta/admin (free plan allows one — the existing rule must not throttle `/api/ipn`)
 
@@ -178,7 +178,7 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
 - [x] secret `TURNSTILE_SECRET` (set 2026-10-01, mirrors the live Worker secret; Turnstile verified live the same day: health `turnstile:true`, 403 without a token on register/forgot, a real browser token accepted, full signup `200`, smoke account deleted)
 - [x] `deploy-worker.yml` gained an optional **secret sync**: `RESEND_API_KEY`, `TURNSTILE_SECRET`, `NOWPAYMENTS_API_KEY`, `NOWPAYMENTS_IPN_SECRET(_2)`, `DISCORD_WEBHOOK_URL` — only the names present in GitHub are pushed, so a blank copy can never blank a live value
 - [ ] MANUAL: secret `CLOUDFLARE_API_TOKEN` — Cloudflare refuses to mint tokens for our automation (`9109 Unauthorized`), so it has to be created in the dashboard with **Workers Scripts:Edit + Workers KV Storage:Edit + D1:Edit**. Until then `deploy-worker.yml` runs the checks and skips the deploy
-- [ ] MANUAL (optional): add `RESEND_API_KEY` to GitHub once Resend exists — the sync step then keeps the Worker and the repo in agreement
+- [x] `RESEND_API_KEY` is set as both a Worker secret and a GitHub secret, so the workflow's sync step keeps the two in agreement (2026-10-03)
 - [ ] MANUAL: set `BETA_TARGET` to a Cloudflare Pages project — the publish job is wired and refuses to fall back to the production Pages site
 
 ## 14. Tester download + maintenance mode (2026-10-01, evening)
@@ -389,9 +389,11 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
       checkout: `test_purchase_bot` / `test_purchase_website`, server-priced and packaged, with the
       old `test_purchase` name kept as an alias so a checkout already open cannot break. An LTC run
       creates a real payment; BTC and ETH are refused with their own higher figure named.
-- [ ] MANUAL: run an **LTC** test on either card to prove the payment path end to end (a BTC/ETH run
-      demonstrates the refusal with the exact figure), use `TEST100` for a free order, and remove both
-      cards + both types + the promo code before launch.
+- [x] **Both test cards and both types were removed 2026-10-03** — with the server-side pricing
+      catalog in place, a test product is no longer needed to prove the checkout: the promo engine
+      (`TEST100`/`TESTFULL`, `test:true`) still produces a free order with no payment at all, and a
+      real tier is priced by the server. `test_purchase*` answers `400 UNKNOWN_TYPE` and the tests
+      keep it that way.
 - [x] **The order page took over from the pay modal, and the chain became checkable and copyable
       (2026-10-03, not yet pushed).** A created payment (and a free order) hands off to
       `order.html?purchase_id=…` automatically — verified in a browser on the local stack — so the
@@ -416,10 +418,12 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
       the real per-coin floors (EUR 0.04 clears LTC; BTC/ETH are refused with their figure), a
       pending payment carrying an address, or a finished one carrying `actually_paid` and a
       `payin_hash`. Opt-in — a normal run is untouched.
-- [ ] MANUAL: re-run the **LTC** test card on the live site after this deploy and confirm the order
-      page's copy buttons and "Check the blockchain now" behave the same against the real provider.
+- [ ] MANUAL: with the test cards gone, prove the live payment path on a **real tier** when the
+      first genuine order arrives (or temporarily with a `test:true` 100% promo for the free-order
+      branch), and confirm the order page's copy buttons and "Check the blockchain now" behave the
+      same against the real provider.
 
-## 18. Full audit pass — pricing, legal, privacy, UX (2026-10-03, not yet pushed)
+## 18. Full audit pass — pricing, legal, privacy, UX (2026-10-03, DEPLOYED)
 
 - [x] **The browser can no longer name the price.** `handleInvoice` used to trust the posted
       `amount`; the Worker now owns every price. `FIXED_PRICES`: `discord_bot` BASIC 15 /
@@ -455,6 +459,14 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
       All 8 guards green; `worker/src/index.js` sha256
       `0fc4419728b6fa303836e515de89de06441037c669bfab689b1c8e881677a8ed`, 214 765 bytes (LF), 0
       non-ASCII.
+- [x] **Committed and pushed 2026-10-03: `e01e312`** (`e01e3126a7cc3a2dba4d811314d2e0294392db92`),
+      41 files. `Deploy aether-api worker` run `37129705139` green → worker version
+      `9aa19a44-a64f-4b81-b38d-24e1afa62a1c`; `Production checks (main)` `37129705133` and
+      `pages-build-deployment` `37129704332` green. Live-verified: the removed type answers
+      `400 UNKNOWN_TYPE`, a real type signed out answers `401 ACCOUNT_REQUIRED`, all four legal
+      pages + their aliases return 200, `/terms/` redirects to `/terms.html`, the homepage loads
+      `consent.js?v=1`, and live `checkout.js` carries the no-refund line. All 15 Worker bindings
+      survived (both IPN secrets, `RESEND_API_KEY`, `TURNSTILE_SECRET`, `D1`, `PROMO_CODES` now set).
 - [ ] MANUAL: fill in the imprint's real operator details (name, address, contact) before launch;
       the page ships with honest placeholders flagged in this repo.
 - [ ] Not implemented (audit findings, deliberate scope): images in the support chat (CSP already
