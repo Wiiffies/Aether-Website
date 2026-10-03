@@ -1432,6 +1432,67 @@ check("and still cannot list them -> 403", r.status === 403, r.json);
 globalThis.fetch = realFetchPay;
 delete env.NOWPAYMENTS_API_KEY;
 
+// Discord refuses a webhook whose embed text adds up to more than 6000 characters, and it refuses
+// the WHOLE message - the order notification would be lost entirely, with the failure swallowed by
+// a fire-and-forget .catch(). The individual limits were already enforced; the sum was not.
+//
+// The reachable path is checkout: `meta` is free-form, an entry may be 1000 characters, and up to 18
+// fields are sent - so an order notification can legitimately be three times the limit. A real
+// signed-in checkout drives it here and the embed the Worker actually posts is measured.
+console.log("\n--- discord embeds fit inside the 6000-character limit ---");
+const realFetchDiscord = globalThis.fetch;
+const embedBodies = [];
+env.DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/9/embed-token";
+env.NOWPAYMENTS_API_KEY = "np-test-key";
+// One stub for both hops the checkout makes: the provider (so a real order is created) and Discord
+// (so the notification the Worker actually posts can be measured).
+globalThis.fetch = async (url, init) => {
+  const u = String(url);
+  if (u.includes("discord.com/api/webhooks")) { embedBodies.push(init && init.body ? String(init.body) : ""); return { ok: true, status: 200, text: async () => "{}" }; }
+  if (u.includes("/v1/min-amount")) return { ok: true, status: 200, text: async () => JSON.stringify({ min_amount: 0.00003, fiat_equivalent: 2.2 }) };
+  if (u.includes("/v1/payment")) return { ok: true, status: 200, text: async () => JSON.stringify({ payment_id: 777000222, payment_status: "waiting", pay_address: "ltc1qexampleaddress", pay_amount: 0.5, pay_currency: "ltc", price_amount: 30, price_currency: "eur" }) };
+  return { ok: true, status: 200, text: async () => "{}" };
+};
+// A fresh account, because every earlier session in this file has been deliberately invalidated by
+// the password-reset and status tests above.
+r = await call("POST", "/api/auth/register", { body: { email: "embed@example.com", password: "embedpass123", discord: "tester#1" } });
+const embedToken = r.json.token;
+check("a fresh account for the embed checks", r.status === 200 && !!embedToken, r.json);
+const embedSize = (e) => (e.title || "").length + (e.description || "").length
+  + (e.footer ? (e.footer.text || "").length : 0) + (e.author ? (e.author.name || "").length : 0)
+  + (e.fields || []).reduce((n, f) => n + (f.name || "").length + (f.value || "").length, 0);
+// Every meta entry at the length the Worker accepts (1000), more than the 18 fields it sends.
+const hugeMeta = Object.fromEntries(Array.from({ length: 20 }, (_, i) => ["Detail " + i, "Z".repeat(1000)]));
+r = await call("POST", "/api/invoice", { token: embedToken, body: { pay_currency: "ltc", type: "website", package: "ADVANCED", description: "A large quoted website", meta: hugeMeta } });
+check("a checkout carrying very long answers still creates the order", r.status === 200 && typeof r.json.orderId === "string", { status: r.status, body: r.json });
+check("the checkout really posted a payment-started embed", embedBodies.length === 1 && JSON.parse(embedBodies[0]).embeds.length === 1, { posts: embedBodies.length });
+const hugeEmbed = embedBodies.length === 1 ? JSON.parse(embedBodies[0]).embeds[0] : {};
+check("the embed is inside Discord's 6000-character limit", embedBodies.length === 1 && embedSize(hugeEmbed) <= 6000, { chars: embedSize(hugeEmbed) });
+// The regression proof, measured on the INPUT rather than on the already-trimmed output: the order
+// carries far more answer text than Discord will ever accept, and the Worker put it in the field
+// list (each entry capped at 1000, up to 18 fields sent). A builder that only caps each field cannot
+// fit this - the payload is genuinely over the limit, not merely close to it.
+const postedAnswerText = Object.values(hugeMeta).join("").length;
+check("without a total budget the same notification would have been rejected by Discord",
+  postedAnswerText > 6000 && embedSize(hugeEmbed) < postedAnswerText,
+  { answersPosted: postedAnswerText, embedSent: embedSize(hugeEmbed) });
+check("trimming keeps the order identifiable, not just short",
+  /ADVANCED|299/.test(hugeEmbed.title || "") && (hugeEmbed.fields || []).some(f => f.name === "Email") && (hugeEmbed.fields || []).some(f => f.name === "Order ID"),
+  { title: hugeEmbed.title, fields: (hugeEmbed.fields || []).map(f => f.name) });
+check("a trimmed embed says so instead of pretending it is complete",
+  (hugeEmbed.fields || []).some(f => /\u2026$/.test(f.value || "")) || /\u2026$/.test(hugeEmbed.description || ""),
+  { last: (hugeEmbed.fields || []).slice(-1)[0], desc: (hugeEmbed.description || "").slice(-40) });
+// The ordinary case must not lose anything: a short order keeps every field, untrimmed.
+embedBodies.length = 0;
+r = await call("POST", "/api/invoice", { token: embedToken, body: { pay_currency: "ltc", type: "discord_bot", package: "BASIC", description: "A short bot order" } });
+const smallEmbed = embedBodies.length === 1 ? JSON.parse(embedBodies[0]).embeds[0] : {};
+check("a normal-sized order is not trimmed at all",
+  r.status === 200 && (smallEmbed.fields || []).every(f => !/\u2026$/.test(f.value || "")) && !/\u2026$/.test(smallEmbed.description || ""),
+  { fields: (smallEmbed.fields || []).filter(f => /\u2026$/.test(f.value || "")).map(f => f.name), desc: (smallEmbed.description || "").slice(-40) });
+globalThis.fetch = realFetchDiscord;
+delete env.NOWPAYMENTS_API_KEY;
+delete env.DISCORD_WEBHOOK_URL;
+
 console.log("\n--- misc ---");
 r = await call("GET", "/api/nope");
 check("unknown route -> 404", r.status === 404, r.json);

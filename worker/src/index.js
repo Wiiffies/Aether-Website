@@ -235,20 +235,47 @@ const DISCORD_ACCENT = {
   new: 0xffffff,
 };
 
+// Discord rejects an embed whose title + description + field names/values + footer + author text
+// exceeds 6000 characters, and a rejected webhook is a missed order: the whole payload is refused,
+// not trimmed. Every individual limit below is documented, but the sum is the one that bites - a
+// website request with a dozen long answers is comfortably over it, which is exactly the order an
+// operator must not lose. So the text is budgeted and the least important parts give way: trailing
+// fields first (callers list the important ones first), then the tail of the description.
+const DISCORD_EMBED_TOTAL = 6000;
+const DISCORD_TRIM = "\u2026";
 function discordEmbed({ title, color, fields, description, footer, author }) {
+  const authorName = author && author.name ? String(author.name).slice(0,256) : "";
+  const titleText = String(title || "Aether \u2014 New order").slice(0,256);
+  const footerText = String(footer ? footer : "Aether \u2022 get-aether.de \u2022 " + new Date().toISOString()).slice(0,2048);
+  const descriptionText = description ? String(description).slice(0,4096) : "";
+  const prepared = (fields||[]).slice(0,25).map(([name,value,inline])=>({
+    name: String(name).slice(0,256),
+    value: String(value).slice(0,1024) || "\u200b",
+    inline: inline !== undefined ? !!inline : String(value).length < 55,
+  }));
+  let budget = DISCORD_EMBED_TOTAL - (titleText.length + authorName.length + footerText.length);
+  const kept = [];
+  for (const f of prepared) {
+    const cost = f.name.length + f.value.length;
+    if (cost <= budget) { kept.push(f); budget -= cost; continue; }
+    // Not enough room for the whole field: keep what fits rather than dropping it without a trace,
+    // and stop - everything after this one is even less important.
+    const room = budget - f.name.length;
+    if (room > 1) kept.push(Object.assign({}, f, { value: f.value.slice(0, room - DISCORD_TRIM.length) + DISCORD_TRIM }));
+    budget = 0;
+    break;
+  }
+  let desc = descriptionText;
+  if (desc.length > budget) desc = budget > DISCORD_TRIM.length ? desc.slice(0, budget - DISCORD_TRIM.length) + DISCORD_TRIM : "";
   const e = {
-    title: (title||"Aether \u2014 New order").slice(0,256),
+    title: titleText,
     color: color ?? DISCORD_ACCENT.info,
-    description: description ? String(description).slice(0,4000) : undefined,
-    fields: (fields||[]).slice(0,25).map(([name,value,inline])=>({
-      name: String(name).slice(0,256),
-      value: String(value).slice(0,1024) || "\u200b",
-      inline: inline !== undefined ? !!inline : String(value).length < 55,
-    })),
+    description: desc || undefined,
+    fields: kept,
     timestamp: new Date().toISOString(),
-    footer: footer ? { text: String(footer).slice(0,2048), icon_url: AETHER_LOGO } : { text: "Aether \u2022 get-aether.de \u2022 " + new Date().toISOString(), icon_url: AETHER_LOGO },
+    footer: { text: footerText, icon_url: AETHER_LOGO },
   };
-  if (author && author.name) e.author = { name: String(author.name).slice(0,256), icon_url: author.icon_url || AETHER_LOGO, url: author.url || undefined };
+  if (authorName) e.author = { name: authorName, icon_url: (author && author.icon_url) || AETHER_LOGO, url: (author && author.url) || undefined };
   e.thumbnail = { url: AETHER_LOGO };
   return [e];
 }

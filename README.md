@@ -85,7 +85,7 @@ who is allowed to do anything — every authorisation decision happens in the Wo
 
 ```bash
 node _dev-server.mjs      # http://127.0.0.1:5501 — static site AND /api/* through the real Worker
-node _test-worker.mjs     # 410 checks, no credentials needed
+node _test-worker.mjs     # 418 checks, no credentials needed
 node _check-inline-js.mjs *.html
 node _check-markup.mjs
 node _check-email-regex.mjs

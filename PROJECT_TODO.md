@@ -454,7 +454,7 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
       be logged so vendor payloads/customer PII never reach mail or Discord.
 - [x] **Sanitisation:** `cleanMessage()` strips control characters, normalises CRLF and caps at 4000
       chars server-side; `chat.js` linkifies only safe schemes and renders through `esc()`.
-- [x] **Tests: 410 checks, 0 failed (7 new)** — price tampering at a fixed tier, the estimate rules
+- [x] **Tests: 418 checks, 0 failed (7 new)** — price tampering at a fixed tier, the estimate rules
       (missing / mismatched / under the floor), the minimum-refusal figure, and the removed types.
       All 8 guards green; `worker/src/index.js` sha256
       `0fc4419728b6fa303836e515de89de06441037c669bfab689b1c8e881677a8ed`, 214 765 bytes (LF), 0
@@ -488,5 +488,30 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
       surrogate-pair escape in the Worker, and a bogus allowlist entry — all four exit 1; the
       baseline exits 0. `_test-worker.mjs`'s non-ASCII signature fixture switched from an emoji to
       CJK text (`\u4e2d\u6587`) so the guard needs no exclusion for test data.
+- [x] **A Discord embed that Discord would have refused, found by measuring the payload (2026-10-03).**
+      `discordEmbed()` enforced every documented per-part limit (title 256, description 4000,
+      field name 256, field value 1024, footer 2048, author 256, 25 fields) but never the **sum**,
+      and the sum is the limit that bites: Discord rejects an embed whose title + description +
+      field names and values + footer + author text exceeds **6000 characters**, and it rejects the
+      whole message rather than trimming it. The checkout is where it is reachable - `meta` is
+      free-form, an entry may be 1000 characters, and up to 18 fields are sent - so a real
+      signed-in order with long answers produced an embed of **8615 characters**, which Discord
+      would have answered with a 400 and which the fire-and-forget `.catch()` would have swallowed:
+      the operator simply never hears about the order. `discordEmbed()` now budgets the text
+      (title + author + footer reserved first, fields kept in the order the caller listed them -
+      important ones first - and the least important tail trimmed with an explicit `…`, then the
+      description takes whatever is left), so the embed always fits and always says it was cut.
+      **Tests: 418 checks, 0 failed (8 new)** - a real checkout carrying 20 x 1000-character
+      answers, the embed the Worker actually posts measured against the 6000 limit, the
+      unbudgeted figure proven to be over it, the order still identifiable after trimming
+      (`ADVANCED`, `Email`, `Order ID` all survive), the trimmed value marked with `…`, and a
+      normal-sized order proven to be untouched. **The fix is proven by reverting it:** with the
+      old builder restored the same test fails at `{chars:8615}` and the trimmed-mark check fails
+      with it; with the fix in place 418/0. All 9 guards green; `worker/src/index.js` sha256
+      `1e20c4c48257b56f0b4524a5b7b2ece272fa82a4c47f0755b2cb3b71475c96ea`, 216 201 bytes (LF),
+      0 non-ASCII.
+- [ ] MANUAL: the rendered Discord embed and the outgoing mail bodies still have not been seen by
+      eye - both code paths are covered by the tests above, but the only way to confirm the actual
+      rendering is a real payment (or a post to the operator's channel).
 - [ ] Not implemented (audit findings, deliberate scope): images in the support chat (CSP already
       allows `img-src 'self' data:`), and a terms-acceptance checkbox at registration.
