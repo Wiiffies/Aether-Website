@@ -146,9 +146,11 @@
     const raw = (j && (j.error || j.message)) || "";
     if(status === 429) return raw || "Too many attempts — please wait a few minutes and try again.";
     if(status === 403 && /origin/i.test(raw)) return "This request was blocked for security reasons. Reload the page and try again.";
-    // 500/502 are crashes: never surface the server's wording there. 503 keeps its message
-    // because the Worker uses it for honest "this feature is not configured yet" answers.
-    if(status === 500 || status === 502) return "Aether had a temporary problem. Please try again in a moment.";
+    // 500/502 are crashes: never surface the server's wording there. The one exception is a crash the
+    // Worker itself classified (`code`), because those sentences are written to be read by a customer
+    // - "the provider's minimum is €2.10, nothing was charged" - and hiding them is what made a real
+    // refusal look like a broken site. 503 keeps its message for the same reason.
+    if((status === 500 || status === 502) && !(j && j.code)) return "Aether had a temporary problem. Please try again in a moment.";
     if(raw) return raw;
     if(status >= 500) return "Aether had a temporary problem. Please try again in a moment.";
     return "Request failed (" + status + ")";
@@ -272,7 +274,6 @@
       <div style="width:min(560px,100%);background:#0b0b0c;border:1px solid #24262b;border-radius:16px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.65);margin:auto">
         <div style="padding:22px 24px 18px;border-bottom:1px solid #1d1f23;display:flex;align-items:flex-start;justify-content:space-between;gap:14px">
           <div style="display:flex;gap:12px;align-items:flex-start;min-width:0">
-            <span style="flex:0 0 auto;width:34px;height:34px;border-radius:10px;border:1px solid #26282d;background:#141519;display:grid;place-items:center;font-size:15px">&#9889;</span>
             <div style="min-width:0">
               <div style="font:10px 'DM Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#85878b">Secure checkout</div>
               <div style="font-size:17px;font-weight:600;letter-spacing:-.03em;margin-top:5px;line-height:1.3">${esc(opts.title||"Confirm order")}</div>
@@ -593,7 +594,10 @@
                 ${promoCode?`<div><span style="color:#6f7277">Promo:</span> <b style="color:#fff">${esc(promoCode)}</b></div>`:``}
               </div>
               <div style="margin-top:10px;font-size:10px;line-height:1.6;color:#7a7d82">It is recorded in your account — the portal shows it like any other order.</div>
-              <div style="margin-top:10px"><button type="button" data-close-payment style="padding:10px 14px;border-radius:6px;border:1px solid #333;background:transparent;color:#fff;font-size:11px;cursor:pointer">Close</button></div>
+              <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+                ${purchaseId?`<a href="order.html?purchase_id=${encodeURIComponent(purchaseId)}" style="padding:10px 14px;border-radius:6px;border:1px solid #333;background:#141519;color:#fff;font-size:11px;font-weight:700;text-decoration:none">Open the order page \u2197</a>`:``}
+                <button type="button" data-close-payment style="padding:10px 14px;border-radius:6px;border:1px solid #333;background:transparent;color:#fff;font-size:11px;cursor:pointer">Close</button>
+              </div>
             </div>`);
           confirm.textContent = "Order placed ✓";
           confirm.style.display = "none";
@@ -625,6 +629,7 @@
               <div style="margin-top:10px;font-size:10px;line-height:1.6;color:#7a7d82">Send <b style="color:#c8d0d8">exactly</b> that amount — network fee on top. Keep this tab open — you'll be redirected automatically once NOWPayments confirms the payment (IPN: <code>api.get-aether.de/api/ipn</code>). Success page is only reachable after verified payment.</div>
               <div data-pay-status style="margin-top:12px;padding:10px 12px;border:1px solid #2a2e33;border-radius:6px;background:#111214;color:#9aa0a6;font-size:11px;line-height:1.6">⏳ Waiting for payment — checking every 8s…<br><span style="color:#7a7d82">Status: <b data-status-text style="color:#c8d0d8">waiting</b> · Checks: <span data-checks>0</span></span></div>
               <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+                ${(result.purchaseId||result.purchase_id)?`<a href="order.html?purchase_id=${encodeURIComponent(result.purchaseId||result.purchase_id)}" target="_blank" rel="noopener" style="flex:1;min-width:140px;text-align:center;padding:10px 14px;border-radius:6px;border:1px solid #333;background:#141519;color:#fff;font-size:11px;font-weight:700;text-decoration:none">Open the payment page \u2197</a>`:``}
                 <button type="button" data-check-now style="flex:1;min-width:140px;padding:10px 14px;border-radius:6px;background:#fff;color:#000;font-size:11px;font-weight:700;cursor:pointer">Check status now</button>
                 <button type="button" data-close-payment style="padding:10px 14px;border-radius:6px;border:1px solid #333;background:transparent;color:#fff;font-size:11px;cursor:pointer">Close</button>
               </div>
@@ -656,7 +661,10 @@
             try{
               const u = apiUrl('/api/payment/' + encodeURIComponent(paymentId));
               if(!u) throw new Error('API not configured');
-              const res = await fetch(u, { headers:{'accept':'application/json'}});
+              // Signed-in data: the session travels with this request, so the Worker can prove the
+              // payment belongs to this account instead of trusting the id in the URL. A payment id
+              // that is not ours answers 404, exactly like one that does not exist.
+              const res = await fetch(u, { headers: authHeaders({'accept':'application/json'}), credentials: 'include' });
               const t = await res.text(); let j; try{ j=JSON.parse(t);}catch{ j={raw:t}; }
               if(!res.ok) throw new Error(j.error || `Status ${res.status}`);
               checks++; if(checksEl) checksEl.textContent=String(checks);
@@ -841,7 +849,21 @@
       deleteUser(id){ return apiFetch("/api/admin/users/" + encodeURIComponent(id), { method:"DELETE" }); },
       // Server-side role change. "admin" is never grantable through the API.
       setRole(id, role){ return apiFetch("/api/admin/users/" + encodeURIComponent(id) + "/role", { method:"POST", body:{ role } }); },
-      conversations(){ return apiFetch("/api/admin/conversations"); },
+      // Support search runs server-side, so a match on the 400th thread still shows up.
+      conversations(filter){
+        const f = filter || {};
+        const qs = [];
+        if(f.q) qs.push("q=" + encodeURIComponent(f.q));
+        if(f.status) qs.push("status=" + encodeURIComponent(f.status));
+        if(f.limit) qs.push("limit=" + encodeURIComponent(f.limit));
+        return apiFetch("/api/admin/conversations" + (qs.length ? "?" + qs.join("&") : ""));
+      },
+      // Ban / suspend / restrict. Server-side, admin-only, audited, and it can never touch an account
+      // listed in ADMIN_EMAILS or the caller's own row.
+      setUserStatus(id, status, reason, hours){ return apiFetch("/api/admin/users/" + encodeURIComponent(id) + "/status", { method:"POST", body:{ status, reason: reason || "", hours: hours || 0 } }); },
+      blockedIps(){ return apiFetch("/api/admin/blocked-ips"); },
+      blockIp(ip, note){ return apiFetch("/api/admin/blocked-ips", { method:"POST", body:{ ip, note: note || "" } }); },
+      unblockIp(ip){ return apiFetch("/api/admin/blocked-ips", { method:"DELETE", body:{ ip } }); },
       conversation(id){ return apiFetch("/api/admin/conversations/" + encodeURIComponent(id)); },
       conversationReply(id, body){ return apiFetch("/api/admin/conversations/" + encodeURIComponent(id) + "/messages", { method:"POST", body:{ body } }); },
       conversationStatus(id, status){ return apiFetch("/api/admin/conversations/" + encodeURIComponent(id) + "/status", { method:"POST", body:{ status } }); },

@@ -61,11 +61,24 @@
     <div class="acc-card">
       <h2>Accounts</h2>
       <p class="sub" id="ad-users-sub">Every registered account with its role, email verification and counts. Tester access is granted here and enforced by the Worker; the Admin role itself comes from <code>ADMIN_EMAILS</code> and can never be granted through this panel.</p>
+      <p class="sub">Status and the last address an account signed in from are shown so a restriction is a decision rather than a guess. Ban and suspend end the sessions that account already had; restricted keeps its own orders and chats readable but stops anything new. Administrators come from <code>ADMIN_EMAILS</code> and cannot be restricted here, and every change is written to the audit trail.</p>
       <div class="acc-row" id="ad-user-filters" style="margin:0 0 12px">
         <button class="acc-btn mini" data-user-filter="all" type="button" aria-pressed="true">All accounts</button>
         <button class="acc-btn ghost mini" data-user-filter="tester" type="button" aria-pressed="false">Testers only</button>
+        <button class="acc-btn ghost mini" data-user-filter="blocked" type="button" aria-pressed="false">Restricted / banned</button>
       </div>
-      <div class="acc-scroll"><table class="acc-table plain" id="ad-users"><thead><tr><th>#</th><th>Email</th><th>Discord</th><th>Email verified</th><th>Role</th><th>Joined</th><th>Orders</th><th>Paid</th><th>Msgs</th><th></th></tr></thead><tbody><tr><td colspan="10" class="acc-empty">Loading…</td></tr></tbody></table></div>
+      <div class="acc-scroll"><table class="acc-table plain" id="ad-users"><thead><tr><th>#</th><th>Email</th><th>Discord</th><th>Email verified</th><th>Role</th><th>Status</th><th>Joined</th><th>Last sign-in IP</th><th>Orders</th><th>Paid</th><th>Msgs</th><th></th></tr></thead><tbody><tr><td colspan="12" class="acc-empty">Loading…</td></tr></tbody></table></div>
+    </div>
+    <div class="acc-card">
+      <h2>Blocked networks</h2>
+      <p class="sub">The last resort for an abusive visitor: an address on this list is refused before any API route runs. It is blunt on purpose — a shared or mobile address would lock out real customers too — so nothing is added without a note saying why.</p>
+      <div class="acc-row" style="margin-bottom:12px;flex-wrap:wrap">
+        <input class="acc-input" id="ad-ip-input" placeholder="203.0.113.7 or 2001:db8::1" style="min-width:220px" autocomplete="off">
+        <input class="acc-input" id="ad-ip-note" placeholder="Why this address (note)" style="min-width:220px" autocomplete="off">
+        <button class="acc-btn mini" id="ad-ip-add" type="button">Block this address</button>
+      </div>
+      <div class="acc-scroll"><table class="acc-table plain" id="ad-ips"><thead><tr><th>Address</th><th>Note</th><th>Added</th><th>By</th><th></th></tr></thead><tbody><tr><td colspan="5" class="acc-empty">Loading…</td></tr></tbody></table></div>
+      <div class="acc-msg" id="ad-ip-msg" role="status" aria-live="polite"></div>
     </div>
   </div>
 
@@ -81,8 +94,18 @@
   <!-- conversations -->
   <div id="ad-tab-convos" class="acc-hide">
     <div class="acc-card">
-      <h2>Customer conversations</h2>
-      <p class="sub">Every authenticated chat thread, newest first. Ownership is enforced by the API: this view is the only way to read someone else's thread.</p>
+      <h2>Customer chats</h2>
+      <p class="sub">Every authenticated chat thread, newest first. Search and filtering run on the server, so a match on the oldest thread still shows up — not just the ones already on screen. Ownership is checked by the API on every read and reply: this panel is the only place a thread can be read by someone who is not its owner.</p>
+      <div class="acc-row" style="margin:0 0 12px;flex-wrap:wrap">
+        <input class="acc-input" id="ad-conv-search" placeholder="Search subject, customer, purchase ID or message…" style="min-width:280px" autocomplete="off">
+        <select class="acc-input" id="ad-conv-status" style="min-width:190px">
+          <option value="">All statuses</option>
+          <option value="open">Waiting for a reply</option>
+          <option value="answered">We replied</option>
+          <option value="closed">Resolved</option>
+        </select>
+        <button class="acc-btn ghost mini" id="ad-conv-reload" type="button">Refresh list</button>
+      </div>
       <div class="acc-scroll"><table class="acc-table plain" id="ad-convos"><thead><tr><th>Conversation</th><th>Customer</th><th>Purchase</th><th>Status</th><th>Last message</th><th></th></tr></thead><tbody><tr><td colspan="6" class="acc-empty">Loading…</td></tr></tbody></table></div>
     </div>
     <div id="ad-conv-detail" class="acc-card acc-hide">
@@ -153,7 +176,7 @@
 </section>
 </main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
 <script src="public/aether-config.js?v=9"></script>
-<script src="public/checkout.js?v=12"></script>
+<script src="public/checkout.js?v=13"></script>
 <script src="public/aether.js?v=7" defer></script>
 <script>
 (() => {
@@ -276,15 +299,28 @@
   function isTesterRow(u){ return u.role === "tester" || u.role === "admin"; }
   function renderUsers(){
     const body = $("ad-users").querySelector("tbody");
-    const list = userFilter === "tester" ? allUsers.filter(isTesterRow) : allUsers;
+    const list = userFilter === "tester" ? allUsers.filter(isTesterRow)
+      : userFilter === "blocked" ? allUsers.filter(u => u.status && u.status !== "active")
+      : allUsers;
     if (!list.length) {
-      body.innerHTML = `<tr><td colspan="10" class="acc-empty">${userFilter === "tester"
+      body.innerHTML = `<tr><td colspan="12" class="acc-empty">${userFilter === "tester"
         ? 'No Tester accounts yet — grant one with “Grant Tester” in the full list.'
+        : userFilter === "blocked" ? "No restricted, suspended or banned accounts."
         : "No accounts yet."}</td></tr>`;
       return;
     }
     body.innerHTML = list.map(u => {
       const isAdminRow = u.role === "admin";
+      const st = u.status || "active";
+      const stCls = st === "active" ? "paid" : st === "restricted" ? "pending" : "failed";
+      const statusCell = `<span class="acc-badge ${stCls}">${esc(st)}</span>`
+        + (u.status_until ? `<br><span class="mono" style="font-size:10px">until ${esc(when(u.status_until))}</span>` : "")
+        + (u.status_reason ? `<br><span class="mono" style="font-size:10px" title="${esc(u.status_reason)}">note on file</span>` : "");
+      const statusBtns = isAdminRow ? "" : (st === "active"
+        ? `<button class="acc-btn ghost mini" data-status="restricted" data-id="${esc(u.id)}" data-email="${esc(u.email)}" type="button">Restrict</button>`
+          + `<button class="acc-btn ghost mini" data-status="suspended" data-id="${esc(u.id)}" data-email="${esc(u.email)}" type="button">Suspend</button>`
+          + `<button class="acc-btn danger mini" data-status="banned" data-id="${esc(u.id)}" data-email="${esc(u.email)}" type="button">Ban</button>`
+        : `<button class="acc-btn mini" data-status="active" data-id="${esc(u.id)}" data-email="${esc(u.email)}" type="button">Reinstate</button>`);
       const roleBtn = isAdminRow
         ? '<span class="role-chip admin">config</span>'
         : (u.role === "tester"
@@ -302,14 +338,17 @@
       <td class="mono">${esc(u.discord || "—")}</td>
       <td>${verified}</td>
       <td><span class="role-chip ${esc(u.role)}">${esc(u.role)}</span></td>
+      <td>${statusCell}</td>
       <td class="mono">${esc(when(u.created_at))}</td>
+      <td class="mono" title="${esc(u.last_ip_at ? "Last sign-in " + when(u.last_ip_at) : "No sign-in recorded yet")}">${esc(u.last_ip || "—")}</td>
       <td class="mono">${esc(countFor(userStats, u.id, "orders"))}</td>
       <td class="mono">${esc(countFor(userStats, u.id, "paid"))}</td>
       <td class="mono">${esc(countFor(userMessageStats, u.id, "messages"))}</td>
-      <td class="acc-row">${roleBtn}${removeBtn}</td>
+      <td class="acc-row" style="flex-wrap:wrap">${roleBtn}${statusBtns}${removeBtn}</td>
     </tr>`; }).join("");
     body.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => removeUser(b.dataset.del, b.dataset.email)));
     body.querySelectorAll("[data-role]").forEach(b => b.addEventListener("click", () => setRole(b.dataset.id, b.dataset.email, b.dataset.role)));
+    body.querySelectorAll("[data-status]").forEach(b => b.addEventListener("click", () => setUserStatus(b.dataset.id, b.dataset.email, b.dataset.status)));
   }
   function renderUserFilters(){
     document.querySelectorAll("[data-user-filter]").forEach(b => {
@@ -321,7 +360,7 @@
     });
   }
   document.querySelectorAll("[data-user-filter]").forEach(b => b.addEventListener("click", () => {
-    userFilter = b.dataset.userFilter === "tester" ? "tester" : "all";
+    userFilter = b.dataset.userFilter === "tester" ? "tester" : b.dataset.userFilter === "blocked" ? "blocked" : "all";
     renderUserFilters();
     renderUsers();
   }));
@@ -342,9 +381,76 @@
       renderUserFilters();
       renderUsers();
     } catch (err) {
-      body.innerHTML = `<tr><td colspan="10" class="acc-empty">${esc(err.message || "Could not load accounts")}</td></tr>`;
+      body.innerHTML = `<tr><td colspan="12" class="acc-empty">${esc(err.message || "Could not load accounts")}</td></tr>`;
     }
   }
+  // ---------- account status (ban / suspend / restrict) ----------
+  // The prompt is the only place a reason is collected, and the reason is what the customer is shown,
+  // so it is written to be read by them. Nothing is applied locally: the API decides and the list is
+  // reloaded from it.
+  async function setUserStatus(id, email, status){
+    let reason = "", hours = 0;
+    if (status === "restricted") {
+      if (!confirm(`Restrict ${email}?\n\nThey keep their own orders and conversations readable, but cannot place new orders or start new conversations.`)) return;
+      reason = String(prompt("Reason (the customer is shown this):") || "");
+    } else if (status === "suspended") {
+      const h = prompt(`Suspend ${email} for how many hours? (1 - 8760, e.g. 24)`, "24");
+      if (h === null) return;
+      hours = Number(h);
+      if (!Number.isFinite(hours) || hours <= 0 || hours > 24 * 365) { msg($("ad-msg"), "A suspension needs a length in hours between 1 and 8760.", "err"); return; }
+      if (!confirm(`Suspend ${email} for ${hours} hour${hours === 1 ? "" : "s"}?\n\nTheir existing sessions are ended immediately. The suspension lifts by itself when the time is up.`)) return;
+      reason = String(prompt("Reason (the customer is shown this):") || "");
+    } else if (status === "banned") {
+      if (!confirm(`Ban ${email}?\n\nTheir sessions end immediately and they cannot sign in again. Nothing is deleted — reinstating the account from this panel restores it.`)) return;
+      reason = String(prompt("Reason (the customer is shown this):") || "");
+    } else {
+      if (!confirm(`Restore full access for ${email}?`)) return;
+      reason = String(prompt("Note for the audit trail (optional):") || "");
+    }
+    msg($("ad-msg"), `Updating ${email}…`);
+    try {
+      const r = await A.admin.setUserStatus(id, status, reason, hours);
+      msg($("ad-msg"), `${r.email} is now ${r.status}${r.until ? " until " + when(r.until) : ""}${r.sessionsRevoked ? " — existing sessions ended" : ""}.`, "ok");
+      await loadUsers();
+    } catch (err) { msg($("ad-msg"), err.message || "Could not change the account status", "err"); }
+  }
+
+  // ---------- blocked networks ----------
+  async function loadIps(){
+    const body = $("ad-ips").querySelector("tbody");
+    try {
+      const r = await A.admin.blockedIps();
+      const list = r.ips || [];
+      if (!list.length) { body.innerHTML = '<tr><td colspan="5" class="acc-empty">No blocked addresses — the site is reachable from every network.</td></tr>'; return; }
+      body.innerHTML = list.map(e => `<tr>
+        <td class="mono">${esc(e.ip)}</td>
+        <td>${esc(e.note || "—")}</td>
+        <td class="mono">${esc(when(e.at))}</td>
+        <td>${esc(e.by || "—")}</td>
+        <td><button class="acc-btn ghost mini" data-unblock="${esc(e.ip)}" type="button">Unblock</button></td>
+      </tr>`).join("");
+      body.querySelectorAll("[data-unblock]").forEach(b => b.addEventListener("click", () => unblockIp(b.dataset.unblock)));
+    } catch (err) {
+      body.innerHTML = `<tr><td colspan="5" class="acc-empty">${esc(err.message || "Could not load blocked addresses")}</td></tr>`;
+    }
+  }
+  async function unblockIp(ip){
+    msg($("ad-ip-msg"), `Unblocking ${ip}…`);
+    try { await A.admin.unblockIp(ip); msg($("ad-ip-msg"), `Unblocked ${ip}.`, "ok"); await loadIps(); }
+    catch (err) { msg($("ad-ip-msg"), err.message || "Could not unblock that address", "err"); }
+  }
+  $("ad-ip-add").addEventListener("click", async () => {
+    const ip = $("ad-ip-input").value.trim(), note = $("ad-ip-note").value.trim();
+    if (!ip) { msg($("ad-ip-msg"), "Enter an address first.", "err"); return; }
+    if (!confirm(`Block every API request from ${ip}?\n\nThis is a blunt instrument: a shared or mobile address would lock real customers out too.`)) return;
+    msg($("ad-ip-msg"), "Blocking…");
+    try {
+      await A.admin.blockIp(ip, note);
+      $("ad-ip-input").value = ""; $("ad-ip-note").value = "";
+      msg($("ad-ip-msg"), `Blocked ${ip}.`, "ok");
+      await loadIps();
+    } catch (err) { msg($("ad-ip-msg"), err.message || "Could not block that address", "err"); }
+  });
   // Tester permission is stored and enforced server-side; this only asks the API to change it.
   async function setRole(id, email, role){
     const label = role === "tester" ? "Grant Tester access to" : "Remove Tester access from";
@@ -372,25 +478,39 @@
     }).join("");
     chat.scrollTop = chat.scrollHeight;
   }
+  function convLabel(s){
+    const v = String(s || "open").toLowerCase();
+    if (v === "closed") return { text:"Resolved", cls:"failed" };
+    if (v === "answered") return { text:"We replied", cls:"paid" };
+    return { text:"Waiting for a reply", cls:"pending" };
+  }
+  let convSearchTimer = null;
   async function loadConvos(){
     const body = $("ad-convos").querySelector("tbody");
     try {
-      const r = await A.admin.conversations();
+      const r = await A.admin.conversations({ q: $("ad-conv-search").value.trim(), status: $("ad-conv-status").value });
       const list = r.conversations || [];
-      if (!list.length) { body.innerHTML = '<tr><td colspan="6" class="acc-empty">No conversations yet.</td></tr>'; return; }
-      body.innerHTML = list.map(c => `<tr>
+      const filtered = (r.filter && (r.filter.q || r.filter.status));
+      if (!list.length) { body.innerHTML = `<tr><td colspan="6" class="acc-empty">${filtered ? "No conversation matches that search." : "No conversations yet."}</td></tr>`; return; }
+      body.innerHTML = list.map(c => {
+        const lb = convLabel(c.status);
+        return `<tr>
         <td>${esc(c.subject || "Conversation")}<br><span class="mono">${esc(String(c.conversation_id).slice(0, 18))}</span></td>
         <td>${esc(c.user_email || "—")}</td>
         <td class="mono">${esc(c.purchase_id || "—")}</td>
-        <td><span class="acc-badge ${c.status === "closed" ? "failed" : c.status === "answered" ? "paid" : "pending"}">${esc(c.status)}</span></td>
+        <td><span class="acc-badge ${lb.cls}">${esc(lb.text)}</span></td>
         <td style="max-width:320px">${esc(String(c.last_body || "").slice(0, 140))}</td>
         <td><button class="acc-btn ghost mini" data-conv="${esc(c.conversation_id)}" type="button">Open ↗</button></td>
-      </tr>`).join("");
+      </tr>`; }).join("");
       body.querySelectorAll("[data-conv]").forEach(b => b.addEventListener("click", () => openConvDetail(b.dataset.conv)));
     } catch (err) {
       body.innerHTML = `<tr><td colspan="6" class="acc-empty">${esc(err.message || "Could not load conversations")}</td></tr>`;
     }
   }
+  // Typing filters after a short pause instead of a request per keystroke.
+  $("ad-conv-search").addEventListener("input", () => { clearTimeout(convSearchTimer); convSearchTimer = setTimeout(() => loadConvos(), 300); });
+  $("ad-conv-status").addEventListener("change", () => loadConvos());
+  $("ad-conv-reload").addEventListener("click", () => loadConvos());
   async function loadConvDetail(id){
     const r = await A.admin.conversation(id);
     const c = r.conversation || {};
@@ -524,6 +644,7 @@
       A.admin.orders(), A.admin.users(), A.admin.messages(),
     ]);
     loadConvos().catch(() => {});
+    loadIps().catch(() => {});
     loadBeta().catch(() => {});
     allOrders = o.orders || [];
     const paid = allOrders.filter(x => ["finished","confirmed","sending","paid"].includes(String(x.status || "").toLowerCase())).length;

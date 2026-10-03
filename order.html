@@ -1,0 +1,236 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="theme-color" content="#08080a"><title>Your order — Aether</title>
+<meta name="description" content="Open one Aether order: what you bought, what it costs, whether the payment went through, and how to pay again if it is still open.">
+<meta name="robots" content="noindex"><link rel="icon" href="public/aether-logo.png" type="image/png">
+<meta property="og:type" content="website"><meta property="og:site_name" content="Aether">
+<meta property="og:title" content="Your order — Aether">
+<meta property="og:description" content="One Aether order: item, amount, payment status and what happens next.">
+<meta property="og:url" content="https://get-aether.de/order.html">
+<meta property="og:image" content="https://get-aether.de/public/og.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Your order — Aether">
+<meta name="twitter:description" content="One Aether order: item, amount, payment status and what happens next.">
+<meta name="twitter:image" content="https://get-aether.de/public/og.png">
+<link rel="stylesheet" href="public/aether.css?v=7"><link rel="stylesheet" href="public/pages.css?v=7"><link rel="stylesheet" href="public/ui.css?v=7">
+</head><body><header class="site-header"><a class="brand" href="index.html"><img src="public/aether-logo.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="account.html">Account</a></nav><a class="header-cta" href="account.html">Your orders <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header>
+<main class="page-main">
+  <span class="page-kicker">Order</span>
+  <h1 id="order-title">Loading<br><em>your order…</em></h1>
+  <p class="page-lead" id="order-lead">Checking this order against your account — only the account that owns an order can read it.</p>
+
+  <div id="order-box" style="margin-top:22px;padding:16px 18px;border:1px solid #2a2e33;border-radius:8px;background:rgba(255,255,255,.02);font-size:12px;line-height:1.7;color:#c8c9cc">
+    <div id="order-state" style="display:flex;align-items:center;gap:10px"><div style="width:14px;height:14px;border:2px solid #555;border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite"></div><span id="order-state-text">Verifying this order against your account…</span></div>
+    <div id="order-detail-note" style="margin-top:10px;font:10px 'DM Mono',monospace;color:#7a7d82;word-break:break-all"></div>
+    <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+  </div>
+
+  <div class="detail-list" id="order-facts" style="margin-top:22px;display:none">
+    <div><b>Order ID</b><span id="of-order">—</span></div>
+    <div><b>Purchase ID</b><span id="of-purchase">—</span></div>
+    <div><b>Item</b><span id="of-item">—</span></div>
+    <div><b>Amount</b><span id="of-amount">—</span></div>
+    <div><b>Status</b><span id="of-status">—</span></div>
+    <div><b>Placed</b><span id="of-created">—</span></div>
+    <div id="of-deadline-row" style="display:none"><b>Pay before</b><span id="of-deadline">—</span></div>
+  </div>
+
+  <section id="order-pay" style="display:none;margin-top:26px;border:1px solid #242529;border-radius:8px;background:#0b0b0c;padding:18px">
+    <div style="font:10px 'DM Mono',monospace;text-transform:uppercase;letter-spacing:.12em;color:#85878b">Payment details</div>
+    <h2 style="font-size:19px;font-weight:500;letter-spacing:-.03em;margin:8px 0 10px">Send exactly this amount</h2>
+    <div style="display:flex;gap:8px;align-items:stretch;flex-wrap:wrap">
+      <code id="order-addr" style="flex:1;min-width:240px;padding:10px 12px;background:#111214;border:1px solid #2a2e33;border-radius:6px;color:#fff;font-size:12px;word-break:break-all;user-select:all">—</code>
+      <button type="button" id="order-copy" class="outline-button" style="margin:0">Copy address</button>
+    </div>
+    <p style="margin:12px 0 0;font-size:12px;line-height:1.7;color:#9aa0a6">
+      Amount <b id="order-pay-amount" style="color:#fff">—</b> · network fee on top. <span id="order-window"></span>
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+      <button type="button" id="order-check" class="purchase-button" style="margin:0">Check status now <span>↗</span></button>
+      <a class="outline-button" id="order-account" href="account.html">Open in your account →</a>
+    </div>
+  </section>
+
+  <div class="important" style="margin-top:28px">
+    <h3>What happens next</h3>
+    <ul>
+      <li><b style="color:#8ee0a0">Paid</b> — we start on it and reply from questions@get-aether.de within 3 days.</li>
+      <li><b style="color:#ffcc00">Waiting</b> — the crypto payment was created but the coins have not confirmed yet. This page updates by itself.</li>
+      <li><b style="color:#ff8a8a">Failed or expired</b> — nothing was charged. You can open this order again and start a new payment from your account dashboard.</li>
+      <li>Nothing here is reachable by changing a link: the server checks that this order belongs to the account you are signed in with.</li>
+    </ul>
+  </div>
+
+  <div class="page-actions" style="flex-wrap:wrap;margin-top:22px">
+    <a class="purchase-button" href="account.html">Your orders <span>↗</span></a>
+    <a class="outline-button" href="mailto:questions@get-aether.de">Email us</a>
+    <button type="button" id="order-refresh" class="outline-button" style="background:#111214;color:#fff;border:1px solid #333">Reload this page</button>
+  </div>
+  <a class="back-link" href="shop.html">← Back to the shop</a>
+</main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
+<script src="public/aether-config.js?v=9"></script>
+<script src="public/checkout.js?v=13"></script>
+<script src="public/aether.js?v=7" defer></script>
+<script src="public/chat.js?v=1" defer></script>
+<script>
+(function(){
+  var A = window.AetherCheckout;
+  var $ = function(id){ return document.getElementById(id); };
+  function esc(s){ return A ? A.esc(s == null ? "" : s) : String(s == null ? "" : s); }
+  if (!A) { $("order-state-text").textContent = "The site scripts did not load — please reload the page."; return; }
+  var params = new URLSearchParams(location.search);
+  var purchaseId = String(params.get("purchase_id") || params.get("purchaseId") || "").trim();
+  var orderId = String(params.get("order") || params.get("order_id") || params.get("orderId") || "").trim();
+  var paymentIdParam = String(params.get("payment_id") || params.get("paymentId") || "").trim();
+  var when = function(ts){ if (!ts && ts !== 0) return "—"; var d = new Date(typeof ts === "number" ? ts : String(ts)); return isNaN(d) ? String(ts) : d.toLocaleString("en-GB", { dateStyle:"medium", timeStyle:"short" }); };
+  function money(amount, currency){ var v = Number(amount); if (!isFinite(v)) return "—"; return "€" + (Math.abs(v % 1) < 0.005 ? v.toFixed(0) : v.toFixed(2)) + " " + String(currency || "eur").toUpperCase(); }
+  function item(o){ return String((o && (o.type || "order")) || "order").replace(/_/g, " ") + ((o && o.package) ? " · " + o.package : ""); }
+
+  function box(kind, html){
+    var el = $("order-box");
+    el.style.borderColor = kind === "ok" ? "#2a7a3a" : kind === "err" ? "#7a2a2a" : kind === "warn" ? "#4a3a12" : "#2a2e33";
+    el.style.background = kind === "ok" ? "rgba(46,160,67,.08)" : kind === "err" ? "rgba(122,42,42,.12)" : kind === "warn" ? "rgba(255,204,0,.05)" : "#111214";
+    var row = $("order-state"); if (row) { row.innerHTML = ""; }
+    el.innerHTML = html + '<style>@keyframes spin{to{transform:rotate(360deg)}}</style>';
+  }
+  function signedOut(message){
+    // A bare "Request failed (401)" is not worth printing at somebody: the useful sentence is that
+    // this page needs a session, so the server's wording is only used when it says something human.
+    const note = (message && !/^Request failed/i.test(String(message))) ? String(message) : "You are not signed in on this browser.";
+    $("order-title").innerHTML = 'Sign in to open<br><em>this order.</em>';
+    $("order-lead").innerHTML = "Orders belong to an account — that is what makes the purchase ID safe to share with support. Sign in and this page opens by itself.";
+    box("warn", '<div style="color:#c9a87a">' + esc(note) + '</div>'
+      + '<div style="margin-top:10px"><a class="purchase-button" href="account.html?next=' + encodeURIComponent(location.pathname + location.search) + '" style="display:inline-block;text-decoration:none">Sign in / create an account <span>↗</span></a></div>');
+  }
+  function notFound(extra){
+    $("order-title").innerHTML = 'No such order<br><em>on your account.</em>';
+    $("order-lead").innerHTML = "That order does not exist, or it is not yours. A purchase ID looks like <code>AETH-YYYY-XXXXXXXX</code> — it is an identifier for support, never a way in.";
+    box("err", '<div style="color:#ff9a9a">' + esc(extra || "Order not found for this account.") + '</div>'
+      + '<div style="margin-top:10px;font:10px \'DM Mono\',monospace;color:#7a7d82">' + esc(location.search || "(no query string)") + '</div>'
+      + '<div style="margin-top:10px"><a class="outline-button" href="account.html">See every order on your account →</a></div>');
+  }
+
+  var state = { orderId:"", purchaseId:"", paymentId:"", paid:false, failed:false, free:false };
+  var timer = null;
+
+  function renderFacts(p, live){
+    $("order-facts").style.display = "";
+    $("of-order").textContent = p.order_id || "—";
+    $("of-purchase").textContent = p.purchase_id || "—";
+    $("of-item").textContent = item(p);
+    $("of-amount").textContent = money(p.amount, p.currency) + (p.discount ? " (−€" + Number(p.discount).toFixed(2) + " promo)" : "");
+    $("of-status").textContent = (live && live.status) ? live.status : (p.status || "pending");
+    $("of-created").textContent = when(p.created_at);
+    if (live && live.validUntil) {
+      $("of-deadline-row").style.display = "";
+      $("of-deadline").textContent = when(live.validUntil);
+    }
+  }
+
+  function renderLive(live){
+    if (!live) return;
+    var s = String(live.status || "").toLowerCase();
+    var paid = !!live.isPaid, failed = !!live.isFailed, pending = !!live.isPending;
+    state.paid = paid; state.failed = failed;
+    if (!paid && !failed && (live.payAddress || live.payAmount != null)) {
+      $("order-pay").style.display = "";
+      $("order-addr").textContent = live.payAddress || "(the provider did not return an address — open your account and check the payment there)";
+      $("order-pay-amount").textContent = (live.payAmount != null ? String(live.payAmount) + " " + String(live.payCurrency || "").toUpperCase() : money(live.priceAmount, live.priceCurrency));
+      $("order-window").textContent = live.validUntil
+        ? "Pay before " + when(live.validUntil) + " — after that the provider expires the payment and it can be started again."
+        : "The provider keeps a pending payment open for a limited time (usually about an hour). After that it expires and nothing was charged.";
+    } else if (paid || failed) {
+      $("order-pay").style.display = "none";
+    }
+    if (paid) {
+      $("order-title").innerHTML = 'Payment<br><em>completed.</em>';
+      $("order-lead").innerHTML = 'Payment confirmed — <b style="color:#8ee0a0">' + esc(s || "paid") + '</b>. Your order is queued and we reply from questions@get-aether.de within 3 days.';
+      box("ok", '<div style="color:#8ee0a0">Paid — ' + esc(s || "paid") + (live.payAmount != null ? " · " + esc(String(live.payAmount)) + " " + esc(String(live.payCurrency || "").toUpperCase()) : "") + '</div><div style="margin-top:8px;font:10px \'DM Mono\',monospace;color:#7a7d82">Order ' + esc(state.orderId) + ' · Purchase ' + esc(state.purchaseId || "—") + '</div>');
+      stop();
+      return;
+    }
+    if (failed) {
+      $("order-title").innerHTML = 'Payment<br><em>did not complete.</em>';
+      $("order-lead").innerHTML = 'This payment is <b style="color:#ff8a8a">' + esc(s || "failed") + '</b>. Nothing was charged — you can start a new payment for this order from your account whenever you like.';
+      box("err", '<div style="color:#ff9a9a">Nothing was charged.</div><div style="margin-top:8px">Start again from <a class="ac-link" style="color:#fff" href="account.html">your account</a>, or write to questions@get-aether.de and we will take it from there.</div>');
+      stop();
+      return;
+    }
+    $("order-title").innerHTML = 'Payment<br><em>pending.</em>';
+    $("order-lead").innerHTML = 'Status: <b style="color:#ffcc00">' + esc(s || "waiting") + '</b>. Keep this page open — it checks every few seconds and updates itself. The address and exact amount above are the only place to send the coins.';
+    box("warn", '<div style="color:#ffcc00">Waiting for the network to confirm ' + esc(s || "the payment") + '…</div><div style="margin-top:8px;font:10px \'DM Mono\',monospace;color:#7a7d82">This page reloads its status automatically. You can close it and reopen the order from your account later.</div>');
+  }
+
+  function stop(){ if (timer) { clearInterval(timer); timer = null; } }
+
+  async function loadLive(){
+    if (!state.paymentId) return null;
+    // /api/payment verifies ownership server-side: the id alone opens nothing.
+    var live = await A.apiFetch("/api/payment/" + encodeURIComponent(state.paymentId));
+    renderLive(live);
+    return live;
+  }
+
+  async function boot(){
+    // Always ask the server who is signed in: the session cookie is HttpOnly, so a fresh tab has no
+    // trace of it in JavaScript and only the server can answer.
+    try { await A.auth.me(); } catch (e) { signedOut(e && e.message); return; }
+
+    try {
+      var purchase = null;
+      if (purchaseId) {
+        var got = await A.portal.purchase(purchaseId);
+        purchase = (got && got.purchase) || null;
+      } else if (orderId) {
+        var o = await A.auth.order(orderId);
+        purchase = (o && o.purchase) || (o && o.order) || null;
+      } else if (paymentIdParam) {
+        var p = await A.apiFetch("/api/payment/" + encodeURIComponent(paymentIdParam));
+        purchase = { order_id: p.orderId, purchase_id: p.purchaseId, amount: p.priceAmount, currency: p.priceCurrency, status: p.status, created_at: p.createdAt, payment_id: String(paymentIdParam) };
+      } else {
+        notFound("This link has no order in it. Open the order from your account or the payment page you were sent.");
+        return;
+      }
+      if (!purchase) { notFound(); return; }
+
+      state.orderId = purchase.order_id || ""; state.purchaseId = purchase.purchase_id || ""; state.paymentId = String(purchase.payment_id || "");
+      state.free = String(purchase.status || "") === "free";
+      renderFacts(purchase, null);
+
+      var accountLink = $("order-account");
+      if (accountLink) accountLink.href = "account.html";
+      $("order-refresh").addEventListener("click", function(){ location.reload(); });
+      $("order-check").addEventListener("click", function(){ loadLive().catch(function(e){ box("err", '<div style="color:#ff9a9a">' + esc(e.message || "Could not check the status.") + '</div>'); }); });
+      $("order-copy").addEventListener("click", function(){
+        var addr = $("order-addr").textContent || "";
+        try { navigator.clipboard.writeText(addr); this.textContent = "Copied ✓"; } catch { this.textContent = "Select the address and press Ctrl+C"; }
+      });
+
+      if (state.free) {
+        $("order-title").innerHTML = 'Order placed<br><em>— nothing due.</em>';
+        $("order-lead").innerHTML = 'A 100% promo covered this order, so no crypto payment was created and nothing is charged. It is recorded on your account like any other order.';
+        box("ok", '<div style="color:#8ee0a0">Paid / free — promoted order</div><div style="margin-top:8px;font:10px \'DM Mono\',monospace;color:#7a7d82">Order ' + esc(state.orderId) + '</div>');
+        $("of-status").textContent = "free";
+        return;
+      }
+      if (!state.paymentId) {
+        $("order-title").innerHTML = 'No payment<br><em>yet.</em>';
+        $("order-lead").innerHTML = "This order exists but no crypto payment was created for it (a payment that could not be started is marked failed instead of left open). Open your account to start it again or start a new order.";
+        box("warn", '<div style="color:#c9a87a">No payment is attached to this order.</div><div style="margin-top:10px"><a class="outline-button" href="account.html">Your orders →</a></div>');
+        $("of-status").textContent = purchase.status || "pending";
+        return;
+      }
+      await loadLive();
+      timer = setInterval(function(){
+        if (state.paid || state.failed) { stop(); return; }
+        loadLive().catch(function(){});
+      }, 9000);
+    } catch (e) {
+      var code = (e && e.code) || "";
+      if (e && e.status === 401) { signedOut(e.message); return; }
+      if (e && /ACCOUNT_(BANNED|SUSPENDED|RESTRICTED)/.test(code)) { box("err", '<div style="color:#ff9a9a">' + esc(e.message) + '</div>'); return; }
+      if (e && e.status === 404) { notFound(e.message); return; }
+      box("err", '<div style="color:#ff9a9a">' + esc((e && e.message) || "This order could not be loaded.") + '</div><div style="margin-top:8px;font:10px \'DM Mono\',monospace;color:#7a7d82">Reload the page, or write to questions@get-aether.de with your purchase ID.</div>');
+    }
+  }
+  boot();
+})();
+</script></body></html>

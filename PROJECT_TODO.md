@@ -293,3 +293,71 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
       Rule** sets `Cache-Control: no-cache` on `/` and `*.html`, so the HTML always revalidates (304
       off `last-modified`) while the versioned assets keep caching. Same mechanism as the earlier
       `checkout.js?v=6` incident, now closed for good.
+
+## 17. Chat, account status, payments, admin (2026-10-03)
+
+- [x] **Site-wide support chat.** `public/chat.js` (standalone, loaded by every public page) adds a
+      bottom-right launcher and a panel that lists *that account's* conversations with an honest
+      badge (`Waiting for a reply` / `We replied` / `Resolved`), opens/continues a thread, starts a
+      new one, and reports unread threads on the launcher while minimised. Open/closed plus the open
+      conversation survive a reload (`localStorage`), the panel's own state survives navigation, and
+      the thread polls every 12 s. Anonymous visitors get a sign-in prompt instead of an empty box.
+- [x] `POST /api/conversations` and every action on a thread run through `accountGate()` — so a
+      suspended or restricted account cannot start or continue a chat, and its refusal names the
+      reason. Read access asks for the weaker gate (a restricted account can still read its history).
+- [x] **Admin → Customer chats**: server-side search (`?q=`, matches subject, customer email,
+      Purchase/Order ID, conversation ID **and message bodies**), status filter, limit (max 500),
+      reply, close/resolve — all behind `requireAdmin` + `adminVerifiedGate`, with no cross-user
+      exposure in the query (proved by a check that a normal account gets `403` for search *and* list).
+- [x] **Account states** (`active` / `restricted` / `suspended` / `banned`) in `users.status`,
+      managed from the admin Accounts tab: Reinstate / Restrict / Suspend (1–8760 h) / Ban, each with
+      a reason that the customer sees verbatim in their portal banner and in the API refusal. Bans and
+      suspensions revoke every session immediately (`revokeSessions`); a login attempt answers `403`
+      with the reason and `accountStatus`. Admins cannot act on their own row or on an `ADMIN_EMAILS`
+      account, and every change is audited (`account.<status>`).
+- [x] **IP restrictions**: `GET|POST|DELETE /api/admin/blocked-ips` (admin-verified) with a single
+      IPv4/IPv6 per entry, a note, and a D1-backed list in `settings("blocked_ips")`; the router
+      refuses `/api/*` and `/admin*` from a blocked address with `403 IP_BLOCKED` before any handler
+      runs, and the admin UI has a **Blocked networks** card. Sign-in IPs are now recorded
+      (`users.last_ip`, `last_ip_at`, `signup_ip`) and shown in the Accounts table — no more wondering
+      which address an account uses.
+- [x] **The red "temporary problem" error explained and fixed at the source.** NOWPayments refuses
+      payments below a pair-specific minimum (≈ €2 for the coin pairs on offer; `TEST100`'s €0.02 test
+      card was under it). `createNowPaymentsPayment` now reads `/v1/min-amount` **before** creating
+      anything (6 h cache), and refuses with a sentence that names the real minimum and says nothing
+      was charged; if the vendor still refuses, the order is marked `failed`
+      (`UPDATE … WHERE order_id=? AND status IN ('pending','waiting')`), the customer gets a readable
+      sentence, and the provider detail only reaches `console.error`. Failure no longer leaves a
+      completed-looking order, and the frontend keeps the server's own wording for any coded error
+      instead of overwriting it with "temporary problem".
+- [x] **An order page with no guessable URL as authorization.** `order.html` resolves
+      `?purchase_id=` / `?order=` / `?payment_id=` through `GET /api/purchases/:id` and
+      `GET /api/payment/:id`, both owner-scoped server-side (another account gets `404`, a tampered or
+      malformed ID gets `400`), and shows item, amount, status, dates, pay-address with copy, and the
+      links back to the account. `GET /api/payment*` now requires a session (an anonymous caller can
+      no longer poll anybody's payment by ID); the local poller inside checkout was updated to send
+      the session.
+- [x] **Account dashboard orders section**: Order | Item | Amount | Payment | Date | Open, an honest
+      `paymentState()` label (`Paid`, `Free (promo)`, `Payment failed`, `Partially paid`, `Waiting for
+      payment`, `Payment open`, `No payment yet`), and a per-row **Open ↗** into `order.html`, so a
+      failed or unpaid order can always be reopened and retried.
+- [x] **No lightning icon** in the pay modal (the chip was removed, and nothing replaced it).
+- [x] **Privacy pass**: `/api/me` returns the sanitised `publicUser()` shape instead of the raw row;
+      no provider payload, secret or customer PII is echoed into any response (checked); payment
+      status and purchase lookups are session-scoped; the chat keeps its token in `sessionStorage`,
+      never a URL.
+- [x] English consistency verified: every page is `lang="en"` and no German UI string remains
+      (`COMMON_PASSWORDS` entries excepted).
+- [x] **388 Worker checks** (was 334: 54 new for account status, IP restrictions, the payment minimum,
+      ownership and admin-chat search/filter), `node --check` clean, 0 non-ASCII bytes in the Worker,
+      and all 8 guard scripts green (`_check-assets` now sees 20 pages incl. `chat.js?v=1` and
+      `checkout.js?v=13`).
+- [x] Live D1 got the additive migration (`users` status/`status_reason`/`status_until`/
+      `status_updated_at`/`last_ip`/`last_ip_at`/`signup_ip`) and it was verified via
+      `pragma_table_info`; the columns are backward-compatible, so the old Worker keeps working.
+- [ ] MANUAL: commit + push — nothing from this section is live yet. A push touching `worker/**`
+      deploys the Worker through CI, and Pages serves `order.html`, `chat.js` and `checkout.js?v=13`
+      only after the same push. Until then the live stack still runs the pre-2026-10-03 build.
+- [ ] MANUAL: NOWPayments' per-pair minimum is vendor-side — the €0.02 card will be refused (with a
+      clear message, nothing charged). Use `TEST100` for a free end-to-end order, and remove the test
+      card + promo code before launch.

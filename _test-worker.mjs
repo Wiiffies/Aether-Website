@@ -18,7 +18,7 @@ class DB {
   constructor() {
     this.db = new DatabaseSync(":memory:");
     this.db.exec(`
-      CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, discord TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), email_verified INTEGER DEFAULT 0, role TEXT DEFAULT 'user');
+      CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, discord TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), email_verified INTEGER DEFAULT 0, role TEXT DEFAULT 'user', status TEXT DEFAULT 'active', status_reason TEXT, status_until INTEGER, status_updated_at TEXT, last_ip TEXT, last_ip_at TEXT, signup_ip TEXT);
       CREATE TABLE auth_tokens (token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL, purpose TEXT NOT NULL, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, payload TEXT);
       CREATE TABLE rate_limits (rl_key TEXT PRIMARY KEY, count INTEGER NOT NULL, window_start INTEGER NOT NULL);
       CREATE TABLE sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), expires_at INTEGER NOT NULL);
@@ -1138,6 +1138,180 @@ r = await call("POST", "/api/orders", { token: bossToken });
 check("the operator's order is filed to their own account", r.status === 200 && (r.json.orders || []).some((o) => o.order_id), r.json);
 env.ADMIN_EMAILS = keepAdmins;
 env.REQUIRE_EMAIL_VERIFICATION = "";
+
+console.log("\n--- account status: ban / suspend / restrict ---");
+// The status is set by an admin, stored on the users row and enforced on the server for every
+// protected call. A restricted account keeps its own history readable and stops being able to create
+// anything new; a suspend or a ban also ends the sessions it already had.
+r = await call("POST", "/api/auth/register", { body: { email: "states@example.com", password: "statespass1" } });
+const stateToken = r.json.token;
+const stateId = r.json.user.id;
+check("a fresh account reports status active", r.status === 200, r.json);
+r = await call("GET", "/api/me", { token: stateToken });
+check("/api/me carries the account status (and never the operator's raw row)",
+  r.json.accountStatus && r.json.accountStatus.state === "active" && r.json.user.password_hash === undefined && r.json.user.status === undefined, r.json.accountStatus);
+r = await call("POST", "/api/invoice", { token: stateToken, body: { amount: 30, pay_currency: "btc", type: "discord_bot", package: "BASIC" } });
+check("the order exists for the reads below (payments are not configured here)", r.status === 503 && typeof r.json.orderId === "string", r.json);
+
+r = await call("POST", "/api/admin/users/" + stateId + "/status", { token: freshSession, body: { status: "banned" } });
+check("a normal account cannot change anyone's status -> 403", r.status === 403, r.json);
+r = await call("POST", "/api/admin/users/" + stateId + "/status", { token: adminToken, body: { status: "nonsense" } });
+check("an unknown status is refused -> 400", r.status === 400, r.json);
+r = await call("POST", "/api/admin/users/" + stateId + "/status", { token: adminToken, body: { status: "suspended" } });
+check("a suspension without a length is refused -> 400", r.status === 400, r.json);
+r = await call("POST", "/api/admin/users/" + stateId + "/status", { token: adminToken, body: { status: "restricted", reason: "Spam in chat" } });
+check("an admin can restrict an account", r.status === 200 && r.json.status === "restricted" && r.json.sessionsRevoked === false, r.json);
+r = await call("GET", "/api/me", { token: stateToken });
+check("a restricted account can still sign in and is told why", r.status === 200 && r.json.accountStatus.state === "restricted" && r.json.accountStatus.reason === "Spam in chat" && r.json.accountStatus.limited === true, r.json.accountStatus);
+r = await call("GET", "/api/orders", { token: stateToken });
+check("a restricted account can still read its own orders", r.status === 200 && Array.isArray(r.json.orders), r.json);
+r = await call("POST", "/api/invoice", { token: stateToken, body: { amount: 30, pay_currency: "btc", type: "discord_bot", package: "BASIC" } });
+check("a restricted account cannot place a new order -> 403 ACCOUNT_RESTRICTED", r.status === 403 && r.json.code === "ACCOUNT_RESTRICTED", r.json);
+r = await call("POST", "/api/conversations", { token: stateToken, body: { message: "let me chat again" } });
+check("a restricted account cannot open a new conversation -> 403 ACCOUNT_RESTRICTED", r.status === 403 && r.json.code === "ACCOUNT_RESTRICTED", r.json);
+
+r = await call("POST", "/api/admin/users/" + stateId + "/status", { token: adminToken, body: { status: "suspended", hours: 2, reason: "Repeated abuse" } });
+check("an admin can suspend an account for a number of hours", r.status === 200 && r.json.status === "suspended" && r.json.until > Date.now() && r.json.sessionsRevoked === true, r.json);
+r = await call("GET", "/api/orders", { token: stateToken });
+check("a suspension ends the sessions the account already had -> 401", r.status === 401, r.json);
+r = await call("POST", "/api/auth/login", { body: { email: "states@example.com", password: "statespass1" } });
+check("and a suspended account cannot sign back in -> 403 ACCOUNT_SUSPENDED", r.status === 403 && r.json.code === "ACCOUNT_SUSPENDED", r.json);
+check("the suspension answer names when it ends", /until/i.test(String(r.json.error)), r.json.error);
+// A suspension that has run out is over: no timer, no cleanup job, just a comparison at read time.
+env.DB.db.prepare("UPDATE users SET status = 'suspended', status_until = ? WHERE id = ?").run(Date.now() - 1000, stateId);
+r = await call("POST", "/api/auth/login", { body: { email: "states@example.com", password: "statespass1" } });
+check("a suspension whose time is up no longer blocks sign-in", r.status === 200 && !!r.json.token, r.json);
+
+r = await call("POST", "/api/admin/users/" + stateId + "/status", { token: adminToken, body: { status: "banned", reason: "Chargebacks" } });
+check("an admin can ban an account", r.status === 200 && r.json.status === "banned", r.json);
+r = await call("POST", "/api/auth/login", { body: { email: "states@example.com", password: "statespass1" } });
+check("a banned account cannot sign in -> 403 ACCOUNT_BANNED", r.status === 403 && r.json.code === "ACCOUNT_BANNED", r.json);
+r = await call("POST", "/api/admin/users/" + stateId + "/status", { token: adminToken, body: { status: "active", reason: "Mistake" } });
+check("reinstating restores sign-in", r.status === 200, r.json);
+r = await call("POST", "/api/auth/login", { body: { email: "states@example.com", password: "statespass1" } });
+const reinstatedToken = r.json.token;
+check("the reinstated account can sign in again", r.status === 200 && !!reinstatedToken, r.json);
+
+const adminRowId = env.DB.db.prepare("SELECT id FROM users WHERE email = ?").get("admin@example.com").id;
+r = await call("POST", "/api/admin/users/" + adminRowId + "/status", { token: adminToken, body: { status: "banned" } });
+check("an admin cannot change their own status (no self-lockout)", r.status === 400, r.json);
+const keepAdminEmails = env.ADMIN_EMAILS;
+env.ADMIN_EMAILS = keepAdminEmails + ",second-admin@example.com";
+r = await call("POST", "/api/auth/register", { body: { email: "second-admin@example.com", password: "secondpass1" } });
+const secondAdminId = r.json.user.id;
+r = await call("POST", "/api/admin/users/" + secondAdminId + "/status", { token: adminToken, body: { status: "banned" } });
+check("an account listed in ADMIN_EMAILS cannot be banned from the panel", r.status === 400, r.json);
+env.ADMIN_EMAILS = keepAdminEmails;
+
+r = await call("GET", "/api/admin/users", { token: adminToken });
+const stateRow = (r.json.users || []).find(u => Number(u.id) === Number(stateId)) || {};
+check("the account list carries the status and the last sign-in address",
+  stateRow.status === "active" && typeof stateRow.last_ip === "string" && stateRow.last_ip.length > 0, { status: stateRow.status, ip: stateRow.last_ip });
+check("the account list never ships a password hash", !/password_hash/.test(JSON.stringify(r.json.users || [])), true);
+check("the list advertises the legal statuses for the panel", Array.isArray(r.json.accountStates) && r.json.accountStates.includes("banned"), r.json.accountStates);
+r = await call("GET", "/api/admin/users", { token: freshSession });
+check("a normal account cannot read the account list -> 403", r.status === 403, r.json);
+
+console.log("\n--- IP restrictions ---");
+r = await call("POST", "/api/admin/blocked-ips", { token: freshSession, body: { ip: "203.0.113.9" } });
+check("a normal account cannot block an address -> 403", r.status === 403, r.json);
+r = await call("POST", "/api/admin/blocked-ips", { token: adminToken, body: { ip: "not-an-ip", note: "probe" } });
+check("a malformed address is refused -> 400", r.status === 400, r.json);
+r = await call("POST", "/api/admin/blocked-ips", { token: adminToken, body: { ip: "203.0.113.9", note: "abuse probe" } });
+check("an admin can block an address", r.status === 200 && r.json.blocked === true && r.json.ips.some(e => e.ip === "203.0.113.9"), r.json);
+r = await call("GET", "/api/health", { ip: "203.0.113.9" });
+check("a blocked address is refused before any route runs -> 403 IP_BLOCKED", r.status === 403 && r.json.code === "IP_BLOCKED", r.json);
+r = await call("POST", "/api/auth/login", { ip: "203.0.113.9", body: { email: "admin@example.com", password: "whatever1" } });
+check("a blocked address cannot reach the sign-in route either", r.status === 403 && r.json.code === "IP_BLOCKED", r.json);
+r = await call("GET", "/api/health", { ip: "203.0.113.10" });
+check("a different address is untouched", r.status === 200 && r.json.ok === true, r.status);
+r = await call("GET", "/api/admin/blocked-ips", { token: adminToken });
+check("the panel can list the blocked addresses", r.status === 200 && Array.isArray(r.json.ips), r.json);
+r = await call("DELETE", "/api/admin/blocked-ips", { token: adminToken, body: { ip: "203.0.113.9" } });
+check("an admin can unblock an address", r.status === 200 && !r.json.ips.some(e => e.ip === "203.0.113.9"), r.json);
+r = await call("GET", "/api/health", { ip: "203.0.113.9" });
+check("and that address works again immediately", r.status === 200, r.status);
+
+console.log("\n--- payments: the provider minimum, honest failures, and ownership ---");
+// The provider is stubbed here: the point is not that NOWPayments answers, it is what the Worker does
+// with the answer. Its documented flow reads the minimum amount BEFORE creating a payment, and the
+// EUR 0.02 test item is far below it - which is the real cause of the raw "temporary problem" the
+// checkout used to show, and of an order row left sitting at "pending" for a payment that never was.
+const realFetchPay = globalThis.fetch;
+const payCalls = [];
+globalThis.fetch = async (url, init) => {
+  const u = String(url);
+  payCalls.push(u);
+  if (u.includes("/v1/min-amount")) return { ok: true, status: 200, text: async () => JSON.stringify({ min_amount: 0.00003, fiat_equivalent: 2.2 }) };
+  if (u.includes("/v1/payment")) return { ok: true, status: 200, text: async () => JSON.stringify({ payment_id: 777000111, payment_status: "waiting", pay_address: "ltc1qexampleaddress", pay_amount: 0.5, pay_currency: "ltc", price_amount: 30, price_currency: "eur", order_id: "aether_probe" }) };
+  return { ok: true, status: 200, text: async () => "{}" };
+};
+env.NOWPAYMENTS_API_KEY = "np-test-key";
+r = await call("POST", "/api/invoice", { token: reinstatedToken, body: { amount: 30, pay_currency: "ltc", type: "discord_bot", package: "BASIC" } });
+const paidOwnerPurchase = r.json.purchaseId;
+const paidOwnerOrder = r.json.orderId;
+check("a payable order still creates a real payment (the minimum check does not block it)",
+  r.status === 200 && r.json.payAddress === "ltc1qexampleaddress" && r.json.paymentId === 777000111, r.json);
+check("the minimum amount is asked for before the payment is created", payCalls.some(u => u.includes("/v1/min-amount")), payCalls);
+
+r = await call("POST", "/api/invoice", { token: reinstatedToken, body: { type: "test_purchase", pay_currency: "btc" } });
+const belowMinOrder = r.json.orderId;
+check("an amount below the provider minimum -> 400, not a 500 crash", r.status === 400 && r.json.code === "AMOUNT_BELOW_MINIMUM", { status: r.status, body: r.json });
+check("the refusal is plain English and names the real minimum",
+  /minimum/i.test(String(r.json.error)) && /2\.20/.test(String(r.json.error)) && /Nothing was charged/i.test(String(r.json.error)), r.json.error);
+check("the refusal leaks no provider payload, no key and no internal detail",
+  !/np-test-key|min_amount|api\.nowpayments/.test(JSON.stringify(r.json)), r.json);
+r = await call("GET", "/api/orders", { token: reinstatedToken });
+const belowMinRow = (r.json.orders || []).find(o => o.order_id === belowMinOrder) || {};
+check("a payment that was never created does not leave a completed order behind",
+  belowMinRow.status === "failed" && belowMinRow.payment_id == null, { status: belowMinRow.status, payment_id: belowMinRow.payment_id });
+
+r = await call("GET", "/api/payment/777000111");
+check("payment status without a session -> 401 (a payment id is not a credential)", r.status === 401, r.json);
+r = await call("GET", "/api/payment/777000111", { token: freshSession });
+check("someone else's payment id -> 404, indistinguishable from one that does not exist", r.status === 404, r.json);
+r = await call("GET", "/api/payment/777000111", { token: reinstatedToken });
+check("the owner reads their own payment (status, address, amount, order link only)",
+  r.status === 200 && r.json.status === "waiting" && r.json.isPending === true && r.json.payAddress === "ltc1qexampleaddress" && r.json.purchaseId === paidOwnerPurchase, r.json);
+check("and the answer never carries the provider payload or customer PII",
+  r.json.raw === undefined && r.json.customer_email === undefined && r.json.order_description === undefined, r.json);
+r = await call("GET", "/api/payment?purchase_id=" + encodeURIComponent(paidOwnerPurchase), { token: freshSession });
+check("another account cannot read that order by its Purchase ID -> 404", r.status === 404, r.json);
+r = await call("GET", "/api/payment?purchase_id=" + encodeURIComponent(paidOwnerPurchase), { token: reinstatedToken });
+check("the owner can open the same order by Purchase ID (the order page's lookup)",
+  r.status === 200 && r.json.orderId === paidOwnerOrder && r.json.status === "waiting", r.json);
+r = await call("GET", "/api/payment?purchase_id=AETH-2026-NOPE", { token: reinstatedToken });
+check("a malformed Purchase ID -> 400", r.status === 400, r.json);
+r = await call("GET", "/api/payment/777000111", { token: reinstatedToken, host: "https://api.get-aether.de" });
+check("no provider secret or api key is echoed into the response", !/np-test-key/.test(JSON.stringify(r.json)), true);
+
+console.log("\n--- admin chat search and filtering ---");
+const allConvs = await call("GET", "/api/admin/conversations", { token: adminToken });
+check("the unfiltered list is unchanged in shape", allConvs.status === 200 && Array.isArray(allConvs.json.conversations), allConvs.status);
+r = await call("GET", "/api/admin/conversations?q=" + encodeURIComponent("hello command"), { token: adminToken });
+// Two threads can share one order (the portal's thread and the one opened for the purchase), and the
+// text is bridged across both - so the assertion is that the search narrows the list to exactly the
+// threads containing that phrase, not that only one row survives.
+const searchHits = r.json.conversations || [];
+let hitCarriesPhrase = false;
+for (const c of searchHits) {
+  const det = await call("GET", "/api/admin/conversations/" + encodeURIComponent(c.conversation_id), { token: adminToken });
+  if ((det.json.messages || []).some(m => /hello command/i.test(String(m.body || "")))) hitCarriesPhrase = true;
+}
+check("search finds threads by the text inside them, server-side, and drops the rest",
+  r.status === 200 && searchHits.length >= 1 && searchHits.length < allConvs.json.conversations.length
+    && hitCarriesPhrase && r.json.filter.q === "hello command",
+  { n: searchHits.length, total: allConvs.json.conversations.length, phraseInThread: hitCarriesPhrase, filter: r.json.filter });
+r = await call("GET", "/api/admin/conversations?status=closed", { token: adminToken });
+check("the status filter returns only resolved threads",
+  r.status === 200 && r.json.conversations.every(c => c.status === "closed"), { n: r.json.conversations.length });
+r = await call("GET", "/api/admin/conversations?q=" + encodeURIComponent("hello command"), { token: freshSession });
+check("a normal account still cannot search every chat -> 403", r.status === 403, r.json);
+r = await call("GET", "/api/admin/conversations", { token: freshSession });
+check("and still cannot list them -> 403", r.status === 403, r.json);
+
+globalThis.fetch = realFetchPay;
+delete env.NOWPAYMENTS_API_KEY;
 
 console.log("\n--- misc ---");
 r = await call("GET", "/api/nope");

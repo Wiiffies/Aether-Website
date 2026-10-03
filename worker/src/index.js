@@ -264,12 +264,47 @@ function resolvePromo(env, code, amount) {
 // ---------- NOWPayments Payment API ----------
 const FIXED_IPN_URL = "https://api.get-aether.de/api/ipn";
 // (removed) hard-coded static payment links - payments are created per order via the API.
+// NOWPayments' own documented flow is: read the minimum amount for the currency pair FIRST, then only
+// create a payment the customer can actually pay (their step 4 and 5 before step 6). Skipping step 4
+// is what turned the EUR 0.02 test item into a raw vendor rejection that surfaced as a generic "temporary
+// problem" - and left an order row sitting at "pending" for a payment that was never created.
+// The answer is cached for six hours and a failure is never fatal: without it the payment is simply
+// attempted, and the provider's own wording is translated below.
+const MIN_AMOUNT_CACHE_MS = 6 * 60 * 60 * 1000;
+const minAmountCache = {};
+async function providerMinimum(env, payCurrency){
+  const key = env.NOWPAYMENTS_API_KEY;
+  const coin = String(payCurrency || "").toLowerCase().trim();
+  if (!key || !coin) return 0;
+  const hit = minAmountCache[coin];
+  if (hit && Date.now() - hit.at < MIN_AMOUNT_CACHE_MS) return hit.min;
+  try {
+    const res = await fetch(`https://api.nowpayments.io/v1/min-amount?currency_from=eur&currency_to=${encodeURIComponent(coin)}&fiat_equivalent=eur`, { headers: { "x-api-key": key } });
+    if (!res.ok) return 0;
+    const text = await res.text();
+    let j; try { j = JSON.parse(text); } catch { return 0; }
+    const min = Number(j && (j.fiat_equivalent != null ? j.fiat_equivalent : j.min_amount));
+    if (!Number.isFinite(min) || min <= 0) return 0;
+    minAmountCache[coin] = { at: Date.now(), min };
+    return min;
+  } catch { return 0; }
+}
 async function createNowPaymentsPayment(env, { amount, currency="eur", payCurrency, orderId, description }) {
   const key = env.NOWPAYMENTS_API_KEY;
   if (!key) throw new Error("NOWPAYMENTS_API_KEY not set");
   const pc = String(payCurrency || "").toLowerCase().trim();
   if (!pc) throw new Error("pay_currency required \u2014 choose BTC, ETH or LTC");
   if (!["btc","ltc","eth"].includes(pc)) throw new Error("Unsupported pay_currency \u2014 use btc, eth or ltc");
+  // Refused before the provider is asked: an amount below its minimum cannot produce a payable
+  // payment, and saying so precisely is better than a doomed API call and a generic error.
+  const min = await providerMinimum(env, pc);
+  if (min > 0 && Number(amount) < min) {
+    const small = new Error("below_minimum");
+    small.code = "AMOUNT_BELOW_MINIMUM";
+    small.minimum = min;
+    small.coin = pc.toUpperCase();
+    throw small;
+  }
   const res = await fetch("https://api.nowpayments.io/v1/payment", {
     method: "POST", headers: { "x-api-key": key, "content-type": "application/json" },
     body: JSON.stringify({
@@ -283,7 +318,17 @@ async function createNowPaymentsPayment(env, { amount, currency="eur", payCurren
   });
   const text = await res.text();
   let data; try{ data=JSON.parse(text);}catch{ data={ raw:text }; }
-  if(!res.ok){ console.error("NOWPayments payment error", res.status, text); throw new Error((data && data.message ? data.message : undefined) || `NOWPayments error ${res.status}: ${text.slice(0,500)}`); }
+  if(!res.ok){
+    console.error("NOWPayments payment error", res.status, text);
+    const providerMsg = String((data && (data.message || data.error || data.msg)) || "").trim();
+    const e = new Error(providerMsg || `NOWPayments error ${res.status}`);
+    e.status = res.status;
+    e.providerMessage = providerMsg;
+    // The vendor can also reject a small amount with its own wording (the check above only knows
+    // what the vendor last told us its minimum was), so recognise that answer too.
+    if (/minimum|too small|min[_ ]?amount|less than the min/i.test(providerMsg)) e.code = "AMOUNT_BELOW_MINIMUM";
+    throw e;
+  }
   return data;
 }
 async function hmacSha512(secret, message){
@@ -590,6 +635,12 @@ async function requireAuth(request, env){
     // email_verified / role are optional (older databases may not have the columns yet)
     try { const v = await env.DB.prepare("SELECT email_verified FROM users WHERE id = ?").bind(row.user_id).first(); if (v) user.email_verified = Number(v.email_verified) || 0; } catch {}
     try { const v = await env.DB.prepare("SELECT role FROM users WHERE id = ?").bind(row.user_id).first(); if (v && v.role) user.role = v.role; } catch {}
+    // Ban / suspension / restriction live on the users row and are optional (a database that predates
+    // the columns simply has no restricted accounts).
+    try {
+      const s = await env.DB.prepare("SELECT status, status_reason, status_until FROM users WHERE id = ?").bind(row.user_id).first();
+      if (s) { user.status = s.status || "active"; user.status_reason = s.status_reason || ""; user.status_until = Number(s.status_until) || 0; }
+    } catch {}
     return { token: hash, user, expires_at: row.expires_at };
   } catch(e){ console.error("requireAuth failed", e && e.message); return null; }
 }
@@ -675,6 +726,61 @@ function verifiedGate(auth, env, request){
   if (effectiveRole(env, auth.user) === ROLE_ADMIN) return null;
   if (isVerifiedUser(auth.user)) return null;
   return unverifiedResponse(env, request);
+}
+
+// ---------- account status: ban / suspend / restrict ----------
+// The state is owned by the operator (admin panel, stored on the users row) and enforced here, on
+// every protected request. Hiding a button in the portal is not a security boundary, so the gate
+// lives on the server and answers with a code the frontend can branch on. An account named by
+// ADMIN_EMAILS is never blocked by this: a wrong row must never lock the operator out of the panel
+// that would fix it.
+const ACCOUNT_STATES = ["active", "restricted", "suspended", "banned"];
+function accountState(user, now){
+  const raw = String((user && user.status) || "active").toLowerCase();
+  const state = ACCOUNT_STATES.includes(raw) ? raw : "active";
+  if (state !== "suspended") return state;
+  const until = Number((user && user.status_until) || 0);
+  if (!until) return "suspended";              // no end date = suspended until an admin lifts it
+  return until > (now || Date.now()) ? "suspended" : "active";   // a suspension that ran out is over
+}
+function accountStatusUntilText(user){
+  const until = Number((user && user.status_until) || 0);
+  if (!until) return "";
+  return new Date(until).toLocaleString("en-GB", { timeZone:"Europe/Berlin", dateStyle:"long", timeStyle:"short" });
+}
+// What the account holder may know about their own status: the state, the reason the operator wrote
+// and - for a suspension - when it ends. Never who decided it and never any other account's row.
+function accountPublicStatus(user){
+  const state = accountState(user);
+  return {
+    state,
+    reason: String((user && user.status_reason) || "").slice(0, 300),
+    until: Number((user && user.status_until) || 0) || 0,
+    untilText: accountStatusUntilText(user),
+    blocked: state === "banned" || state === "suspended",
+    limited: state === "restricted",
+  };
+}
+// action: "read" (reading orders, chats, payments) or "write" (placing an order, starting a chat).
+// A restricted account keeps its own history but cannot put anything new into the system.
+function accountGate(auth, env, request, action){
+  if (!auth || !auth.user) return null;
+  if (isAdminEmail(env, auth.user.email)) return null;
+  const state = accountState(auth.user);
+  if (state === "active") return null;
+  if (state === "restricted" && action !== "write") return null;
+  const untilTxt = accountStatusUntilText(auth.user);
+  const error = state === "banned"
+    ? "This account has been closed. If you think that is a mistake, write to questions@get-aether.de."
+    : state === "suspended"
+      ? "This account is suspended" + (untilTxt ? " until " + untilTxt : "") + ". Everything stays locked until then - write to questions@get-aether.de if you need it sooner."
+      : "This account is restricted: your orders and conversations stay readable, but new orders and new conversations are paused. Write to questions@get-aether.de and we will sort it out.";
+  return json({ error, code: "ACCOUNT_" + state.toUpperCase(), accountStatus: accountPublicStatus(auth.user) }, 403, env, request);
+}
+// A ban is meant to end access, so the sessions are dropped with it: a token that was already in a
+// browser must stop working the moment the operator says so.
+async function revokeSessions(env, userId){
+  try { await env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(userId).run(); } catch {}
 }
 
 // ---------- Purchase IDs (AETH-2026-XXXXXXXX) ----------
@@ -1019,6 +1125,54 @@ async function setSetting(env, key, value){
   await env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at")
     .bind(key, String(value), new Date().toISOString()).run();
 }
+
+// ---------- IP restrictions ("where technically appropriate") ----------
+// Cloudflare hands the Worker the real client address in CF-Connecting-IP; that header is set by the
+// edge and is not something a browser can forge through to here. The list is a setting (an array of
+// { ip, note, at, by }), cached per isolate for 30 seconds so a block costs at most one small read a
+// minute rather than one per request. It is a coarse tool on purpose: it is enforced at the top of
+// the router for everything that is not a static file.
+const BLOCKED_IP_CACHE_MS = 30000;
+let blockedIpCache = { at: 0, list: [] };
+// Only a real address is ever stored or compared: an empty or malformed value is never a match, so a
+// request that arrives without the header cannot be blocked by accident (or unblocked by spoofing it).
+function validIp(ip){
+  const s = String(ip == null ? "" : ip).trim();
+  if (!s || s.length > 45) return "";
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(s)) return s.split(".").every(p => Number(p) <= 255) ? s : "";
+  if (/^[0-9a-fA-F:]{2,45}$/.test(s) && s.includes(":")) return s.toLowerCase();
+  return "";
+}
+async function blockedIps(env, force){
+  const now = Date.now();
+  if (!force && now - blockedIpCache.at < BLOCKED_IP_CACHE_MS) return blockedIpCache.list;
+  let list = [];
+  try {
+    const raw = await getSetting(env, "blocked_ips");
+    const j = JSON.parse(raw || "[]");
+    if (Array.isArray(j)) {
+      list = j.map(e => validIp(e && e.ip != null ? e.ip : e)).filter(Boolean).slice(0, 500);
+    }
+  } catch {}
+  blockedIpCache = { at: now, list };
+  return list;
+}
+async function ipBlocked(env, request){
+  const ip = clientIp(request);
+  if (!ip) return false;
+  if (!hasDb(env)) return false;
+  const list = await blockedIps(env);
+  return list.includes(ip) || list.includes(ip.toLowerCase());
+}
+// Recording the address an account last signed in from is what makes an IP restriction a decision
+// rather than a guess. Best effort: never fails a sign-in, and never shown to anyone but an admin.
+async function rememberSignInIp(env, request, userId, alsoSignup){
+  if (!hasDb(env) || !userId) return;
+  const ip = validIp(clientIp(request));
+  if (!ip) return;
+  try { await env.DB.prepare("UPDATE users SET last_ip = ?, last_ip_at = ? WHERE id = ?").bind(ip, new Date().toISOString(), userId).run(); } catch {}
+  if (alsoSignup) { try { await env.DB.prepare("UPDATE users SET signup_ip = ? WHERE id = ?").bind(ip, userId).run(); } catch {} }
+}
 async function betaConfig(env){
   const host = validBetaHost(env.BETA_HOST) || await getSetting(env, "beta_host") || DEFAULT_BETA_HOST;
   const path = validBetaPath(env.BETA_PATH) || await getSetting(env, "beta_path") || DEFAULT_BETA_PATH;
@@ -1043,6 +1197,8 @@ function betaFlags(env){
 async function requireTesterOrExplain(request, env){
   const auth = await requireAuth(request, env);
   if (!auth) return { auth: null, refusal: json({ error:"Sign in first - the Beta area and the desktop build both need an account.", code:"SESSION_REQUIRED" }, 403, env, request) };
+  const statusGate = accountGate(auth, env, request, "read");
+  if (statusGate) return { auth: null, refusal: statusGate };
   const verified = !verificationRequired(env) || isVerifiedUser(auth.user);
   // The role is asked about first, and that order is the point: "Tester access is already on this
   // account" may only ever be said to an account that has it. Checking the address first told every
@@ -1109,6 +1265,8 @@ async function handlePurchases(request, env, url){
   if (!hasDb(env)) return json({ error:"Accounts not configured" }, 503, env, request);
   const gate = verifiedGate(auth, env, request);
   if (gate) return gate;
+  const statusGate = accountGate(auth, env, request, "read");
+  if (statusGate) return statusGate;
   const m = url.pathname.match(/^\/api\/purchases\/([^\/]+)\/?$/);
   const raw = m ? decodeURIComponent(m[1]) : String(url.searchParams.get("purchase_id") || url.searchParams.get("purchaseId") || "");
   const pid = normalizePurchaseId(raw);
@@ -1160,6 +1318,9 @@ async function handleConversations(request, env, url){
   if (!(await conversationsReady(env))) return json({ error:"Chat storage is being upgraded - please try again in a moment." }, 503, env, request);
   const gate = verifiedGate(auth, env, request);
   if (gate) return gate;
+  // A restricted account may read its own history but may not open a new conversation.
+  const statusGate = accountGate(auth, env, request, request.method === "POST" ? "write" : "read");
+  if (statusGate) return statusGate;
   const single = url.pathname.match(/^\/api\/conversations\/([^\/]+)\/?$/);
   if (single && request.method === "GET") {
     const conv = await env.DB.prepare("SELECT * FROM conversations WHERE conversation_id = ? AND user_id = ?").bind(decodeURIComponent(single[1]), auth.user.id).first();
@@ -1210,6 +1371,8 @@ async function handleConversationAction(request, env, url){
   if (!(await conversationsReady(env))) return json({ error:"Chat storage is being upgraded - please try again in a moment." }, 503, env, request);
   const gate = verifiedGate(auth, env, request);
   if (gate) return gate;
+  const statusGate = accountGate(auth, env, request, "write");
+  if (statusGate) return statusGate;
   const msgMatch = url.pathname.match(/^\/api\/conversations\/([^\/]+)\/messages\/?$/);
   const statusMatch = url.pathname.match(/^\/api\/conversations\/([^\/]+)\/status\/?$/);
   if (!msgMatch && !statusMatch) return json({ error:"Not found" }, 404, env, request);
@@ -1389,13 +1552,31 @@ async function handleAdminConversations(request, env, url){
     const detail = Object.assign({}, publicConversation(conv), { user_email: conv.user_email || "" });
     return json({ ok:true, conversation: detail, messages: await conversationMessages(env, conv) }, 200, env, request);
   }
-  const rows = await env.DB.prepare(`SELECT c.*, COALESCE(u.email, '') AS user_email,
+  // Search and filtering run in D1, not in the browser: the panel shows the newest 200 threads, and a
+  // support search that only looked at the page it already had would silently miss the rest.
+  const wantedStatus = String(url.searchParams.get("status") || "").trim().toLowerCase();
+  const q = String(url.searchParams.get("q") || "").trim().slice(0, 120);
+  const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 200) || 200, 1), 500);
+  const where = [], binds = [];
+  if (CONVERSATION_STATUSES.includes(wantedStatus)) { where.push("c.status = ?"); binds.push(wantedStatus); }
+  if (q) {
+    const like = "%" + q.toLowerCase() + "%";
+    where.push("(lower(COALESCE(c.subject,'')) LIKE ? OR lower(COALESCE(u.email,'')) LIKE ? OR lower(COALESCE(c.purchase_id,'')) LIKE ? OR lower(COALESCE(c.order_id,'')) LIKE ? OR lower(c.conversation_id) LIKE ? OR EXISTS (SELECT 1 FROM messages m WHERE " + MSG_MATCH + " AND lower(m.body) LIKE ?))");
+    binds.push(like, like, like, like, like, like);
+  }
+  const sql = `SELECT c.*, COALESCE(u.email, '') AS user_email,
       (SELECT COUNT(*) FROM messages m WHERE ${MSG_MATCH}) AS message_count,
       (SELECT m.body FROM messages m WHERE ${MSG_MATCH} ORDER BY m.id DESC LIMIT 1) AS last_body,
       (SELECT m.created_at FROM messages m WHERE ${MSG_MATCH} ORDER BY m.id DESC LIMIT 1) AS last_at
-    FROM conversations c LEFT JOIN users u ON u.id = c.user_id
-    ORDER BY COALESCE(c.updated_at, c.created_at) DESC LIMIT 200`).all();
-  return json({ ok:true, conversations: (rows.results || []).map(c => Object.assign(conversationListRow(c), { user_email: c.user_email || "" })) }, 200, env, request);
+    FROM conversations c LEFT JOIN users u ON u.id = c.user_id`
+    + (where.length ? " WHERE " + where.join(" AND ") : "")
+    + ` ORDER BY COALESCE(c.updated_at, c.created_at) DESC LIMIT ?`;
+  const rows = await env.DB.prepare(sql).bind(...binds, limit).all();
+  return json({
+    ok:true,
+    filter:{ q, status: CONVERSATION_STATUSES.includes(wantedStatus) ? wantedStatus : "", limit },
+    conversations: (rows.results || []).map(c => Object.assign(conversationListRow(c), { user_email: c.user_email || "" })),
+  }, 200, env, request);
 }
 
 // ---------- admin: Beta configuration (email-confirmed changes) ----------
@@ -1575,6 +1756,7 @@ async function handleRegister(request, env){
   const { token } = await createSession(env, userId);
   const user = await env.DB.prepare("SELECT id, email, discord, created_at FROM users WHERE id = ?").bind(userId).first();
   if (user) { user.email_verified = 0; user.role = ROLE_USER; }
+  await rememberSignInIp(env, request, userId, true);
   dropExpiredSessions(env);
   // Email verification is optional: it only fires when an email transport is configured.
   if (emailConfigured(env)) {
@@ -1618,6 +1800,26 @@ async function handleLogin(request, env){
   const user = { id: row.id, email: row.email, discord: row.discord };
   try { const v = await env.DB.prepare("SELECT email_verified FROM users WHERE id = ?").bind(row.id).first(); if (v) user.email_verified = Number(v.email_verified)||0; } catch {}
   try { const v = await env.DB.prepare("SELECT role FROM users WHERE id = ?").bind(row.id).first(); if (v && v.role) user.role = v.role; } catch {}
+  // A closed or suspended account cannot sign in again; the refusal names the state so the person is
+  // not left guessing, and it is the same answer for every blocked account (no extra information).
+  try {
+    const s = await env.DB.prepare("SELECT status, status_reason, status_until FROM users WHERE id = ?").bind(row.id).first();
+    if (s) { user.status = s.status || "active"; user.status_reason = s.status_reason || ""; user.status_until = Number(s.status_until) || 0; }
+  } catch {}
+  // A closed or suspended account cannot sign in again, and the refusal names the state so the
+  // person is not left guessing at a generic "invalid email or password".
+  if (accountState(user) === "banned" || accountState(user) === "suspended") {
+    const st = accountPublicStatus(user);
+    const banned = st.state === "banned";
+    return json({
+      error: banned
+        ? "This account has been closed. If you think that is a mistake, write to questions@get-aether.de."
+        : "This account is suspended" + (st.untilText ? " until " + st.untilText : "") + ". Write to questions@get-aether.de if you need it sooner.",
+      code: banned ? "ACCOUNT_BANNED" : "ACCOUNT_SUSPENDED",
+      accountStatus: st,
+    }, 403, env, request);
+  }
+  await rememberSignInIp(env, request, row.id, false);
   const me = publicUser(env, user);
   return json({ ok:true, token, user: me, emailVerified: me.emailVerified, emailVerificationRequired: verificationRequired(env), role: me.role, isTester: me.isTester, isAdmin: me.isAdmin, betaAllowed: me.isTester && (!verificationRequired(env) || me.emailVerified) }, 200, env, request, { "set-cookie": sessionCookie(token, SESSION_TTL_SEC, request) });
 }
@@ -1632,7 +1834,10 @@ async function handleMe(request, env){
   const auth = await requireAuth(request, env);
   if (!auth) return json({ ok:false, authenticated:false }, 401, env, request);
   const me = publicUser(env, auth.user);
-  return json({ ok:true, authenticated:true, user: auth.user, emailVerified: me.emailVerified, emailVerificationRequired: verificationRequired(env), role: me.role, isTester: me.isTester, isAdmin: me.isAdmin, betaAllowed: me.isTester && (!verificationRequired(env) || me.emailVerified) }, 200, env, request);
+  // `user` is the sanitised shape, never the raw row: the row now carries the account status, the
+  // operator's note and the last sign-in address, and none of that belongs in a response body by
+  // accident. A blocked account may still ask who it is, so the portal can explain itself.
+  return json({ ok:true, authenticated:true, user: me, accountStatus: accountPublicStatus(auth.user), emailVerified: me.emailVerified, emailVerificationRequired: verificationRequired(env), role: me.role, isTester: me.isTester, isAdmin: me.isAdmin, betaAllowed: me.isTester && (!verificationRequired(env) || me.emailVerified) }, 200, env, request);
 }
 // DELETE /api/me - a user may remove their own account.
 // Orders/messages are kept for accounting but detached (user_id = NULL).
@@ -1862,6 +2067,8 @@ async function handleOrders(request, env, url){
   // Purchases are protected customer data: an unconfirmed email cannot read them.
   const gate = verifiedGate(auth, env, request);
   if (gate) return gate;
+  const statusGate = accountGate(auth, env, request, "read");
+  if (statusGate) return statusGate;
   if (request.method === "GET" && url.pathname.match(/^\/api\/orders\/[^\/]+\/?$/)) {
     const orderId = decodeURIComponent(url.pathname.split("/").pop().replace(/\/$/,""));
     const ord = await env.DB.prepare("SELECT * FROM orders WHERE order_id = ? AND user_id = ?").bind(orderId, auth.user.id).first();
@@ -1880,6 +2087,8 @@ async function handleOrderMessage(request, env, url){
   if (!auth) return json({ error:"Not authenticated" }, 401, env, request);
   const gate = verifiedGate(auth, env, request);
   if (gate) return gate;
+  const statusGate = accountGate(auth, env, request, "write");
+  if (statusGate) return statusGate;
   const m = url.pathname.match(/^\/api\/orders\/([^\/]+)\/message\/?$/);
   if (!m) return json({ error:"Invalid route" }, 404, env, request);
   const orderId = decodeURIComponent(m[1]);
@@ -1942,14 +2151,95 @@ async function handleAdminUsers(request, env, url){
     return json({ ok:true, deleted:id, email: target.email }, 200, env, request);
   }
   let users;
-  try { users = await env.DB.prepare("SELECT id, email, discord, created_at, email_verified, role FROM users ORDER BY id DESC LIMIT 500").all(); }
-  catch { users = await env.DB.prepare("SELECT id, email, discord, created_at FROM users ORDER BY id DESC LIMIT 500").all(); }
-  const userList = (users.results || []).map(u => Object.assign({}, publicUser(env, u), { email_verified: Number(u.email_verified || 0) ? 1 : 0 }));
+  try { users = await env.DB.prepare("SELECT id, email, discord, created_at, email_verified, role, status, status_reason, status_until, last_ip, last_ip_at FROM users ORDER BY id DESC LIMIT 500").all(); }
+  catch {
+    try { users = await env.DB.prepare("SELECT id, email, discord, created_at, email_verified, role FROM users ORDER BY id DESC LIMIT 500").all(); }
+    catch { users = await env.DB.prepare("SELECT id, email, discord, created_at FROM users ORDER BY id DESC LIMIT 500").all(); }
+  }
+  // Status, the operator's own note and the last sign-in address: visible here (admin-only, and the
+  // panel labels what each field is) so a restriction is a decision, never a guess.
+  const userList = (users.results || []).map(u => Object.assign({}, publicUser(env, u), {
+    email_verified: Number(u.email_verified || 0) ? 1 : 0,
+    status: accountState(u),
+    status_reason: u.status_reason || "",
+    status_until: Number(u.status_until) || 0,
+    last_ip: u.last_ip || "",
+    last_ip_at: u.last_ip_at || "",
+  }));
   const stats = await env.DB.prepare("SELECT user_id, COUNT(*) AS orders, SUM(CASE WHEN status IN ('finished','confirmed','sending','paid') THEN 1 ELSE 0 END) AS paid FROM orders GROUP BY user_id").all();
   const msgs  = await env.DB.prepare("SELECT user_id, COUNT(*) AS messages FROM messages GROUP BY user_id").all();
   // `emailVerificationRequired` is the server's own answer, so the panel can say whether an
   // unconfirmed address actually blocks a Tester instead of guessing at it in the browser.
-  return json({ ok:true, users: userList, stats: stats.results || [], messageStats: msgs.results || [], assignableRoles: ASSIGNABLE_ROLES.slice(), adminEmailsConfigured: adminEmails(env).length, emailVerificationRequired: verificationRequired(env) }, 200, env, request);
+  return json({ ok:true, users: userList, stats: stats.results || [], messageStats: msgs.results || [], assignableRoles: ASSIGNABLE_ROLES.slice(), adminEmailsConfigured: adminEmails(env).length, emailVerificationRequired: verificationRequired(env), accountStates: ACCOUNT_STATES.slice() }, 200, env, request);
+}
+
+// ---------- admin: account status (ban / suspend / restrict) ----------
+// Least privilege in practice: this is the only endpoint that can change an account's status, it is
+// behind requireAdmin + a confirmed admin address (adminVerifiedGate), it can never touch an account
+// listed in ADMIN_EMAILS and it can never touch the caller's own row - so the panel cannot lock the
+// operator out of the panel. Every change is written to the audit log with the note the admin typed.
+async function handleAdminUserStatus(request, env, url){
+  if (!hasDb(env)) return json({ error:"DB missing" }, 503, env, request);
+  const m = url.pathname.match(/^\/api\/admin\/users\/(\d+)\/status\/?$/);
+  if (!m) return json({ error:"Not found" }, 404, env, request);
+  if (request.method !== "POST") return json({ error:"Method not allowed" }, 405, env, request);
+  const auth = await requireAdmin(request, env);
+  if (!auth) return json({ error:"Admin only" }, 403, env, request);
+  const vg = adminVerifiedGate(auth, env, request); if (vg) return vg;
+  let body; try{ body = await request.json(); }catch{ return json({ error:"Invalid JSON" }, 400, env, request); }
+  const next = String(body.status || "").toLowerCase();
+  if (!ACCOUNT_STATES.includes(next)) return json({ error:"Status must be active, restricted, suspended or banned." }, 400, env, request);
+  const id = Number(m[1]);
+  if (Number(id) === Number(auth.user.id)) return json({ error:"You cannot change your own account status." }, 400, env, request);
+  let target;
+  try { target = await env.DB.prepare("SELECT id, email, role, email_verified, status, status_reason, status_until FROM users WHERE id = ?").bind(id).first(); }
+  catch { target = await env.DB.prepare("SELECT id, email, role, email_verified FROM users WHERE id = ?").bind(id).first(); }
+  if (!target) return json({ error:"User not found" }, 404, env, request);
+  if (isAdminEmail(env, target.email)) return json({ error:"That account is an Administrator (ADMIN_EMAILS), so it cannot be restricted here." }, 400, env, request);
+  const reason = String(body.reason || "").replace(/[\u0000-\u001F\u007F]/g, " ").slice(0, 300).trim();
+  const hours = Number(body.hours || 0);
+  let until = 0;
+  if (next === "suspended") {
+    if (!Number.isFinite(hours) || hours <= 0 || hours > 24 * 365) return json({ error:"A suspension needs a length in hours (1 - 8760)." }, 400, env, request);
+    until = Date.now() + Math.round(hours * 3600000);
+  }
+  try {
+    await env.DB.prepare("UPDATE users SET status = ?, status_reason = ?, status_until = ?, status_updated_at = ? WHERE id = ?")
+      .bind(next, reason, until, new Date().toISOString(), id).run();
+  } catch { return json({ error:"Account status storage is not configured yet (database migration pending)." }, 503, env, request); }
+  // A ban or a suspension ends the access it found: the sessions go with it.
+  const revoked = next === "banned" || next === "suspended";
+  if (revoked) await revokeSessions(env, id);
+  await audit(env, auth.user, "account." + next, String(target.email), (reason || "no note") + (until ? " until " + new Date(until).toISOString() : ""));
+  return json({ ok:true, id, email: target.email, status: next, reason, until, sessionsRevoked: revoked }, 200, env, request);
+}
+
+// ---------- admin: blocked networks (IP restrictions) ----------
+// GET is a plain read for the panel; adding or removing an entry is a sensitive change (it can cut a
+// real customer off), so it needs the admin's confirmed address like every other sensitive action.
+async function handleAdminBlockedIps(request, env, url){
+  if (!hasDb(env)) return json({ error:"DB missing" }, 503, env, request);
+  const auth = await requireAdmin(request, env);
+  if (!auth) return json({ error:"Admin only" }, 403, env, request);
+  async function readList(){
+    try { const j = JSON.parse((await getSetting(env, "blocked_ips")) || "[]"); if (Array.isArray(j)) return j; } catch {}
+    return [];
+  }
+  if (request.method === "GET") { const ips = await readList(); return json({ ok:true, ips: ips.slice(0, 500) }, 200, env, request); }
+  if (request.method !== "POST" && request.method !== "DELETE") return json({ error:"Method not allowed" }, 405, env, request);
+  const vg = adminVerifiedGate(auth, env, request); if (vg) return vg;
+  let body; try{ body = await request.json(); }catch{ return json({ error:"Invalid JSON" }, 400, env, request); }
+  const ip = validIp(body.ip);
+  if (!ip) return json({ error:"A single IPv4 or IPv6 address is required." }, 400, env, request);
+  const note = String(body.note || "").replace(/[\u0000-\u001F\u007F]/g, " ").slice(0, 200).trim();
+  let list = (await readList()).filter(e => validIp(e && e.ip != null ? e.ip : e) !== ip);
+  if (request.method === "POST") list.unshift({ ip, note, at: new Date().toISOString(), by: auth.user.email });
+  if (list.length > 500) list = list.slice(0, 500);
+  try { await setSetting(env, "blocked_ips", JSON.stringify(list)); }
+  catch { return json({ error:"Settings storage is not configured." }, 503, env, request); }
+  blockedIpCache = { at: 0, list: [] };   // the change is live on this isolate at once
+  await audit(env, auth.user, request.method === "DELETE" ? "ip.unblock" : "ip.block", ip, note);
+  return json({ ok:true, ips: list, blocked: request.method === "POST" }, 200, env, request);
 }
 async function handleAdminMessages(request, env, url){
   if (!hasDb(env)) return json({ error:"DB missing" }, 503, env, request);
@@ -2114,6 +2404,8 @@ async function handleInvoice(request, env){
   if(!earlyAuth) return json({ error:"Checkout requires an account \u2014 create one or sign in, then pay.", code:"ACCOUNT_REQUIRED" }, 401, env, request);
   const invoiceGate=verifiedGate(earlyAuth, env, request);
   if(invoiceGate) return invoiceGate;
+  const statusGate=accountGate(earlyAuth, env, request, "write");
+  if(statusGate) return statusGate;
   const accountEmail=(earlyAuth.user && isEmail(earlyAuth.user.email)) ? String(earlyAuth.user.email).trim() : "";
   const discord=String(body.discord||body.discordUsername||(earlyAuth.user && earlyAuth.user.discord)||"").trim().slice(0,120);
   // The account email always wins; a posted email is only a fallback for an unusable account row.
@@ -2266,13 +2558,35 @@ async function handleInvoice(request, env){
       emailOk,
     }, 200, env, request);
   }catch(e){
-    if(String(e.message).includes("NOWPAYMENTS_API_KEY")){
+    const rawMsg = String((e && e.message) || "");
+    if(rawMsg.includes("NOWPAYMENTS_API_KEY")){
       return json({ ok:false, error:"NOWPayments not configured yet \u2014 order email + Discord were sent, but crypto checkout is not enabled. Add NOWPAYMENTS_API_KEY.", orderId, purchaseId, emailOk }, 503, env, request);
     }
-    if(String(e.message).toLowerCase().includes("pay_currency")){
-      return json({ error: e.message }, 400, env, request);
+    if(rawMsg.toLowerCase().includes("pay_currency")){
+      return json({ error: rawMsg }, 400, env, request);
     }
-    return json({ error:e.message||"Payment failed" }, 500, env, request);
+    // No payment exists, so the order must not keep looking like money that might still arrive.
+    // Only an order that is still awaiting a payment is touched: a paid one is never rewritten here.
+    if (hasDb(env) && orderId) {
+      try { await env.DB.prepare("UPDATE orders SET status = 'failed' WHERE order_id = ? AND status IN ('pending','waiting')").bind(orderId).run(); } catch {}
+    }
+    const belowMin = (e && e.code === "AMOUNT_BELOW_MINIMUM") || /below_minimum/.test(rawMsg);
+    if (belowMin) {
+      const min = Number((e && e.minimum) || 0);
+      const minText = min > 0 ? `\u20AC${min.toFixed(2)}` : "the provider's minimum";
+      const coin = String((e && e.coin) || payCurrency || "crypto").toUpperCase();
+      return json({
+        error: `The crypto provider cannot process a payment this small: its minimum for ${coin} is ${minText}. Nothing was charged and no payment was created, and the order is marked as failed in your account. Choose a coin with a lower minimum, a larger amount, or a promo code that covers it \u2014 orders of \u20AC15 and up are well above the minimum.`,
+        code:"AMOUNT_BELOW_MINIMUM", orderId, purchaseId, minimum: min,
+      }, 400, env, request);
+    }
+    // Anything else is a real failure at the provider: the customer gets a plain sentence and the
+    // detail goes to the Worker log, never into the response body.
+    console.error("payment creation failed", rawMsg);
+    return json({
+      error: "The payment provider could not start this payment, so nothing was charged. Your order is saved as failed in your account \u2014 you can reopen it there and try again, or write to questions@get-aether.de." + (purchaseId ? ` (Order ${purchaseId})` : ""),
+      code:"PAYMENT_PROVIDER_ERROR", orderId, purchaseId,
+    }, 502, env, request);
   }
 }
 
@@ -2409,19 +2723,42 @@ async function handleIpn(request, env){
   return json({ ok:true, status }, 200, env, request);
 }
 
+// Payment status is protected customer data, and a payment id is a NUMBER - sequential and trivially
+// enumerable - so it can never be the thing that decides who may read an order. The caller must be
+// signed in AND an order in this database must link that payment to this account. Anything else is a
+// 404, which is also the answer for a payment that does not exist at all, so the endpoint cannot be
+// used to discover whose payments exist.
 async function handlePaymentStatus(request, env, url){
+  const auth = await requireAuth(request, env);
+  if (!auth) return json({ error:"Sign in to view a payment - payments belong to an account.", code:"SESSION_REQUIRED" }, 401, env, request);
+  if (!hasDb(env)) return json({ error:"Accounts not configured" }, 503, env, request);
+  const statusGate = accountGate(auth, env, request, "read");
+  if (statusGate) return statusGate;
   let paymentId = "";
   const path = url.pathname;
   const m = path.match(/^\/api\/payment\/([^\/\?]+)$/);
   if(m) paymentId = decodeURIComponent(m[1]);
   if(!paymentId || paymentId.toLowerCase()==="status") paymentId = url.searchParams.get("payment_id") || url.searchParams.get("paymentId") || url.searchParams.get("id") || "";
   paymentId = String(paymentId||"").trim();
-  if(!paymentId || paymentId.toLowerCase()==="status") return json({ error:"payment_id required \u2014 use /api/payment/:payment_id or ?payment_id=..." }, 400, env, request);
-  if(!/^\d+$/.test(paymentId)) return json({ error:"Invalid payment_id" }, 400, env, request);
+  const rawPurchase = String(url.searchParams.get("purchase_id") || url.searchParams.get("purchaseId") || "").trim();
+  const purchaseId = normalizePurchaseId(rawPurchase);
+  if (rawPurchase && !purchaseId) return json({ error:"Invalid Purchase ID - the format is AETH-YYYY-XXXXXXXX" }, 400, env, request);
+  if(!paymentId && !purchaseId) return json({ error:"Provide a payment id (/api/payment/:payment_id) or ?purchase_id=AETH-..." }, 400, env, request);
+  if(paymentId && !/^\d+$/.test(paymentId)) return json({ error:"Invalid payment_id" }, 400, env, request);
+  const ord = paymentId
+    ? await env.DB.prepare("SELECT * FROM orders WHERE payment_id = ? AND user_id = ?").bind(paymentId, auth.user.id).first()
+    : await env.DB.prepare("SELECT * FROM orders WHERE purchase_id = ? AND user_id = ?").bind(purchaseId, auth.user.id).first();
+  if (!ord) return json({ error:"No payment with that id belongs to your account.", code:"PAYMENT_NOT_FOUND" }, 404, env, request);
+  const base = { ok:true, orderId: ord.order_id, purchaseId: ord.purchase_id || "", priceAmount: ord.amount, priceCurrency: ord.currency, createdAt: ord.created_at };
+  // A test order that a 100% promo covered has no provider payment behind it: it is already settled.
+  if (String(ord.status || "") === "free" || !ord.payment_id) {
+    const free = String(ord.status || "") === "free";
+    return json(Object.assign(base, { status: free ? "free" : String(ord.status || "unknown"), isPaid: free, isPending: false, isFailed: String(ord.status||"") === "failed", payAmount: null, payCurrency: "", validUntil: "" }), 200, env, request);
+  }
   const key = env.NOWPAYMENTS_API_KEY;
-  if(!key) return json({ error:"Payment verification not configured" }, 503, env, request);
+  if(!key) return json({ error:"Payment verification is not configured on this deployment." }, 503, env, request);
   try{
-    const res = await fetch(`https://api.nowpayments.io/v1/payment/${encodeURIComponent(paymentId)}`, { headers: { "x-api-key": key } });
+    const res = await fetch(`https://api.nowpayments.io/v1/payment/${encodeURIComponent(String(ord.payment_id))}`, { headers: { "x-api-key": key } });
     const text = await res.text();
     let data; try{ data=JSON.parse(text);}catch{ data={ raw:text }; }
     if(!res.ok) return json({ error: "Payment could not be verified with the provider" }, 502, env, request);
@@ -2429,10 +2766,18 @@ async function handlePaymentStatus(request, env, url){
     const isPaid = ["finished","confirmed","sending"].includes(status);
     const isPending = ["waiting","confirming"].includes(status);
     const isFailed = ["failed","expired","refunded"].includes(status);
-    // Minimal disclosure: status + amounts only. No provider payload, no customer PII.
-    return json({ ok:true, paymentId, status, isPaid, isPending, isFailed, price_amount: data.price_amount, price_currency: data.price_currency, pay_amount: data.pay_amount, pay_currency: data.pay_currency, order_id: data.order_id }, 200, env, request);
+    // Minimal disclosure: status, amounts and a deadline when the provider reports one. No provider
+    // payload, no customer PII, no other account's anything.
+    return json(Object.assign(base, {
+      paymentId: String(ord.payment_id),
+      status, isPaid, isPending, isFailed,
+      payAmount: data.pay_amount, payAddress: data.pay_address || "",
+      payCurrency: data.pay_currency, priceAmount: data.price_amount ?? ord.amount, priceCurrency: data.price_currency || ord.currency,
+      validUntil: data.valid_until || data.expiration_estimate_date || "",
+    }), 200, env, request);
   }catch(e){
-    return json({ error: e.message || "Verification failed" }, 500, env, request);
+    console.error("payment status lookup failed", e && e.message);
+    return json({ error:"The payment provider could not be reached just now. Please try again in a moment." }, 502, env, request);
   }
 }
 
@@ -2458,6 +2803,11 @@ async function handleRequest(request, env, ctx){
     if(["POST","PUT","PATCH","DELETE"].includes(request.method) && !isIpnPath(path) && !writeOriginAllowed(env, request)){
       return json({ error:"Request blocked \u2014 untrusted origin" }, 403, env, request);
     }
+    // Blocked networks are refused before any route runs, so a restriction cannot be dodged by
+    // finding an endpoint that forgot to ask. The list is small, admin-owned and cached per isolate.
+    if((path.startsWith("/api") || path.startsWith("/admin")) && await ipBlocked(env, request)){
+      return json({ error:"Access from this network has been blocked. Write to questions@get-aether.de if you think that is a mistake.", code:"IP_BLOCKED" }, 403, env, request);
+    }
 
     // admin (must be matched before /api/orders)
     if(path.startsWith("/api/admin") || path.startsWith("/admin/")){
@@ -2471,6 +2821,8 @@ async function handleRequest(request, env, ctx){
       if(apath==="/api/admin/audit"||apath==="/api/admin/audit/") return handleAdminAudit(request, env);
       if(apath==="/api/admin/ipn"||apath==="/api/admin/ipn/") return handleAdminIpn(request, env);
       if(/^\/api\/admin\/users\/\d+\/role\/?$/.test(apath)) return handleAdminRole(request, env, aurl);
+      if(/^\/api\/admin\/users\/\d+\/status\/?$/.test(apath)) return handleAdminUserStatus(request, env, aurl);
+      if(apath==="/api/admin/blocked-ips"||apath==="/api/admin/blocked-ips/") return handleAdminBlockedIps(request, env, aurl);
       if(apath==="/api/admin/conversations"||apath==="/api/admin/conversations/"||/^\/api\/admin\/conversations\/[^\/]+(\/(messages|status))?\/?$/.test(apath)) return handleAdminConversations(request, env, aurl);
       if(apath==="/api/admin/orders"||apath==="/api/admin/orders/") return handleAdminOrders(request, env, aurl);
       if(/^\/api\/admin\/orders\/[^\/]+\/message\/?$/.test(apath)) return request.method==="POST" ? handleAdminOrderMessage(request, env, aurl) : json({ error:"Method not allowed" }, 405, env, request);
@@ -2478,7 +2830,7 @@ async function handleRequest(request, env, ctx){
       if(apath==="/api/admin/users"||apath==="/api/admin/users/") return handleAdminUsers(request, env, aurl);
       if(/^\/api\/admin\/users\/\d+\/?$/.test(apath)) return handleAdminUsers(request, env, aurl);
       if(apath==="/api/admin/messages"||apath==="/api/admin/messages/") return handleAdminMessages(request, env, aurl);
-      if(apath==="/api/admin"||apath==="/api/admin/") return json({ ok:true, admin: admin.user.email, routes:["GET /api/admin/orders","GET /api/admin/orders/:id","POST /api/admin/orders/:id/message","GET /api/admin/users","DELETE /api/admin/users/:id","POST /api/admin/users/:id/role","GET /api/admin/messages","GET /api/admin/conversations","POST /api/admin/conversations/:id/messages","GET /api/admin/beta","POST /api/admin/beta/domain/request","POST /api/admin/beta/domain/confirm","POST /api/admin/beta/flags","GET /api/admin/audit","GET /api/admin/ipn"] }, 200, env, request);
+      if(apath==="/api/admin"||apath==="/api/admin/") return json({ ok:true, admin: admin.user.email, routes:["GET /api/admin/orders","GET /api/admin/orders/:id","POST /api/admin/orders/:id/message","GET /api/admin/users","DELETE /api/admin/users/:id","POST /api/admin/users/:id/role","POST /api/admin/users/:id/status","GET /api/admin/blocked-ips","POST /api/admin/blocked-ips","DELETE /api/admin/blocked-ips","GET /api/admin/messages","GET /api/admin/conversations","POST /api/admin/conversations/:id/messages","GET /api/admin/beta","POST /api/admin/beta/domain/request","POST /api/admin/beta/domain/confirm","POST /api/admin/beta/flags","GET /api/admin/audit","GET /api/admin/ipn"] }, 200, env, request);
       return json({ error:"Not found", path }, 404, env, request);
     }
 

@@ -35,7 +35,7 @@ class DB {
   constructor() {
     this.db = new DatabaseSync(":memory:");
     this.db.exec(`
-      CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, discord TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), email_verified INTEGER DEFAULT 0, role TEXT DEFAULT 'user');
+      CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, discord TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), email_verified INTEGER DEFAULT 0, role TEXT DEFAULT 'user', status TEXT DEFAULT 'active', status_reason TEXT, status_until INTEGER, status_updated_at TEXT, last_ip TEXT, last_ip_at TEXT, signup_ip TEXT);
       CREATE TABLE sessions (token TEXT PRIMARY KEY, user_id INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), expires_at INTEGER NOT NULL);
       CREATE TABLE auth_tokens (token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL, purpose TEXT NOT NULL, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, payload TEXT);
       CREATE TABLE rate_limits (rl_key TEXT PRIMARY KEY, count INTEGER NOT NULL, window_start INTEGER NOT NULL);
@@ -84,6 +84,11 @@ const env = {
   PROGRAM_SHA256: process.env.PROGRAM_SHA256 || "",
   PROGRAM_VERIFY_MAX_BYTES: process.env.PROGRAM_VERIFY_MAX_BYTES || "",
   PROGRAM_URL: process.env.PROGRAM_URL || "",
+  // Payment provider (optional). With a key set, the Worker really calls NOWPayments - which is how
+  // the payment error paths are exercised locally. Even a bogus key is useful: the provider answers
+  // 401, and the checkout has to say so in one plain English sentence instead of a generic crash.
+  //   NOWPAYMENTS_API_KEY=anything node _dev-server.mjs
+  NOWPAYMENTS_API_KEY: process.env.NOWPAYMENTS_API_KEY || "",
 };
 
 const worker = (await import("./worker/src/index.js")).default;

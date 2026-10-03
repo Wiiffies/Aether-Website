@@ -47,8 +47,8 @@
   <a class="back-link" href="index.html">← Home</a>
 </main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
 <script src="public/aether-config.js?v=9"></script>
-<script src="public/checkout.js?v=12"></script>
-<script src="public/aether.js?v=7" defer></script>
+<script src="public/checkout.js?v=13"></script>
+<script src="public/aether.js?v=7" defer></script><script src="public/chat.js?v=1" defer></script>
 <script>
 (function(){
   var CFG=window.AETHER_CONFIG||{}; var API=(CFG.apiBase||"https://api.get-aether.de").replace(/\/+$/,"");
@@ -96,7 +96,11 @@
     verifyDetails.textContent="payment_id: "+pid+" · order_id: "+(oid||"—")+" · amount: "+(amt||"—");
     try{
       var url=API+"/api/payment/"+encodeURIComponent(pid);
-      var res=await fetch(url,{headers:{"accept":"application/json"}});
+      // The payment belongs to an account and the Worker checks that: the payment id alone opens
+      // nothing, so this request sends the session (cookie, plus the tab's bearer token when the API
+      // is on the legacy cross-origin host where the cookie is not first-party).
+      var tok=""; try{ tok=sessionStorage.getItem("aether_token")||""; }catch(e){}
+      var res=await fetch(url,{headers: tok ? {"accept":"application/json","authorization":"Bearer "+tok} : {"accept":"application/json"}, credentials:"include"});
       var t=await res.text(); var j; try{ j=JSON.parse(t);}catch{ j={raw:t};}
       if(!res.ok) throw new Error(j.error||"Status "+res.status);
       var s=String(j.status||"").toLowerCase();

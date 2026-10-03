@@ -57,6 +57,11 @@
     <div class="acc-msg" id="acc-dash-msg"></div>
   </div>
 
+  <div class="acc-card acc-hide" id="acc-status-card">
+    <h2 id="acc-status-title">Account status</h2>
+    <p class="sub" id="acc-status-text">—</p>
+  </div>
+
   <div class="acc-card acc-hide" id="acc-verify-card">
     <h2>Confirm your email address</h2>
     <p class="sub">Protected customer functionality — purchases, chat and the Beta — stays locked until your email address is confirmed. We sent a confirmation link to <span id="acc-verify-email">your inbox</span>.</p>
@@ -65,9 +70,10 @@
   </div>
 
   <div id="acc-list-card" class="acc-card">
-    <h2>Your purchases</h2>
-    <p class="sub">Newest first, each with its Purchase ID (<code>AETH-YYYY-XXXXXXXX</code>) — quote it to support and we can find the order immediately. Click a purchase to open its chat thread. Checkout uses this account's email and Discord, so you never have to type them again.</p>
-    <div class="acc-scroll"><table class="acc-table" id="acc-orders"><thead><tr><th>Purchase ID</th><th>Item</th><th>Amount</th><th>Status</th><th>Placed</th></tr></thead><tbody><tr><td colspan="5" class="acc-empty">Loading…</td></tr></tbody></table></div>
+    <h2>Your orders &amp; payments</h2>
+    <p class="sub">Every order you have placed, newest first, with its Purchase ID (<code>AETH-YYYY-XXXXXXXX</code>) — quote it to support and we can find the order immediately. <b>An order that is still unpaid, waiting or failed can always be reopened from here</b>: press <b>Open</b> to see the payment address and amount again (for example after closing the tab), or to start a new payment. Click the row itself to read the messages for that order.</p>
+    <div class="acc-scroll"><table class="acc-table" id="acc-orders"><thead><tr><th>Order</th><th>Item</th><th>Amount</th><th>Payment</th><th>Date</th><th>Open</th></tr></thead><tbody><tr><td colspan="6" class="acc-empty">Loading…</td></tr></tbody></table></div>
+    <p class="sub" style="margin-top:10px">Paid orders stay listed forever, so you can always find an invoice again. A payment that failed or expired never charged you — reopening the order simply lets you try again.</p>
   </div>
 
   <div id="acc-detail-card" class="acc-card acc-hide">
@@ -145,7 +151,7 @@
 </section>
 </main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
 <script src="public/aether-config.js?v=9"></script>
-<script src="public/checkout.js?v=12"></script>
+<script src="public/checkout.js?v=13"></script>
 <script src="public/aether.js?v=7" defer></script>
 <script>
 (() => {
@@ -168,6 +174,21 @@
     if (["finished","confirmed","sending","paid"].includes(v)) return "paid";
     if (["failed","expired","refunded"].includes(v)) return "failed";
     return "pending";
+  }
+  // One place that turns a stored status into the sentence a customer needs: is my money taken, is
+  // something still waiting, or did it not go through at all.
+  function paymentState(o){
+    const s = String((o && o.status) || "pending").toLowerCase();
+    if (["finished","confirmed","sending","paid"].includes(s)) return { label:"Paid", cls:"paid" };
+    if (s === "free") return { label:"Free (promo)", cls:"paid" };
+    if (["failed","expired","refunded"].includes(s)) return { label:"Payment failed", cls:"failed" };
+    if (s === "partially_paid") return { label:"Partially paid", cls:"pending" };
+    if (s === "waiting" || s === "confirming") return { label:"Waiting for payment", cls:"pending" };
+    return { label: (o && o.payment_id) ? "Payment open" : "No payment yet", cls:"pending" };
+  }
+  function orderPageUrl(o){
+    const pid = o && (o.purchase_id || "");
+    return pid ? ("order.html?purchase_id=" + encodeURIComponent(pid)) : "";
   }
   function when(ts){
     if (!ts) return "—";
@@ -269,15 +290,25 @@
     try {
       const r = await A.portal.purchases();
       purchases = r.orders || [];
-      if (!purchases.length) { body.innerHTML = '<tr><td colspan="5" class="acc-empty">No purchases yet — <a href="shop.html" style="color:#fff">browse the shop</a>. Purchases you pay for with this email show up here.</td></tr>'; return; }
-      body.innerHTML = purchases.map(o => `<tr data-order="${esc(o.order_id)}">
+      if (!purchases.length) { body.innerHTML = '<tr><td colspan="6" class="acc-empty">No orders yet — <a href="shop.html" style="color:#fff">browse the shop</a>. Everything you pay for with this account shows up here, including orders whose payment failed.</td></tr>'; return; }
+      body.innerHTML = purchases.map(o => {
+        const st = paymentState(o);
+        const url = orderPageUrl(o);
+        const open = url
+          ? `<a class="acc-btn ghost mini" href="${esc(url)}" data-open-order="1">Open ↗</a>`
+          : '<span class="mono">—</span>';
+        return `<tr data-order="${esc(o.order_id)}">
         <td class="mono">${esc(o.purchase_id || o.order_id)}</td>
         <td>${esc(String(o.type || "order").replace(/_/g, " "))} <span class="mono">${esc(o.package || "")}</span></td>
-        <td>${esc(money(o.amount, o.currency))}${o.discount ? ` <span class="mono">−€${esc(Number(o.discount).toFixed(0))}</span>` : ""}</td>
-        <td><span class="acc-badge ${statusClass(o.status)}">${esc(o.status || "pending")}</span></td>
+        <td>${esc(money(o.amount, o.currency))}${o.discount ? ` <span class="mono">−€${esc(Number(o.discount).toFixed(2))}</span>` : ""}</td>
+        <td><span class="acc-badge ${st.cls}">${esc(st.label)}</span></td>
         <td class="mono">${esc(when(o.created_at))}</td>
-      </tr>`).join("");
+        <td>${open}</td>
+      </tr>`; }).join("");
       body.querySelectorAll("tr[data-order]").forEach(tr => tr.addEventListener("click", () => openDetail(tr.dataset.order)));
+      // The "Open" button has its own job (the order/payment page). Without this the row handler would
+      // fire as well and the customer would land in the chat instead of the payment.
+      body.querySelectorAll("[data-open-order]").forEach(a => a.addEventListener("click", e => e.stopPropagation()));
       fillPurchaseSelect();
     } catch (err) {
       body.innerHTML = `<tr><td colspan="5" class="acc-empty">${esc(err.message || "Could not load purchases")}</td></tr>`;
@@ -500,6 +531,22 @@
       if (me.emailVerified) { vNote.className = "acc-note ok"; vNote.textContent = "Email confirmed — order updates reach " + me.user.email + "."; }
       else if (me.emailVerificationRequired) { vNote.className = "acc-note"; vNote.textContent = "Email not confirmed yet. Open the confirmation link we sent to " + me.user.email + " to confirm it."; }
       else { vNote.className = "acc-note"; vNote.textContent = "Email delivery is not configured on this deployment, so confirmation is not being enforced. Your purchases and chat are still tied to this account."; }
+    }
+    // Ban / suspension / restriction is decided server-side; the portal's only job is to say so
+    // plainly. Nothing is hidden behind this - every protected call is refused by the API anyway.
+    const acctState = me.accountStatus || { state:"active" };
+    const statusCard = $("acc-status-card");
+    if (statusCard) {
+      const blocked = acctState.state && acctState.state !== "active";
+      if (blocked) {
+        const title = acctState.state === "banned" ? "This account is closed" : acctState.state === "suspended" ? "This account is suspended" : "This account is restricted";
+        const detail = acctState.state === "restricted"
+          ? "You can still read your orders and conversations, but new orders and new conversations are paused."
+          : "Ordering, chat and the Beta are locked" + (acctState.untilText ? " until " + acctState.untilText : "") + ".";
+        $("acc-status-title").textContent = title;
+        $("acc-status-text").textContent = (acctState.reason ? acctState.reason + " " : "") + detail + " Write to questions@get-aether.de and we will sort it out.";
+      }
+      show(statusCard, !!blocked);
     }
     $("acc-role-chip").textContent = me.role || "user";
     $("acc-role-chip").className = "role-chip" + (me.role === "admin" ? " admin" : me.role === "tester" ? " tester" : "");

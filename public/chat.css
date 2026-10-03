@@ -1,0 +1,84 @@
+/* Support chat launcher — one widget on every page.
+   Loaded by public/chat.js (it injects this file itself, so pages only need the one script tag).
+   Same palette and radii as the rest of the site: #08080a page, #101014 panels, #24262b lines. */
+.ac-launch{
+  position:fixed;right:18px;bottom:18px;z-index:9000;
+  display:inline-flex;align-items:center;gap:9px;
+  padding:11px 16px;border-radius:999px;
+  border:1px solid #2a2e33;background:#101014;color:#fff;
+  font:600 12px Manrope,Arial,sans-serif;letter-spacing:.01em;cursor:pointer;
+  box-shadow:0 12px 34px rgba(0,0,0,.55);
+}
+.ac-launch:hover{border-color:#4a4f57;background:#141519}
+.ac-launch:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.ac-launch .ac-dot{width:7px;height:7px;border-radius:50%;background:#8ee0a0;flex:0 0 auto}
+.ac-launch[data-state="off"] .ac-dot{background:#5b5f66}
+.ac-launch .ac-count{
+  min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#fff;color:#08080a;
+  font:700 10px/18px 'DM Mono',monospace;text-align:center
+}
+.ac-panel{
+  position:fixed;right:18px;bottom:74px;z-index:9001;
+  width:min(382px,calc(100vw - 24px));max-height:min(76vh,620px);
+  display:flex;flex-direction:column;overflow:hidden;
+  background:#101014;border:1px solid #24262b;border-radius:14px;
+  box-shadow:0 24px 70px rgba(0,0,0,.65);color:#e8eaed;
+  font:13px Manrope,Arial,sans-serif
+}
+.ac-panel[hidden]{display:none}
+.ac-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid #1d1f23}
+.ac-head .ac-kicker{font:10px 'DM Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:#85878b}
+.ac-head h3{margin:5px 0 0;font-size:15px;font-weight:600;letter-spacing:-.02em}
+.ac-head .ac-sub{margin:4px 0 0;font-size:11px;line-height:1.6;color:#9aa0a6}
+.ac-x{
+  flex:0 0 auto;width:30px;height:30px;border-radius:9px;border:1px solid #26282d;background:#141519;
+  color:#c8c9cc;font-size:13px;cursor:pointer;display:grid;place-items:center
+}
+.ac-x:hover{border-color:#4a4f57;color:#fff}
+.ac-body{flex:1;overflow:auto;padding:14px 16px;display:grid;gap:12px;align-content:start}
+.ac-row{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.ac-list{display:grid;gap:8px;margin:0}
+.ac-item{
+  text-align:left;width:100%;padding:11px 12px;border-radius:10px;
+  border:1px solid #212227;background:#0c0c0f;color:#e8eaed;cursor:pointer
+}
+.ac-item:hover{border-color:#3a3f46;background:#121317}
+.ac-item .t{display:block;font-size:12px;font-weight:600;line-height:1.45}
+.ac-item .m{display:block;margin-top:4px;font-size:11px;line-height:1.55;color:#8b8f96}
+.ac-item .d{display:block;margin-top:6px;font:10px 'DM Mono',monospace;color:#6f7277}
+.ac-badge{
+  display:inline-block;padding:2px 7px;border-radius:999px;font:10px 'DM Mono',monospace;
+  border:1px solid #2a2e33;color:#c8c9cc;background:#141519;white-space:nowrap
+}
+.ac-badge.waiting{border-color:#4a3a12;background:rgba(255,204,0,.07);color:#e8d48a}
+.ac-badge.answered{border-color:#24402c;background:rgba(46,160,67,.08);color:#8ee0a0}
+.ac-badge.resolved{border-color:#2a2e33;color:#8b8f96}
+.ac-thread{display:grid;gap:10px}
+.ac-msg{max-width:88%;padding:9px 11px;border-radius:10px;font-size:12px;line-height:1.65;white-space:pre-wrap;word-break:break-word}
+.ac-msg.mine{margin-left:auto;background:#1b2a20;border:1px solid #24402c}
+.ac-msg.theirs{margin-right:auto;background:#141519;border:1px solid #24262b}
+.ac-msg .meta{display:block;margin-top:5px;font:10px 'DM Mono',monospace;color:#7a7d82}
+.ac-field{display:grid;gap:6px}
+.ac-label{font:10px 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#85878b}
+.ac-input,.ac-textarea{
+  width:100%;box-sizing:border-box;background:#111214;border:1px solid #2a2e33;color:#fff;
+  border-radius:8px;padding:10px 12px;font:12px Manrope,Arial,sans-serif;outline:none
+}
+.ac-textarea{min-height:74px;resize:vertical;line-height:1.6}
+.ac-input:focus,.ac-textarea:focus{border-color:#4a4f57}
+.ac-btn{
+  padding:10px 14px;border-radius:9px;border:1px solid #fff;background:#fff;color:#08080a;
+  font:700 12px Manrope,Arial,sans-serif;cursor:pointer
+}
+.ac-btn:disabled{opacity:.6;cursor:default}
+.ac-btn.ghost{border:1px solid #2a2e33;background:transparent;color:#c8c9cc;font-weight:600}
+.ac-btn.ghost:hover{border-color:#4a4f57;color:#fff}
+.ac-note{padding:11px 12px;border:1px solid #24262b;border-radius:10px;background:#0c0c0f;font-size:11px;line-height:1.7;color:#9aa0a6}
+.ac-note.err{border-color:#4a2a2a;background:rgba(122,42,42,.1);color:#ff9a9a}
+.ac-note.ok{border-color:#24402c;background:rgba(46,160,67,.07);color:#8ee0a0}
+.ac-empty{padding:14px 12px;border:1px dashed #24262b;border-radius:10px;font-size:11px;line-height:1.7;color:#8b8f96;text-align:center}
+.ac-link{color:#fff;text-decoration:underline;text-underline-offset:2px}
+@media (max-width:520px){
+  .ac-launch{right:12px;bottom:12px}
+  .ac-panel{right:12px;left:12px;width:auto;bottom:66px;max-height:74vh}
+}

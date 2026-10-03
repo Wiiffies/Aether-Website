@@ -109,14 +109,15 @@
           <span class="tier-kicker">Test — €0.02</span>
           <div class="tier-name">TEST PURCHASE</div>
           <ul class="tier-list">
-            <li>Creates a real NOWPayments payment for exactly €0.02</li>
-            <li>Normal checkout: account, BTC/LTC/ETH, promo code, IPN and emails all apply</li>
+            <li>Runs the whole checkout: account, BTC/LTC/ETH, promo code, order page, emails and IPN all apply</li>
+            <li>The crypto provider has a minimum of roughly €2 per payment, so €0.02 is refused up front — with a plain English reason and nothing charged, never a broken 500</li>
+            <li>Enter a promo code that covers the whole amount to see the other path: a free order with no payment at all</li>
             <li>Testing only — not a product; it cannot be swapped for a real package</li>
           </ul>
-          <button class="tier-cta" data-pay="test_purchase" data-package="TEST" data-amount="0.02" data-desc="Test Purchase — real payment (€0.02)">Pay €0.02 with Crypto <span>↗</span></button>
+          <button class="tier-cta" data-pay="test_purchase" data-package="TEST" data-amount="0.02" data-desc="Test Purchase — payment path check (€0.02)">Run the €0.02 payment test <span>↗</span></button>
         </article>
       </div>
-      <p style="margin:12px 0 0;font-size:12px;line-height:1.7;color:#9aa0a6">Temporary: verifies the live payment + IPN path with a real (tiny) payment. Delete this section and the <code style="color:#c8d0d8">test_purchase</code> type in the Worker once checkout is confirmed — it is not part of the shop.</p>
+      <p style="margin:12px 0 0;font-size:12px;line-height:1.7;color:#9aa0a6">Temporary: proves both checkout paths — a below-minimum order refused clearly with no payment and no charge, and (with a 100% promo) a free order that creates no payment at all. Delete this section and the <code style="color:#c8d0d8">test_purchase</code> type in the Worker once checkout is confirmed — it is not part of the shop.</p>
     </section>
   </section>
 
@@ -138,8 +139,8 @@
   </div>
 </main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
 <script src="public/aether-config.js?v=9"></script>
-<script src="public/checkout.js?v=12"></script>
-<script src="public/aether.js?v=7" defer></script>
+<script src="public/checkout.js?v=13"></script>
+<script src="public/aether.js?v=7" defer></script><script src="public/chat.js?v=1" defer></script>
 <script>
 (() => {
   const C = window.AetherCheckout;
