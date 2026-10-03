@@ -379,6 +379,9 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
       `81830ab5c40740d5a71a5909da775079` is now at version 7 with **both** rules `enabled:false` and
       their expressions byte-identical; `/`, `/shop.html`, `/account.html`, `/order.html`,
       `/payment-success.html`, `/public/chat.js` and `/api/health` all answer 200.
-- [ ] MANUAL: NOWPayments' per-pair minimum is vendor-side — the €0.02 card will be refused (with a
-      clear message, nothing charged). Use `TEST100` for a free end-to-end order, and remove the test
-      card + promo code before launch.
+- [x] **The provider minimum is per coin and small — measured live 2026-10-03: €0.04 for LTC.** The
+      card's €0.02 therefore stays under it by design, and the refusal now names the exact figure for
+      the chosen coin (the pre-flight asks `/v1/min-amount` with the coin as `currency_from`). Real
+      orders (€15+) are nowhere near any floor.
+- [ ] MANUAL: use `TEST100` for a free end-to-end order (or a €0.10+ LTC test to exercise a real
+      payment), and remove the test card + promo code before launch.
