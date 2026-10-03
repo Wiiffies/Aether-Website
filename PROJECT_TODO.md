@@ -469,5 +469,12 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
       survived (both IPN secrets, `RESEND_API_KEY`, `TURNSTILE_SECRET`, `D1`, `PROMO_CODES` now set).
 - [ ] MANUAL: fill in the imprint's real operator details (name, address, contact) before launch;
       the page ships with honest placeholders flagged in this repo.
+- [x] **No emoji in product copy (2026-10-03, operator's decision):** the order/payment/chat
+      notifications and the checkout/success status lines use plain-text labels (`PAID`, `FAILED`,
+      `PARTIALLY PAID`, `PENDING`, `Payment started`, `Free order (promo)`) instead of colour emoji,
+      so they render identically in every mail client, Discord client and screen reader. The
+      monochrome functional glyphs (menu icon, check/cross marks, copy feedback) stay, and
+      `checkout.js` moved to `?v=16`. A scan of every tracked text file reports none left; the
+      worker is back to 0 non-ASCII bytes.
 - [ ] Not implemented (audit findings, deliberate scope): images in the support chat (CSP already
       allows `img-src 'self' data:`), and a terms-acceptance checkbox at registration.

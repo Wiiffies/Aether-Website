@@ -1381,7 +1381,7 @@ async function notifySupportChat(env, auth, conv, text){
         text:`New message for ${label} from ${auth.user.email}:\n\n${text}`,
         replyTo: auth.user.email,
       }).catch(()=>null),
-      sendDiscord(env, { embeds: discordEmbed({ title:`\uD83D\uDCAC Customer chat - ${label}`, color: DISCORD_ACCENT.info, fields:[["Purchase", conv.purchase_id || "-", true],["From", auth.user.email, true],["Message", text.slice(0,900), false]], description:`**${escMd(auth.user.email)}** \u2192 ${escMd(text.slice(0,400))}`, footer:`Chat \u2022 ${at}`, author:{ name:"Aether Chat" } }) }).catch(()=>null),
+      sendDiscord(env, { embeds: discordEmbed({ title:`Customer chat - ${label}`, color: DISCORD_ACCENT.info, fields:[["Purchase", conv.purchase_id || "-", true],["From", auth.user.email, true],["Message", text.slice(0,900), false]], description:`**${escMd(auth.user.email)}** \u2192 ${escMd(text.slice(0,400))}`, footer:`Chat \u2022 ${at}`, author:{ name:"Aether Chat" } }) }).catch(()=>null),
     ]);
   } catch {}
 }
@@ -1628,7 +1628,7 @@ async function handleAdminConversations(request, env, url){
       // to answer. No message body, so a support conversation never leaks into a shared channel.
       const chatUrl = siteUrl(env) + "/account.html";
       await sendDiscord(env, { embeds: discordEmbed({
-        title:`\uD83D\uDCAC Reply sent - ${conv.purchase_id || conv.order_id || conv.conversation_id}`,
+        title:`Reply sent - ${conv.purchase_id || conv.order_id || conv.conversation_id}`,
         color: DISCORD_ACCENT.info,
         description:`Answered by **${escMd((auth2 && auth2.user && auth2.user.email) || "support")}** \u00B7 customer notified by email \u00B7 thread stays at ${chatUrl}`,
         footer:"Aether support",
@@ -2212,7 +2212,7 @@ async function handleOrderMessage(request, env, url){
   ];
   const notify = [
     sendEmail(env, { to: "questions@get-aether.de", subject:`[CHAT] ${orderId} \u2014 ${auth.user.email}`, html: orderHtml({ title:`New customer message \u2014 ${orderId}`, fields: [["Order", orderId],["From", auth.user.email],["Discord", auth.user.discord||"\u2014"],["Message", text],["At", submitted]] }), text:`New message for ${orderId} from ${auth.user.email}:\n\n${text}`, replyTo: auth.user.email }).catch(()=>null),
-    sendDiscord(env, { embeds: discordEmbed({ title:`\uD83D\uDCAC New chat \u2014 ${orderId}`, color: DISCORD_ACCENT.info, fields: discordFields, description: `**${escMd(auth.user.email)}** \u2192 ${escMd(text.slice(0,400))}`, footer:`Chat \u2022 ${submitted}`, author:{name:"Aether Chat"} }) }).catch(()=>null),
+    sendDiscord(env, { embeds: discordEmbed({ title:`New chat \u2014 ${orderId}`, color: DISCORD_ACCENT.info, fields: discordFields, description: `**${escMd(auth.user.email)}** \u2192 ${escMd(text.slice(0,400))}`, footer:`Chat \u2022 ${submitted}`, author:{name:"Aether Chat"} }) }).catch(()=>null),
   ];
   await Promise.all(notify).catch(()=>{});
   const msgs = await env.DB.prepare("SELECT id, sender, body, created_at FROM messages WHERE order_id = ? ORDER BY id ASC").bind(orderId).all();
@@ -2365,7 +2365,7 @@ async function handleAdminOrderMessage(request, env, url){
   const at = new Date().toLocaleString("en-GB",{ timeZone:"Europe/Berlin", dateStyle:"long", timeStyle:"short"});
   const notify = [];
   if (ord.user_email) notify.push(sendEmail(env, { to: ord.user_email, subject:`[Aether] Reply to your order ${orderId}`, html: orderHtml({ title:`Aether replied \u2014 ${orderId}`, fields: [["Order", orderId],["Message", text],["At", at]] }), text:`${text}\n\n\u2014 Aether support (order ${orderId})` }).catch(()=>null));
-  notify.push(sendDiscord(env, { embeds: discordEmbed({ title:`\u2709\uFE0F Admin reply \u2014 ${orderId}`, color: DISCORD_ACCENT.paid, fields: [["Order ID", orderId, true],["To", ord.user_email || "guest checkout", true],["Message", text.slice(0,900), false]], description: `**Aether** \u2192 ${escMd(text.slice(0,400))}`, footer:`Admin reply \u2022 ${at}`, author:{name:"Aether Support"} }) }).catch(()=>null));
+  notify.push(sendDiscord(env, { embeds: discordEmbed({ title:`Admin reply \u2014 ${orderId}`, color: DISCORD_ACCENT.paid, fields: [["Order ID", orderId, true],["To", ord.user_email || "guest checkout", true],["Message", text.slice(0,900), false]], description: `**Aether** \u2192 ${escMd(text.slice(0,400))}`, footer:`Admin reply \u2022 ${at}`, author:{name:"Aether Support"} }) }).catch(()=>null));
   await Promise.all(notify).catch(()=>{});
   const msgs = await env.DB.prepare("SELECT id, sender, body, created_at FROM messages WHERE order_id = ? ORDER BY id ASC").bind(orderId).all();
   return json({ ok:true, messages: msgs.results || [] }, 200, env, request);
@@ -2444,7 +2444,7 @@ async function handleOrder(request, env){
   const discordDesc = `**${escMd(discord||"\u2014")}** \u00B7 ${escMd(email)} \u00B7 ${type} \u2014 ${String(body.package||"Custom")} \u00B7 \u20AC${amount ?? body.estimatedPrice ?? "?"}\n\n${escMd(description.slice(0,900))}${description.length>900?"\u2026":""}`;
   const discordTask = sendDiscord(env, {
     content: null,
-    embeds: discordEmbed({ title: `\uD83D\uDCE9 ${title} \u2014 \u20AC${amount ?? body.estimatedPrice ?? "?"}`, color: discordColor, fields: discordFields, description: discordDesc, footer: `Aether Orders \u2022 ${submitted}`, author:{name:"Aether \u2014 New order"} })
+    embeds: discordEmbed({ title: `${title} \u2014 \u20AC${amount ?? body.estimatedPrice ?? "?"}`, color: discordColor, fields: discordFields, description: discordDesc, footer: `Aether Orders \u2022 ${submitted}`, author:{name:"Aether \u2014 New order"} })
   }).catch(e=>({ error:e.message }));
   tasks.push(emailTask, discordTask);
   const replyTask = sendEmail(env, {
@@ -2639,17 +2639,17 @@ async function handleInvoice(request, env){
         subject:`${freeOrder ? `[PROMO ${appliedPromo || "100%"}] No payment required \u2014 ${type} ${pkg}` : `[PENDING] ${type} ${pkg} \u2014 ${payCurrency.toUpperCase()} \u2014 \u20AC${amount}`} \u2014 ${discord||"\u2014"} \u2014 ${orderId}`.slice(0,180),
         html: orderHtml({ title:`${freeOrder ? "Free order (promo) \u2014 no payment required" : `New payment started \u2014 ${payCurrency.toUpperCase()}`} \u2014 \u20AC${amount} \u2014 ${orderId}`, fields: pendingFields, note: freeOrder
           ? `A 100% promo (${appliedPromo}) covered the whole amount, so NO crypto payment was created and nothing will be charged. The order is recorded as paid/free.`
-          : `Customer started a NOWPayments Payment (pay_currency=${payCurrency.toUpperCase()}) \u2014 IPN will be sent to ${FIXED_IPN_URL}. You\u2019ll get a \u2705 PAID email when status becomes confirmed/finished.` }),
+          : `Customer started a NOWPayments Payment (pay_currency=${payCurrency.toUpperCase()}) \u2014 IPN will be sent to ${FIXED_IPN_URL}. You\u2019ll get a PAID email when status becomes confirmed/finished.` }),
         text: pendingFields.map(([k,v])=>`${k}: ${v}`).join("\n"), replyTo: email,
       }).catch(e => { console.warn("pending mail failed", e && e.message); emailOk = false; return null; }),
       sendDiscord(env, {
         embeds: discordEmbed({
-          title: `${freeOrder ? "\uD83C\uDFF7\uFE0F Free order (promo)" : "\u23F3 Payment started"} \u2014 ${freeOrder ? "NO PAYMENT" : payCurrency.toUpperCase()} \u00B7 \u20AC${amount} \u00B7 ${type} ${pkg}`,
+          title: `${freeOrder ? "Free order (promo)" : "Payment started"} \u2014 ${freeOrder ? "NO PAYMENT" : payCurrency.toUpperCase()} \u00B7 \u20AC${amount} \u00B7 ${type} ${pkg}`,
           color: DISCORD_ACCENT.pending,
           fields: pendingFields.slice(0,18),
           description: freeOrder
-            ? `${escMd(discord||"\u2014")} \u00B7 ${escMd(email)} \u00B7 **\u20AC0.00 due** \u00B7 \uD83C\uDFF7\uFE0F ${escMd(appliedPromo||"promo")} covered the amount \u2014 **no payment was created and nothing is charged**.`
-            : `${escMd(discord||"\u2014")} \u00B7 ${escMd(email)} \u00B7 **${payCurrency.toUpperCase()} \u2192 \u20AC${amount}**${appliedPromo ? ` \u00B7 \uD83C\uDFF7\uFE0F ${escMd(appliedPromo)} \u2212\u20AC${discount}` : ""} \u2014 IPN \u2192 ${FIXED_IPN_URL} \u2014 you\u2019ll get a \u2705 **PAID** ping on **confirmed/finished**.`,
+            ? `${escMd(discord||"\u2014")} \u00B7 ${escMd(email)} \u00B7 **\u20AC0.00 due** \u00B7 promo ${escMd(appliedPromo||"promo")} covered the amount \u2014 **no payment was created and nothing is charged**.`
+            : `${escMd(discord||"\u2014")} \u00B7 ${escMd(email)} \u00B7 **${payCurrency.toUpperCase()} \u2192 \u20AC${amount}**${appliedPromo ? ` \u00B7 promo ${escMd(appliedPromo)} \u2212\u20AC${discount}` : ""} \u2014 IPN \u2192 ${FIXED_IPN_URL} \u2014 you\u2019ll get a **PAID** ping on **confirmed/finished**.`,
           footer: `Order ${orderId} \u2022 ${submitted} \u2022 ${FIXED_IPN_URL}`,
           author: { name: freeOrder ? "Aether Payments \u2014 FREE (PROMO)" : "Aether Payments \u2014 PENDING" }
         })
@@ -2826,14 +2826,16 @@ async function handleIpn(request, env){
     if(v==null || String(v).trim()==="") continue;
     fields.push([k, String(v).slice(0,200), true]);
   }
-  let subjectPrefix = "\u2139\uFE0F IPN";
-  if(isPaid) subjectPrefix = "\u2705 PAID";
-  else if(isPartiallyPaid) subjectPrefix = "\u26A0\uFE0F PARTIALLY PAID";
-  else if(isFailed) subjectPrefix = "\u274C FAILED";
-  else if(isPending || status === "waiting" || status === "confirming") subjectPrefix = "\u23F3 PENDING \u2014 " + status.toUpperCase();
+  // Plain-text status labels, no emoji: they survive every mail client, every Discord client and
+  // every screen reader without relying on a colour font being installed.
+  let subjectPrefix = "IPN";
+  if(isPaid) subjectPrefix = "PAID";
+  else if(isPartiallyPaid) subjectPrefix = "PARTIALLY PAID";
+  else if(isFailed) subjectPrefix = "FAILED";
+  else if(isPending || status === "waiting" || status === "confirming") subjectPrefix = "PENDING \u2014 " + status.toUpperCase();
   const title=`${subjectPrefix} \u2014 ${status.toUpperCase()} \u2014 ${orderId}`;
   const toList=["questions@get-aether.de"];
-  const emoji = isPaid ? "\uD83C\uDF89" : isPartiallyPaid ? "\u26A0\uFE0F" : isFailed ? "\u274C" : "\u23F3";
+
 
   try{
     await Promise.all([
@@ -2842,16 +2844,16 @@ async function handleIpn(request, env){
         subject:`${title} \u2014 \u20AC${priceAmount} \u2014 ${payAmount} ${String(payCurrency).toUpperCase()}`.slice(0,180),
         // The raw payload stays in the Worker log (where only the operator can read it) instead of
         // being mailed or posted into Discord, which would spread customer PII to third parties.
-        html: orderHtml({ title: `${emoji} ${title}`, fields, note: `Full payload: ${raw.length} bytes \u2014 in Workers Logs for this request.` }),
+        html: orderHtml({ title: `${title}`, fields, note: `Full payload: ${raw.length} bytes \u2014 in Workers Logs for this request.` }),
         text: fields.map(([k,v])=>`${k}: ${v}`).join("\n") + `\n\n(Full payload: ${raw.length} bytes \u2014 see Workers Logs.)`,
       }).catch(e=>{ console.error("IPN email failed", e.message); }),
       sendDiscord(env, {
         embeds: discordEmbed({
           title, color: isPaid? DISCORD_ACCENT.paid : isPartiallyPaid? DISCORD_ACCENT.partially : isFailed? DISCORD_ACCENT.failed : DISCORD_ACCENT.pending,
           fields: fields.slice(0,18),
-          description: isPaid ? `${emoji} Payment **${escMd(status)}** \u2014 ${escMd(String(priceAmount))} ${escMd(String(payload.price_currency||"EUR"))} \u2192 ${escMd(String(payAmount))} ${escMd(String(payCurrency).toUpperCase())}` : isPartiallyPaid ? `\u26A0\uFE0F Partially paid \u2014 ${escMd(status)} \u2014 ${escMd(orderId)} \u2014 check amount` : `Status: **${escMd(status)}** \u2014 ${escMd(orderId)}`,
+          description: isPaid ? `Payment **${escMd(status)}** \u2014 ${escMd(String(priceAmount))} ${escMd(String(payload.price_currency||"EUR"))} \u2192 ${escMd(String(payAmount))} ${escMd(String(payCurrency).toUpperCase())}` : isPartiallyPaid ? `Partially paid \u2014 ${escMd(status)} \u2014 ${escMd(orderId)} \u2014 check amount` : `Status: **${escMd(status)}** \u2014 ${escMd(orderId)}`,
           footer: `NOWPayments IPN \u2022 ${new Date().toLocaleString("en-GB",{timeZone:"Europe/Berlin"})} \u2022 ${FIXED_IPN_URL}`,
-          author: { name: isPaid ? "Aether Payments \u2014 PAID \u2705" : isFailed ? "Aether Payments \u2014 FAILED" : "Aether Payments \u2014 IPN" }
+          author: { name: isPaid ? "Aether Payments \u2014 PAID" : isFailed ? "Aether Payments \u2014 FAILED" : "Aether Payments \u2014 IPN" }
         })
       }).catch(e=>{ console.error("IPN discord failed", e.message); })
     ]);
@@ -2862,8 +2864,8 @@ async function handleIpn(request, env){
     if(isPaid && firstPaid && customerEmail && isEmail(customerEmail)){
       await sendEmail(env, {
         to: customerEmail,
-        subject:`Payment received \u2014 ${orderId} \u2014 Aether \u2705`,
-        html: orderHtml({ title:`Thanks! Your payment is ${status} \uD83C\uDF89`, fields:[
+        subject:`Payment received \u2014 ${orderId} \u2014 Aether`,
+        html: orderHtml({ title:`Thanks! Your payment is ${status}`, fields:[
           ["Order", orderId], ["Purchase ID", ipnPurchaseId || "\u2014"], ["Status", status], ["Amount", `${priceAmount} ${payload.price_currency||"EUR"}`],
           ["What happens next","We\u2019ll start your order and reply from questions@get-aether.de or business@get-aether.de within 24h. Keep this email for your records."],
         ], note:"Questions? Reply to questions@get-aether.de"}),

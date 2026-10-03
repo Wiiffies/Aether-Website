@@ -657,7 +657,7 @@
                 <div><span style="color:#6f7277">Amount:</span> <b style="color:#fff">${esc(String(amt))} ${esc(cur)}</b> <span style="color:#6f7277">· Price: ${esc(eur(result.priceAmount ?? opts.amount))}${result.discount?` (${esc(String(result.promoApplied||"promo"))} −${esc(eur(result.discount))})`:``}</span></div>
               </div>
               <div style="margin-top:10px;font-size:10px;line-height:1.6;color:#7a7d82">Send <b style="color:#c8d0d8">exactly</b> that amount — network fee on top. Keep this tab open — you'll be redirected automatically once NOWPayments confirms the payment (IPN: <code>api.get-aether.de/api/ipn</code>). Success page is only reachable after verified payment.</div>
-              <div data-pay-status style="margin-top:12px;padding:10px 12px;border:1px solid #2a2e33;border-radius:6px;background:#111214;color:#9aa0a6;font-size:11px;line-height:1.6">⏳ Waiting for payment — checking every 8s…<br><span style="color:#7a7d82">Status: <b data-status-text style="color:#c8d0d8">waiting</b> · Checks: <span data-checks>0</span></span></div>
+              <div data-pay-status style="margin-top:12px;padding:10px 12px;border:1px solid #2a2e33;border-radius:6px;background:#111214;color:#9aa0a6;font-size:11px;line-height:1.6">Waiting for payment — checking every 8s…<br><span style="color:#7a7d82">Status: <b data-status-text style="color:#c8d0d8">waiting</b> · Checks: <span data-checks>0</span></span></div>
               <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
                 ${(result.purchaseId||result.purchase_id)?`<a href="order.html?purchase_id=${encodeURIComponent(result.purchaseId||result.purchase_id)}" target="_blank" rel="noopener" style="flex:1;min-width:140px;text-align:center;padding:10px 14px;border-radius:6px;border:1px solid #333;background:#141519;color:#fff;font-size:11px;font-weight:700;text-decoration:none">Open the payment page \u2197</a>`:``}
                 <button type="button" data-check-now style="flex:1;min-width:140px;padding:10px 14px;border-radius:6px;background:#fff;color:#000;font-size:11px;font-weight:700;cursor:pointer">Check status now</button>
@@ -706,22 +706,22 @@
               if(statusText) statusText.textContent=s||'unknown';
               if(j.isPaid){
                 statusEl.style.borderColor='#2a7a3a'; statusEl.style.background='rgba(46,160,67,.08)';
-                statusEl.innerHTML=`✅ Payment <b style="color:#8ee0a0">${esc(s)}</b> — verified! Redirecting to success page…<br><span style="color:#7a7d82">Order ${esc(orderId)} · ${esc(String(j.pay_amount||amt))} ${esc(cur)}</span>`;
+                statusEl.innerHTML=`Payment <b style="color:#8ee0a0">${esc(s)}</b> — verified. Redirecting to success page…<br><span style="color:#7a7d82">Order ${esc(orderId)} · ${esc(String(j.pay_amount||amt))} ${esc(cur)}</span>`;
                 clearInterval(pollTimer); stopped=true; checkBtn.disabled=true; checkBtn.textContent='Verified ✓';
                 setTimeout(()=>{ const url=SUCCESS_URL+`?order_id=${encodeURIComponent(orderId)}&payment_id=${encodeURIComponent(paymentId)}&pay=${encodeURIComponent(cur)}&amount=${encodeURIComponent(String(j.pay_amount||amt))}&status=${encodeURIComponent(s)}`; location.href=url; }, 1200);
                 return;
               } else if(j.isFailed){
                 statusEl.style.borderColor='#7a2a2a'; statusEl.style.background='rgba(122,42,42,.12)';
-                statusEl.innerHTML=`❌ Payment <b style="color:#ff8a8a">${esc(s)}</b> — failed/expired.<br><span style="color:#7a7d82">Order ${esc(orderId)} — you were not charged for failed payments. Try again or contact questions@get-aether.de</span><br><a href="${esc(CANCEL_URL+`?order_id=${encodeURIComponent(orderId)}&payment_id=${encodeURIComponent(paymentId)}`)}" style="display:inline-block;margin-top:8px;padding:6px 10px;border:1px solid #333;border-radius:4px;color:#fff;text-decoration:none;font-size:10px">Go to cancel page</a>`;
+                statusEl.innerHTML=`Payment <b style="color:#ff8a8a">${esc(s)}</b> — failed/expired.<br><span style="color:#7a7d82">Order ${esc(orderId)} — you were not charged for failed payments. Try again or contact questions@get-aether.de</span><br><a href="${esc(CANCEL_URL+`?order_id=${encodeURIComponent(orderId)}&payment_id=${encodeURIComponent(paymentId)}`)}" style="display:inline-block;margin-top:8px;padding:6px 10px;border:1px solid #333;border-radius:4px;color:#fff;text-decoration:none;font-size:10px">Go to cancel page</a>`;
                 clearInterval(pollTimer); stopped=true; checkBtn.disabled=false; checkBtn.textContent='Check status now';
                 return;
               } else {
                 statusEl.style.borderColor='#2a2e33'; statusEl.style.background='#111214';
-                statusEl.innerHTML=`⏳ Status: <b style="color:#ffcc00">${esc(s||'waiting')}</b> — still waiting for confirmations…<br><span style="color:#7a7d82">Checks: ${checks} · Send exactly ${esc(String(amt))} ${esc(cur)} to the address above. Auto-checks every 8s.</span>`;
+                statusEl.innerHTML=`Status: <b style="color:#ffcc00">${esc(s||'waiting')}</b> — still waiting for confirmations…<br><span style="color:#7a7d82">Checks: ${checks} · Send exactly ${esc(String(amt))} ${esc(cur)} to the address above. Auto-checks every 8s.</span>`;
                 checkBtn.disabled=false; checkBtn.textContent='Check status now';
               }
             }catch(e){
-              statusEl.innerHTML=`⚠️ Check failed: ${esc(e.message)}<br><span style="color:#7a7d82">Will retry automatically. Payment ID: ${esc(String(paymentId))}</span>`;
+              statusEl.innerHTML=`Check failed: ${esc(e.message)}<br><span style="color:#7a7d82">Will retry automatically. Payment ID: ${esc(String(paymentId))}</span>`;
               checkBtn.disabled=false; checkBtn.textContent='Check status now';
             }
           }

@@ -27,6 +27,12 @@ this directory.
 
 **Never put a secret in `wrangler.toml`.** Secrets exist only as Worker secrets.
 
+**No emoji in notifications.** Order, payment and chat mails and Discord embeds carry plain-text
+status labels (`PAID`, `FAILED`, `PARTIALLY PAID`, `PENDING`) instead of colour emoji: they survive
+every mail client, every Discord client and every screen reader, and a mail subject that renders as
+a blank box in one client is worse than one that reads plainly. A single non-ASCII byte is also what
+once turned every character in a Discord embed into `?` - see the ASCII rule below.
+
 ## Prices are server-side
 
 `POST /api/invoice` never trusts the browser's `amount`. `FIXED_PRICES` owns the packaged tiers

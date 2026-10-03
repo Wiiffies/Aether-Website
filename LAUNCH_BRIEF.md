@@ -139,7 +139,7 @@ variables below are set, a Tester sees the honest "No build has been published y
   (ECDSAP256SHA256), digest type `2` (SHA-256), digest
   `031AAD25DC73AEB6B8889DD733B7F4807785B40C9DBD04C188408438C5CFB6ED`.
   Verify at <https://dnssec-analyzer.verisignlabs.com/get-aether.de>.
-  ⚠️ A **wrong** DS record makes the domain unresolvable for validating resolvers. If the site stops
+  WARNING: A **wrong** DS record makes the domain unresolvable for validating resolvers. If the site stops
   resolving right after you add it, remove the DS record first and look it up again.
 
 - [ ] **Tighten DMARC later, in this order:** add the sending provider's SPF include **and** its DKIM
