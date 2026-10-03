@@ -361,9 +361,10 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
       logged instead of silently returning `0`, and the classifier reads the vendor's `code` too —
       so a below-minimum refusal now answers `400 AMOUNT_BELOW_MINIMUM` with one sentence naming the
       real figure.
-- [x] **395 Worker checks** (was 388: 7 new, one of which reproduces the production failure
-      verbatim), `node --check` clean, 0 non-ASCII bytes in the Worker, and all 8 guard scripts green
-      (`_check-assets` now sees 20 pages incl. `chat.js?v=1` and `checkout.js?v=13`).
+- [x] **401 Worker checks** (was 388: 7 for the live payment diagnosis, one of which reproduces the
+      production failure verbatim, plus 6 for the two payable test items), `node --check` clean,
+      0 non-ASCII bytes in the Worker, and all 8 guard scripts green (`_check-assets` now sees
+      20 pages incl. `chat.js?v=1` and `checkout.js?v=13`).
 - [x] Live D1 got the additive migration (`users` status/`status_reason`/`status_until`/
       `status_updated_at`/`last_ip`/`last_ip_at`/`signup_ip`) and it was verified via
       `pragma_table_info`; the columns are backward-compatible, so the old Worker keeps working.
@@ -380,8 +381,14 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
       their expressions byte-identical; `/`, `/shop.html`, `/account.html`, `/order.html`,
       `/payment-success.html`, `/public/chat.js` and `/api/health` all answer 200.
 - [x] **The provider minimum is per coin and small — measured live 2026-10-03: €0.04 for LTC.** The
-      card's €0.02 therefore stays under it by design, and the refusal now names the exact figure for
-      the chosen coin (the pre-flight asks `/v1/min-amount` with the coin as `currency_from`). Real
-      orders (€15+) are nowhere near any floor.
-- [ ] MANUAL: use `TEST100` for a free end-to-end order (or a €0.10+ LTC test to exercise a real
-      payment), and remove the test card + promo code before launch.
+      refusal now names the exact figure for the chosen coin (the pre-flight asks `/v1/min-amount`
+      with the coin as `currency_from`). Real orders (€15+) are nowhere near any floor.
+- [x] **Two payable test items at €0.04 — one Discord bot, one website (2026-10-03).** Repriced from
+      €0.02 (which sat a cent below the LTC floor and could only ever demonstrate the refusal) to
+      €0.04, which sits exactly on it, and split so both product families run through the real
+      checkout: `test_purchase_bot` / `test_purchase_website`, server-priced and packaged, with the
+      old `test_purchase` name kept as an alias so a checkout already open cannot break. An LTC run
+      creates a real payment; BTC and ETH are refused with their own higher figure named.
+- [ ] MANUAL: run an **LTC** test on either card to prove the payment path end to end (a BTC/ETH run
+      demonstrates the refusal with the exact figure), use `TEST100` for a free order, and remove both
+      cards + both types + the promo code before launch.

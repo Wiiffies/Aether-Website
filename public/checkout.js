@@ -189,7 +189,7 @@
     return readJson(res);
   }
   function esc(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
-  // Prices can be fractional (the EUR 0.02 test item), so show cents only when they exist.
+  // Prices can be fractional (the EUR 0.04 test items), so show cents only when they exist.
   function eur(n){ const v=Number(n)||0; return (Math.abs(v % 1) < 0.005) ? ("€"+v.toFixed(0)) : ("€"+v.toFixed(2)); }
   // One place that asks the Worker about a promo code. The server is authoritative: whatever it
   // answers (discount, final amount, test:true) is what the UI shows, and the invoice recomputes

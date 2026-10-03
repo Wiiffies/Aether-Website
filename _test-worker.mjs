@@ -1025,7 +1025,7 @@ globalThis.fetch = realFetchIpn;
 delete env.EMAIL;
 delete env.DISCORD_WEBHOOK_URL;
 
-console.log("\n--- promo codes + the EUR 0.02 test purchase ---");
+console.log("\n--- promo codes + the EUR 0.04 test purchases ---");
 // The promo engine is server-side only: the browser sends a code and the Worker decides the
 // discount from PROMO_CODES. The 50% cap and the EUR 1 floor stay for normal codes; only an entry
 // that opts in with test:true may reach 100% (EUR 0), and such an order is recorded as "free".
@@ -1033,42 +1033,57 @@ r = await call("GET", "/api/promo?code=TESTFULL&amount=30");
 check("a test code gives a true 100% discount", r.status === 200 && r.json.valid === true && r.json.discount === 30 && r.json.finalAmount === 0 && r.json.test === true, r.json);
 r = await call("GET", "/api/promo?code=CAP100&amount=30");
 check("a normal 100% entry is still capped at 50% (no accidental free orders)", r.json.valid === true && r.json.discount === 15 && r.json.finalAmount === 15 && r.json.test === false, r.json);
-r = await call("GET", "/api/promo?code=TESTFULL&amount=0.02");
-check("cent precision: 100% of EUR 0.02 is EUR 0.02, not rounded to zero", r.json.valid === true && r.json.discount === 0.02 && r.json.finalAmount === 0, r.json);
-r = await call("GET", "/api/promo?code=TESTFIXED&amount=0.02");
-check("a test fixed code can cover a smaller amount too", r.json.valid === true && r.json.discount === 0.02 && r.json.finalAmount === 0, r.json);
-r = await call("GET", "/api/promo?code=WELCOME10&amount=0.02");
-check("a normal code on the EUR 0.02 item never raises its price (floor does not apply below EUR 1)", r.json.valid === true && r.json.discount === 0 && r.json.finalAmount === 0.02, r.json);
+r = await call("GET", "/api/promo?code=TESTFULL&amount=0.04");
+check("cent precision: 100% of EUR 0.04 is EUR 0.04, not rounded to zero", r.json.valid === true && r.json.discount === 0.04 && r.json.finalAmount === 0, r.json);
+r = await call("GET", "/api/promo?code=TESTFIXED&amount=0.04");
+check("a test fixed code can cover a smaller amount too", r.json.valid === true && r.json.discount === 0.04 && r.json.finalAmount === 0, r.json);
+r = await call("GET", "/api/promo?code=WELCOME10&amount=0.04");
+check("a normal code on a test item never raises its price (floor does not apply below EUR 1)", r.json.valid === true && r.json.discount === 0 && r.json.finalAmount === 0.04, r.json);
 r = await call("GET", "/api/promo?code=NOPE&amount=30");
 check("unknown codes are still invalid", r.json.valid === false, r.json);
 
-// The test purchase: the server owns its price (EUR 0.02), package, description and meta.
-r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 0.02, pay_currency: "btc", type: "test_purchase", package: "PREMIUM", description: "evil", meta: { tier: "PREMIUM" } } });
-check("the test purchase reaches the normal invoice path and is priced by the server", r.status === 503 && typeof r.json.orderId === "string", { status: r.status, body: r.json });
+// The test purchases: the server owns their price (EUR 0.04), package, description and meta, and
+// there is one per product family. Both posted amount/package/description/meta are ignored.
+r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 0.02, pay_currency: "btc", type: "test_purchase_bot", package: "PREMIUM", description: "evil", meta: { tier: "PREMIUM" } } });
+check("the bot test reaches the normal invoice path and is priced by the server", r.status === 503 && typeof r.json.orderId === "string", { status: r.status, body: r.json });
 const testRow = env.DB.db.prepare("SELECT amount, type, package, description, meta, status, user_id FROM orders WHERE order_id = ?").get(r.json.orderId);
-check("price, package and meta are server-fixed - the posted values are ignored",
-  testRow && testRow.amount === 0.02 && testRow.type === "test_purchase" && testRow.package === "Test Purchase" && /Test Purchase/.test(testRow.description) && JSON.parse(testRow.meta).test === true && testRow.status === "pending", testRow);
+check("bot test: price, package and meta are server-fixed - the posted values are ignored",
+  testRow && testRow.amount === 0.04 && testRow.type === "test_purchase_bot" && testRow.package === "Test Purchase (Discord bot)" && /Test Purchase/.test(testRow.description) && /Discord bot/.test(testRow.description) && JSON.parse(testRow.meta).test === true && JSON.parse(testRow.meta).variant === "Discord bot" && testRow.status === "pending", testRow);
 check("the test purchase is filed to the signed-in account", testRow && testRow.user_id === memberId, testRow);
 
-r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 0.02, pay_currency: "btc", type: "discord_bot" } });
+r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 30, pay_currency: "eth", type: "test_purchase_website", package: "BASIC", description: "evil", meta: { tier: "BASIC" } } });
+check("the website test reaches the normal invoice path and is priced by the server", r.status === 503 && typeof r.json.orderId === "string", { status: r.status, body: r.json });
+const webRow = env.DB.db.prepare("SELECT amount, type, package, description, meta FROM orders WHERE order_id = ?").get(r.json.orderId);
+check("website test: its own package, its own meta, and the same fixed price",
+  webRow && webRow.amount === 0.04 && webRow.type === "test_purchase_website" && webRow.package === "Test Purchase (Website)" && /Website/.test(webRow.description) && JSON.parse(webRow.meta).variant === "Website", webRow);
+
+r = await call("POST", "/api/invoice", { token: freshSession, body: { pay_currency: "ltc", type: "test_purchase" } });
+const aliasRow = env.DB.db.prepare("SELECT amount, type, package FROM orders WHERE order_id = ?").get(r.json.orderId);
+check("the old single-item name still works and is stored under the explicit bot type (an open page cannot break)",
+  r.status === 503 && aliasRow && aliasRow.type === "test_purchase_bot" && aliasRow.amount === 0.04, aliasRow);
+
+r = await call("POST", "/api/invoice", { token: freshSession, body: { pay_currency: "ltc", type: "test_purchase_pro" } });
+check("an invented test-ish type is not granted the test price -> 400 Valid amount required",
+  r.status === 400 && /Valid amount required/.test(String(r.json.error)), { status: r.status, body: r.json });
+
+r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 0.04, pay_currency: "btc", type: "discord_bot" } });
 check("a normal product cannot be bought at the test price -> 400", r.status === 400, r.json);
-r = await call("POST", "/api/invoice", { body: { amount: 0.02, pay_currency: "btc", type: "test_purchase" } });
-check("the test purchase still requires an account -> 401", r.status === 401 && r.json.code === "ACCOUNT_REQUIRED", r.json);
+r = await call("POST", "/api/invoice", { body: { amount: 0.04, pay_currency: "btc", type: "test_purchase_website" } });
+check("the test purchases still require an account -> 401", r.status === 401 && r.json.code === "ACCOUNT_REQUIRED", r.json);
 
 // A 100% test promo on the test item: a free order, and no NOWPayments call at all (this env has
 // no API key - a real call would fail - so a 200 proves the payment was skipped on purpose).
-r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 0.02, pay_currency: "btc", type: "test_purchase", promoCode: "TESTFULL" } });
-check("test item + 100% test code -> free order, no payment created",
-  r.status === 200 && r.json.ok === true && r.json.free === true && r.json.priceAmount === 0 && r.json.promoApplied === "TESTFULL" && typeof r.json.purchaseId === "string", r.json);
+r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 0.04, pay_currency: "btc", type: "test_purchase_bot", promoCode: "TESTFULL" } });
+check("test item + 100% test code -> free order, no payment created", r.status === 200 && r.json.ok === true && r.json.free === true && r.json.priceAmount === 0 && r.json.promoApplied === "TESTFULL" && typeof r.json.purchaseId === "string", r.json);
 const freeRow = env.DB.db.prepare("SELECT amount, status, promo_code, discount FROM orders WHERE order_id = ?").get(r.json.orderId);
-check("the free order is recorded honestly (status free, EUR 0, promo + discount)", freeRow && freeRow.status === "free" && freeRow.amount === 0 && freeRow.promo_code === "TESTFULL" && freeRow.discount === 0.02, freeRow);
+check("the free order is recorded honestly (status free, EUR 0, promo + discount)", freeRow && freeRow.status === "free" && freeRow.amount === 0 && freeRow.promo_code === "TESTFULL" && freeRow.discount === 0.04, freeRow);
 
 r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 30, pay_currency: "btc", type: "discord_bot", package: "BASIC", promoCode: "TESTFULL" } });
 check("the same test code on a normal item also creates a free order (deliberate and test-only)", r.status === 200 && r.json.free === true, r.json);
 const freeRow2 = env.DB.db.prepare("SELECT amount, status, discount FROM orders WHERE order_id = ?").get(r.json.orderId);
 check("an item discounted to zero is recorded as free, never as paid", freeRow2 && freeRow2.status === "free" && freeRow2.amount === 0 && freeRow2.discount === 30, freeRow2);
 
-r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 0.02, pay_currency: "btc", type: "test_purchase", promoCode: "WELCOME10" } });
+r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 0.04, pay_currency: "btc", type: "test_purchase_bot", promoCode: "WELCOME10" } });
 check("a normal code cannot zero the test item (whole-euro rounding) -> still payable", r.status === 503 && typeof r.json.orderId === "string", { status: r.status, body: r.json });
 
 // A free order creates no payment, so it needs no coin - and everything that does create one is
@@ -1254,6 +1269,7 @@ globalThis.fetch = async (url) => {
     }
     if (payMode === "min_unusable") return { ok: true, status: 200, text: async () => JSON.stringify({ min_amount: 0.00003 }) };
     if (payMode === "min_absurd") return { ok: true, status: 200, text: async () => JSON.stringify({ min_amount: 0.00003, fiat_equivalent: 999999 }) };
+    if (payMode === "min_at_price") return { ok: true, status: 200, text: async () => JSON.stringify({ min_amount: 0.0006, fiat_equivalent: 0.04 }) };
     return { ok: true, status: 200, text: async () => JSON.stringify({ min_amount: 0.00003, fiat_equivalent: 2.2 }) };
   }
   if (u.includes("/v1/payment")) {
@@ -1335,6 +1351,17 @@ payMode = "min_absurd";
 r = await call("POST", "/api/invoice", { token: reinstatedToken, body: { amount: 30, pay_currency: "eth", type: "discord_bot", package: "BASIC" } });
 check("an unusable minimum (a figure in the wrong unit) never blocks a payable order",
   r.status === 200 && r.json.paymentId === 777000111, { status: r.status, body: r.json });
+
+// The point of the two test items is to produce a REAL payment, so with the provider's floor at
+// EUR 0.04 (the figure measured live for LTC on 2026-10-03) the item has to clear it exactly - being
+// a cent under would make the item useless for the one job it has.
+payMode = "min_at_price";
+r = await call("POST", "/api/invoice", { token: reinstatedToken, body: { type: "test_purchase_website", pay_currency: "eth" } });
+const paidTestRow = env.DB.db.prepare("SELECT amount, status, payment_id, type, package FROM orders WHERE order_id = ?").get(r.json.orderId);
+check("the EUR 0.04 test item creates a real payment when the provider's floor is exactly EUR 0.04",
+  r.status === 200 && r.json.paymentId === 777000111 && r.json.payCurrency === "eth", { status: r.status, body: r.json });
+check("and it leaves a waiting order carrying that payment, priced by the server",
+  paidTestRow && paidTestRow.amount === 0.04 && paidTestRow.status === "waiting" && String(paidTestRow.payment_id) === "777000111" && paidTestRow.type === "test_purchase_website", paidTestRow);
 payMode = "ok";
 
 console.log("\n--- admin chat search and filtering ---");

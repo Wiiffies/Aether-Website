@@ -106,18 +106,29 @@
       <div class="shop-section-head"><h2>Payment testing <em>— temporary</em></h2></div>
       <div class="tier-grid">
         <article class="tier-card">
-          <span class="tier-kicker">Test — €0.02</span>
-          <div class="tier-name">TEST PURCHASE</div>
+          <span class="tier-kicker">Test — €0.04</span>
+          <div class="tier-name">DISCORD BOT TEST</div>
           <ul class="tier-list">
-            <li>Runs the whole checkout: account, BTC/LTC/ETH, promo code, order page, emails and IPN all apply</li>
-            <li>The crypto provider sets its own minimum per coin — measured live at €0.04 for LTC, higher for BTC and ETH — so €0.02 sits below it and is refused before any payment exists: the message names the exact figure for the coin you picked, and nothing is charged</li>
-            <li>Enter a promo code that covers the whole amount to see the other path: a free order with no payment at all</li>
+            <li>Runs the whole checkout against a real NOWPayments payment: account, coin, promo code, order page, emails and IPN all apply</li>
+            <li>€0.04 is exactly the provider's LTC floor (measured live), so <b>pick LTC</b> and a payment is really created — BTC and ETH have higher floors and will be refused with their exact figure named, nothing charged</li>
+            <li>Enter a promo code that covers the whole amount for the other path: a free order with no payment at all</li>
             <li>Testing only — not a product; it cannot be swapped for a real package</li>
           </ul>
-          <button class="tier-cta" data-pay="test_purchase" data-package="TEST" data-amount="0.02" data-desc="Test Purchase — payment path check (€0.02)">Run the €0.02 payment test <span>↗</span></button>
+          <button class="tier-cta" data-pay="test_purchase_bot" data-package="TEST" data-amount="0.04" data-desc="Test Purchase — Discord bot (€0.04)">Run the €0.04 bot test <span>↗</span></button>
+        </article>
+        <article class="tier-card">
+          <span class="tier-kicker">Test — €0.04</span>
+          <div class="tier-name">WEBSITE TEST</div>
+          <ul class="tier-list">
+            <li>The same real checkout on the website product family: own order row, own order page, same provider and IPN checks</li>
+            <li>Identical price and rules — <b>LTC</b> at €0.04 clears the floor, BTC and ETH answer with the figure they need</li>
+            <li>Useful for checking the admin panel and the portal with two test orders side by side</li>
+            <li>Testing only — not a product; it cannot be swapped for a real package</li>
+          </ul>
+          <button class="tier-cta" data-pay="test_purchase_website" data-package="TEST" data-amount="0.04" data-desc="Test Purchase — Website (€0.04)">Run the €0.04 website test <span>↗</span></button>
         </article>
       </div>
-      <p style="margin:12px 0 0;font-size:12px;line-height:1.7;color:#9aa0a6">Temporary: proves both checkout paths — a below-minimum order refused clearly with no payment and no charge, and (with a 100% promo) a free order that creates no payment at all. Delete this section and the <code style="color:#c8d0d8">test_purchase</code> type in the Worker once checkout is confirmed — it is not part of the shop.</p>
+      <p style="margin:12px 0 0;font-size:12px;line-height:1.7;color:#9aa0a6">Temporary: two server-priced items — one for a Discord bot, one for a website — so both product paths can be run through the real checkout, including the below-minimum refusal (nothing charged, order marked failed) and, with a 100% promo, a free order that creates no payment at all. Delete this section and the <code style="color:#c8d0d8">test_purchase_bot</code> / <code style="color:#c8d0d8">test_purchase_website</code> types in the Worker once checkout is confirmed — they are not part of the shop.</p>
     </section>
   </section>
 
@@ -144,15 +155,16 @@
 <script>
 (() => {
   const C = window.AetherCheckout;
-  const PAY_LABELS = { website: 'Website', discord_bot: 'Discord Bot', test_purchase: 'Test Purchase' };
+  const PAY_LABELS = { website: 'Website', discord_bot: 'Discord Bot',
+    test_purchase_bot: 'Discord bot test', test_purchase_website: 'Website test', test_purchase: 'Discord bot test' };
   document.querySelectorAll('[data-pay]').forEach(btn=>{
     btn.addEventListener('click', (e)=>{
       e.preventDefault();
       const amt = Number(btn.dataset.amount);
       const pkg = btn.dataset.package;
-      const type = btn.dataset.pay; // discord_bot | website | test_purchase
+      const type = btn.dataset.pay; // discord_bot | website | test_purchase_bot | test_purchase_website
       const desc = btn.dataset.desc || `${type} ${pkg}`;
-      const isTest = type === 'test_purchase';
+      const isTest = String(type).indexOf('test_purchase') === 0;
       if(!C || !C.isConfigured()){
         (C ? C.mailtoFallback({ subject: `Order — ${desc} — €${amt}`, body: `${desc}\nAmount: €${amt}\n\nEmail questions@get-aether.de with your Discord + email to pay with crypto. Worker not set up — see worker/README.md (set public/aether-config.js → apiBase).` }) : (location.href=`mailto:questions@get-aether.de?subject=${encodeURIComponent(desc)}`));
         return;
@@ -160,6 +172,7 @@
       const label = PAY_LABELS[type] || 'Aether';
       C.showPayModal({
         title: isTest ? `${label} — €${amt.toFixed(2)} payment test` : `${label} ${pkg} — €${amt}`,
+        // The server owns the price for a test item; the posted amount is only what the card displays.
         amount: amt,
         promo: true,
         breakdownHtml: isTest

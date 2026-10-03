@@ -2,7 +2,9 @@
  * Aether -- Cloudflare Worker (api.get-aether.de)
  * - POST /api/order   -> validates + emails you + Discord webhook + auto-replies
  * - POST /api/invoice -> creates NOWPayments Payment + pending email + beautiful Discord, returns payAddress
- *   type=test_purchase is the temporary server-priced EUR 0.02 test item (real payment, same checks)
+ *   type=test_purchase_bot / test_purchase_website are the temporary server-priced EUR 0.04 test items
+ *   (one for each product family, real payment, same checks; the bare test_purchase name is an alias
+ *   of the bot one so a page that was already open cannot break mid-checkout)
  * - POST /api/ipn     -> NOWPayments IPN callback, verifies HMAC-512, emails + Discord
  * - GET  /api/ipn     -> 405 + the exact POST callback URL (a browser probe is not a dead route)
  * - GET  /api/admin/ipn -> admin-only: last accepted/rejected IPN + whether a secret is set
@@ -2397,14 +2399,24 @@ async function handleOrder(request, env){
   return json({ ok:true, emailed: !(emailRes && emailRes.mocked), discord: !(results[1] && results[1].mocked) && !(results[1] && results[1].error), conversationId }, 200, env, request);
 }
 
-// The temporary payment-test product. Its price, package, description and meta are decided HERE
-// and nowhere else: the browser can only ask for it by name (type=test_purchase), so it can never
-// be priced by the client, attached to a normal package, or confused with a real order.
-const TEST_PURCHASE_TYPE = "test_purchase";
-const TEST_PURCHASE_EUR = 0.02;
+// The temporary payment-test products. Their price, package, description and meta are decided HERE
+// and nowhere else: the browser can only ask for one by name, so it can never be priced by the
+// client, attached to a normal package, or confused with a real order. There are two so both product
+// families (a Discord bot and a website) can be run through the real checkout side by side, and the
+// price sits exactly on the provider's LTC floor measured live on 2026-10-03 (EUR 0.04) - so an LTC
+// test payment is created for real, while BTC and ETH answer with their own (higher) figure instead.
+const TEST_PURCHASE_EUR = 0.04;
+const TEST_PURCHASE_ITEMS = {
+  test_purchase_bot:     { label: "Discord bot", pkg: "Test Purchase (Discord bot)" },
+  test_purchase_website: { label: "Website",     pkg: "Test Purchase (Website)" },
+  // Alias, so a checkout already open on the old single-item page still works: it resolves to the bot
+  // item and is stored under the explicit name.
+  test_purchase:         { label: "Discord bot", pkg: "Test Purchase (Discord bot)", alias:"test_purchase_bot" }
+};
 async function handleInvoice(request, env){
   let body; try{ body=await request.json(); }catch{ return json({ error:"Invalid JSON" }, 400, env, request); }
-  const isTestPurchase = String(body.type||"") === TEST_PURCHASE_TYPE;
+  const testItem = TEST_PURCHASE_ITEMS[String(body.type||"")] || null;
+  const isTestPurchase = !!testItem;
   let amount = isTestPurchase ? TEST_PURCHASE_EUR : Number(body.amount ?? body.price_amount ?? body.estimatedPrice);
   if(!isTestPurchase){
     if(!Number.isFinite(amount)||amount<1) return json({ error:"Valid amount required" }, 400, env, request);
@@ -2428,13 +2440,13 @@ async function handleInvoice(request, env){
   // free and no payment is created for it, so a free order needs no coin. Everything that will
   // actually create a NOWPayments payment is validated exactly as strictly as before.
   const payCurrency=String(body.pay_currency||body.payCurrency||body.coin||"").toLowerCase().trim();
-  const type=isTestPurchase ? TEST_PURCHASE_TYPE : String(body.type||"custom").slice(0,40);
-  const pkg=isTestPurchase ? "Test Purchase" : String(body.package||body.tier||"Custom").slice(0,40);
+  const type=isTestPurchase ? (testItem.alias || String(body.type||"")) : String(body.type||"custom").slice(0,40);
+  const pkg=isTestPurchase ? testItem.pkg : String(body.package||body.tier||"Custom").slice(0,40);
   const description=isTestPurchase
-    ? "Test Purchase - real NOWPayments payment (EUR 0.02)"
+    ? `Test Purchase - real NOWPayments payment (EUR ${TEST_PURCHASE_EUR.toFixed(2)}) - ${testItem.label}`
     : String(body.description||body.orderDescription||`${type} ${pkg} \u2014 Aether`).slice(0,200);
   // A test purchase carries no client options at all (and a normal order can never claim its type).
-  const meta=isTestPurchase ? { test:true } : (body.meta||{});
+  const meta=isTestPurchase ? { test:true, variant:testItem.label } : (body.meta||{});
   const extraText=isTestPurchase ? "" : String(body.extra||"").slice(0,2000);
   if(body.website||body._gotcha) return json({ ok:true, mocked:true }, 200, env, request);
 
