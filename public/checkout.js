@@ -603,6 +603,9 @@
           confirm.style.display = "none";
           const closeFree = msg.querySelector("[data-close-payment]");
           if(closeFree) closeFree.addEventListener("click", close);
+          // Hand over to the order page: it is the surface built for following an order (facts,
+          // payment state, copy, blockchain check), so the customer is not asked to keep a modal open.
+          if(purchaseId) setTimeout(()=>{ location.href = "order.html?purchase_id=" + encodeURIComponent(purchaseId); }, 900);
           return;
         }
         // Payment API returns payment data (payAddress, payAmount) — show address + poll for verified payment before redirect
@@ -615,7 +618,7 @@
           msg.style.color="#c8d0d8";
           showResult(`
             <div style="padding:12px;border:1px solid #2a7a3a;border-radius:8px;background:rgba(46,160,67,.08)">
-              <div style="font:10px 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#8ee0a0;margin-bottom:8px">✓ Payment created — send exact amount</div>
+              <div style="font:10px 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#8ee0a0;margin-bottom:8px">✓ Payment created — opening your order page…</div>
               <div style="font-size:13px;font-weight:700;letter-spacing:-.02em;color:#fff">Send <span style="color:#8ee0a0">${esc(String(amt))} ${esc(cur)}</span> to:</div>
               <div style="margin-top:8px;display:flex;gap:8px;align-items:stretch">
                 <code data-pay-addr style="flex:1;display:block;padding:10px 12px;background:#111214;border:1px solid #2a2e33;border-radius:6px;color:#fff;font-size:11px;word-break:break-all;user-select:all">${esc(addr)}</code>
@@ -649,6 +652,10 @@
             copyOrderBtn.addEventListener('click', async ()=>{ try{ await navigator.clipboard.writeText(orderId); flash(copyOrderBtn,'Copied ✓'); }catch{ flash(copyOrderBtn,'Copied'); }});
           }
           if(navigator.clipboard) navigator.clipboard.writeText(addr).catch(()=>{});
+          // The order page shows the same address with one-tap copy, the exact amount, a blockchain
+          // check and the live status - take the customer there instead of parking them in a modal.
+          const handOffPurchase = result.purchaseId || result.purchase_id || "";
+          if(handOffPurchase) setTimeout(()=>{ location.href = "order.html?purchase_id=" + encodeURIComponent(handOffPurchase); }, 1400);
           // polling — only redirect after verified payment
           let checks=0; let pollTimer=null; let stopped=false;
           const statusEl = msg.querySelector('[data-pay-status]');

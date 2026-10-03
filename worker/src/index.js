@@ -2794,14 +2794,18 @@ async function handlePaymentStatus(request, env, url){
     const isPaid = ["finished","confirmed","sending"].includes(status);
     const isPending = ["waiting","confirming"].includes(status);
     const isFailed = ["failed","expired","refunded"].includes(status);
-    // Minimal disclosure: status, amounts and a deadline when the provider reports one. No provider
-    // payload, no customer PII, no other account's anything.
+    // Minimal disclosure: status, amounts and a deadline when the provider reports one, plus the two
+    // facts that let the owner check their own transfer on the chain - how much has arrived and the
+    // transaction hash, which is public data about their own payment. No provider payload beyond
+    // those, no customer PII, no other account's anything.
     return json(Object.assign(base, {
       paymentId: String(ord.payment_id),
       status, isPaid, isPending, isFailed,
       payAmount: data.pay_amount, payAddress: data.pay_address || "",
       payCurrency: data.pay_currency, priceAmount: data.price_amount ?? ord.amount, priceCurrency: data.price_currency || ord.currency,
       validUntil: data.valid_until || data.expiration_estimate_date || "",
+      actuallyPaid: Number.isFinite(Number(data.actually_paid)) ? Number(data.actually_paid) : null,
+      payinHash: String(data.payin_hash || data.outcome_hash || "").trim().slice(0, 128),
     }), 200, env, request);
   }catch(e){
     console.error("payment status lookup failed", e && e.message);

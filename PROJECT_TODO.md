@@ -392,3 +392,29 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
 - [ ] MANUAL: run an **LTC** test on either card to prove the payment path end to end (a BTC/ETH run
       demonstrates the refusal with the exact figure), use `TEST100` for a free order, and remove both
       cards + both types + the promo code before launch.
+- [x] **The order page took over from the pay modal, and the chain became checkable and copyable
+      (2026-10-03, not yet pushed).** A created payment (and a free order) hands off to
+      `order.html?purchase_id=…` automatically — verified in a browser on the local stack — so the
+      buyer lands on the page built for following an order. There the address is itself a copy
+      button (Enter/Space work, Enter/Space and the Copy address / **Copy amount** buttons report
+      through a polite status line, and the fallback selects the exact value that failed to copy).
+      **Check the blockchain now** disables itself, says "Checking…", asks the provider, then reports
+      `Last checked <time>`; the page also shows **Received so far** and the **transaction hash**
+      (`actuallyPaid` / `payinHash`, new on the owner-only payment endpoint whose response stays a
+      closed list the tests assert key by key). The hash is copy-only — `_check-headers.mjs` forbids
+      third-party URL literals, so an explorer link would be the first origin to poke through the
+      deployed CSP. Two bugs were found by looking at the rendered page: the facts table kept the
+      stale `waiting` status next to a finished payment, and the clipboard fallback always selected
+      the address. `checkout.js` `?v=14` on 14 pages. Tests: **403 checks, 0 failed (2 new)**.
+- [x] **Frontend + backend is priced out loud as the expensive kind of job (2026-10-03, not yet
+      pushed): shopping copy pass on `shop.html`, `website.html` and `discord-bot.html` —
+      accounts, payments and stored data take considerably more time and cost considerably more than
+      a static site, quoted individually, with hosting and the domain paid separately to the
+      provider the customer picks.
+- [x] **A local payment-provider stub, so the payment UI is testable without crypto (2026-10-03):**
+      `DEV_FAKE_PAYMENTS=waiting|paid node _dev-server.mjs` answers `api.nowpayments.io` locally with
+      the real per-coin floors (EUR 0.04 clears LTC; BTC/ETH are refused with their figure), a
+      pending payment carrying an address, or a finished one carrying `actually_paid` and a
+      `payin_hash`. Opt-in — a normal run is untouched.
+- [ ] MANUAL: re-run the **LTC** test card on the live site after this deploy and confirm the order
+      page's copy buttons and "Check the blockchain now" behave the same against the real provider.

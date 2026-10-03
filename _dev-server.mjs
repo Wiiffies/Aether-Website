@@ -91,6 +91,65 @@ const env = {
   NOWPAYMENTS_API_KEY: process.env.NOWPAYMENTS_API_KEY || "",
 };
 
+// ---------- local payment-provider stub (opt-in, no secrets) ----------
+// The Worker calls NOWPayments directly, so without a real key the checkout can only ever reach the
+// "provider refused it" path - and the order page's payment UI (the address, the exact amount, the
+// one-tap copy, the blockchain check and the transaction hash) could never be looked at outside
+// production, where looking at it costs real crypto.
+//   DEV_FAKE_PAYMENTS=waiting node _dev-server.mjs   -> a pending payment, with an address to copy
+//   DEV_FAKE_PAYMENTS=paid    node _dev-server.mjs   -> a confirmed one, with received-so-far and a tx hash
+// Both answer api.nowpayments.io and only when the flag is set: a normal run is untouched, and the
+// minimums below are the provider's real ones (EUR 0.04 clears LTC, BTC and ETH are refused with the
+// figure they need), so the below-minimum path stays exercisable next to the payable one.
+const FAKE_PAY = String(process.env.DEV_FAKE_PAYMENTS || "").trim().toLowerCase();
+if (FAKE_PAY === "waiting" || FAKE_PAY === "paid") {
+  const realFetch = globalThis.fetch.bind(globalThis);
+  const json = (body) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+  const FAKE_MIN_EUR = { btc: 2.4, eth: 1.5, ltc: 0.04 };
+  const FAKE_RATE_EUR = { btc: 60000, eth: 2500, ltc: 80 };
+  const FAKE_ADDR = { btc: "bc1q0fakelocaldevaddress4zq8v", eth: "0x1FakeLocalDevAddress0000000000000000c0ffee", ltc: "ltc1q0fakelocaldevaddress7h9k2" };
+  const FAKE_TX = "faketx0localdev0aether0copy0me0deadbeef0cafe0feed0";
+  let nextId = 900000000;
+  const payments = new Map();
+  globalThis.fetch = async (input, init) => {
+    const target = typeof input === "string" ? input : (input && input.url) || "";
+    if (!target.startsWith("https://api.nowpayments.io/")) return realFetch(input, init);
+    const u = new URL(target);
+    if (u.pathname === "/v1/min-amount") {
+      const coin = String(u.searchParams.get("currency_from") || "").toLowerCase();
+      const eur = FAKE_MIN_EUR[coin] || 1;
+      console.log(`  [fake provider] min-amount ${coin} -> EUR ${eur}`);
+      return json({ currency_from: coin, currency_to: "eur", fiat_equivalent: eur, min_amount: Number((eur / (FAKE_RATE_EUR[coin] || 1)).toFixed(8)) });
+    }
+    if (u.pathname === "/v1/payment" && String((init && init.method) || "GET").toUpperCase() === "POST") {
+      const sent = JSON.parse(String((init && init.body) || "{}"));
+      const coin = String(sent.pay_currency || "").toLowerCase();
+      const id = String(++nextId);
+      payments.set(id, { coin, price: Number(sent.price_amount) });
+      console.log(`  [fake provider] created payment ${id} for order ${sent.order_id} (${coin}, EUR ${sent.price_amount}) - it will report ${FAKE_PAY}`);
+      return json(fakePayment(id, payments.get(id)));
+    }
+    const one = u.pathname.match(/^\/v1\/payment\/(\d+)$/);
+    if (one) return json(fakePayment(one[1], payments.get(one[1]) || { coin: "ltc", price: 0.04 }));
+    return new Response(JSON.stringify({ message: "the local provider stub does not implement " + u.pathname }), { status: 404, headers: { "content-type": "application/json" } });
+  };
+  function fakePayment(id, known) {
+    const coin = known.coin;
+    const paid = FAKE_PAY === "paid";
+    const amount = Number((Number(known.price) / (FAKE_RATE_EUR[coin] || 1)).toFixed(8));
+    const body = {
+      payment_id: Number(id), payment_status: paid ? "finished" : "waiting",
+      pay_address: FAKE_ADDR[coin] || "fake-address", pay_amount: amount, pay_currency: coin,
+      price_amount: Number(known.price), price_currency: "eur",
+      valid_until: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    };
+    // The two fields the order page's blockchain block reads: what has arrived, and the transfer itself.
+    if (paid) { body.actually_paid = amount; body.payin_hash = FAKE_TX; }
+    return body;
+  }
+  console.log(`  payment provider: LOCAL STUB (${FAKE_PAY}) - api.nowpayments.io is answered here, nothing goes online`);
+}
+
 const worker = (await import("./worker/src/index.js")).default;
 
 // A demo admin account so /admin.html can be exercised locally.

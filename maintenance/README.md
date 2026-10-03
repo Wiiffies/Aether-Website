@@ -1,9 +1,11 @@
 # Maintenance mode
 
-> **State on 2026-10-01: the SOFT rule is ON.** The shop, the marketing pages and every bookmark
-> redirect to the notice, while the account area, the password-recovery pages, payment results, the
-> admin panel, `/beta.html`, `/public/*` and `/api/*` all stay open. To close the site to everyone,
-> switch to the HARD rule; to reopen, switch both off.
+> **State on 2026-10-03: both rules are OFF — the site is open.** (The 2026-10-01 note that had the
+> SOFT rule ON is historical: it was switched off with the payment release, ruleset version 7, both
+> rules `enabled:false` and the expressions byte-identical.) While the SOFT rule is on, the shop, the
+> marketing pages and every bookmark redirect to the notice, while the account area, the
+> password-recovery pages, payment results, the admin panel, `/beta.html`, `/public/*` and `/api/*`
+> all stay open. To close the site to everyone, switch to the HARD rule; to reopen, switch both off.
 
 There are **two switches**, and either one is enough. They are independent on purpose: the
 Cloudflare rule is the fast one (seconds), the Pages branch is the one that works even if the

@@ -37,16 +37,21 @@
     <div style="font:10px 'DM Mono',monospace;text-transform:uppercase;letter-spacing:.12em;color:#85878b">Payment details</div>
     <h2 style="font-size:19px;font-weight:500;letter-spacing:-.03em;margin:8px 0 10px">Send exactly this amount</h2>
     <div style="display:flex;gap:8px;align-items:stretch;flex-wrap:wrap">
-      <code id="order-addr" style="flex:1;min-width:240px;padding:10px 12px;background:#111214;border:1px solid #2a2e33;border-radius:6px;color:#fff;font-size:12px;word-break:break-all;user-select:all">—</code>
+      <code id="order-addr" role="button" tabindex="0" title="Click to copy the address" style="flex:1;min-width:240px;padding:10px 12px;background:#111214;border:1px solid #2a2e33;border-radius:6px;color:#fff;font-size:12px;word-break:break-all;user-select:all;cursor:pointer">—</code>
       <button type="button" id="order-copy" class="outline-button" style="margin:0">Copy address</button>
     </div>
     <p style="margin:12px 0 0;font-size:12px;line-height:1.7;color:#9aa0a6">
-      Amount <b id="order-pay-amount" style="color:#fff">—</b> · network fee on top. <span id="order-window"></span>
+      Amount <b id="order-pay-amount" style="color:#fff">—</b>
+      <button type="button" id="order-copy-amount" class="outline-button" style="margin:0 0 0 8px;padding:4px 10px;font-size:11px">Copy amount</button>
+      · network fee on top. <span id="order-window"></span>
     </p>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
-      <button type="button" id="order-check" class="purchase-button" style="margin:0">Check status now <span>↗</span></button>
+    <div id="order-live-extra" style="display:none;margin-top:10px;font:11px 'DM Mono',monospace;line-height:1.9;color:#9aa0a6"></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;align-items:center">
+      <button type="button" id="order-check" class="purchase-button" style="margin:0">Check the blockchain now <span>↗</span></button>
+      <span id="order-checked" style="font:10px 'DM Mono',monospace;color:#60636a"></span>
       <a class="outline-button" id="order-account" href="account.html">Open in your account →</a>
     </div>
+    <div id="order-copy-note" role="status" aria-live="polite" style="min-height:16px;margin-top:8px;font:10px 'DM Mono',monospace;color:#8ee0a0"></div>
   </section>
 
   <div class="important" style="margin-top:28px">
@@ -67,7 +72,7 @@
   <a class="back-link" href="shop.html">← Back to the shop</a>
 </main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
 <script src="public/aether-config.js?v=9"></script>
-<script src="public/checkout.js?v=13"></script>
+<script src="public/checkout.js?v=14"></script>
 <script src="public/aether.js?v=7" defer></script>
 <script src="public/chat.js?v=1" defer></script>
 <script>
@@ -125,11 +130,33 @@
     }
   }
 
+  // What the chain already knows: how much has arrived, and the transaction itself. The hash is
+  // shown to copy rather than linked, because the deployed Content-Security-Policy allows this
+  // site's own origins only - an explorer link would be the first third-party origin to poke
+  // through it. Any explorer accepts a pasted hash. It is rendered while the payment is pending and
+  // again after it completes, because the receipt is exactly when a buyer wants the proof of it.
+  function chainFacts(live){
+    var out = [];
+    var cur = String(live.payCurrency || "").toUpperCase();
+    if (live.actuallyPaid != null && Number(live.actuallyPaid) > 0) {
+      out.push('<div>Received so far: <b style="color:#8ee0a0">' + esc(String(live.actuallyPaid)) + ' ' + esc(cur) + '</b></div>');
+    }
+    if (live.payinHash) {
+      out.push('<div style="margin-top:6px">Transaction: <code style="color:#c8d0d8;word-break:break-all">' + esc(String(live.payinHash)) + '</code>'
+        + ' <button type="button" data-copy-tx style="padding:2px 8px;border-radius:4px;border:1px solid #2a2e33;background:#111214;color:#7a7d82;font-size:10px;cursor:pointer">copy</button>'
+        + '<br><span style="color:#6f7277">Paste it into any ' + esc(cur || "crypto") + ' block explorer to follow the transfer.</span></div>');
+    }
+    return out.join("");
+  }
+
   function renderLive(live){
     if (!live) return;
     var s = String(live.status || "").toLowerCase();
     var paid = !!live.isPaid, failed = !!live.isFailed, pending = !!live.isPending;
     state.paid = paid; state.failed = failed;
+    // The facts table is rendered once from the order row; the provider's own word for the payment is
+    // newer than that, and leaving it stale printed "waiting" next to a finished payment.
+    if (s) $("of-status").textContent = s;
     if (!paid && !failed && (live.payAddress || live.payAmount != null)) {
       $("order-pay").style.display = "";
       $("order-addr").textContent = live.payAddress || "(the provider did not return an address — open your account and check the payment there)";
@@ -137,13 +164,16 @@
       $("order-window").textContent = live.validUntil
         ? "Pay before " + when(live.validUntil) + " — after that the provider expires the payment and it can be started again."
         : "The provider keeps a pending payment open for a limited time (usually about an hour). After that it expires and nothing was charged.";
+      var extraEl = $("order-live-extra");
+      if (extraEl) { extraEl.innerHTML = chainFacts(live); extraEl.style.display = extraEl.innerHTML ? "" : "none"; }
     } else if (paid || failed) {
       $("order-pay").style.display = "none";
+      var extraEl2 = $("order-live-extra"); if (extraEl2) extraEl2.style.display = "none";
     }
     if (paid) {
       $("order-title").innerHTML = 'Payment<br><em>completed.</em>';
       $("order-lead").innerHTML = 'Payment confirmed — <b style="color:#8ee0a0">' + esc(s || "paid") + '</b>. Your order is queued and we reply from questions@get-aether.de within 3 days.';
-      box("ok", '<div style="color:#8ee0a0">Paid — ' + esc(s || "paid") + (live.payAmount != null ? " · " + esc(String(live.payAmount)) + " " + esc(String(live.payCurrency || "").toUpperCase()) : "") + '</div><div style="margin-top:8px;font:10px \'DM Mono\',monospace;color:#7a7d82">Order ' + esc(state.orderId) + ' · Purchase ' + esc(state.purchaseId || "—") + '</div>');
+      box("ok", '<div style="color:#8ee0a0">Paid — ' + esc(s || "paid") + (live.payAmount != null ? " · " + esc(String(live.payAmount)) + " " + esc(String(live.payCurrency || "").toUpperCase()) : "") + '</div><div style="margin-top:8px;font:10px \'DM Mono\',monospace;color:#7a7d82">Order ' + esc(state.orderId) + ' · Purchase ' + esc(state.purchaseId || "—") + '</div>' + chainFacts(live));
       stop();
       return;
     }
@@ -198,10 +228,47 @@
       var accountLink = $("order-account");
       if (accountLink) accountLink.href = "account.html";
       $("order-refresh").addEventListener("click", function(){ location.reload(); });
-      $("order-check").addEventListener("click", function(){ loadLive().catch(function(e){ box("err", '<div style="color:#ff9a9a">' + esc(e.message || "Could not check the status.") + '</div>'); }); });
-      $("order-copy").addEventListener("click", function(){
-        var addr = $("order-addr").textContent || "";
-        try { navigator.clipboard.writeText(addr); this.textContent = "Copied ✓"; } catch { this.textContent = "Select the address and press Ctrl+C"; }
+      function note(text){ var n = $("order-copy-note"); if (n) n.textContent = text; }
+      function copyText(text, btn, label, node){
+        var value = String(text == null ? "" : text).trim();
+        if (!value || value === "—") { note("Nothing to copy yet."); return; }
+        function done(){ if (btn) { var was = btn.textContent; btn.textContent = "Copied ✓"; setTimeout(function(){ btn.textContent = was; }, 1400); } note((label || "Copied") + " to the clipboard."); }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(value).then(done, function(){ selectNode(node); });
+        } else selectNode(node);
+      }
+      function selectNode(node){
+        // No clipboard API (or it was refused): select the text itself so Ctrl+C still works in one
+        // step. Whichever value was asked for is the one selected - not always the address.
+        var el = node || $("order-addr");
+        if (!el || !el.textContent || el.textContent.trim() === "—") { note("Copy by hand: the value is above."); return; }
+        try { var r = document.createRange(); r.selectNodeContents(el); var s = getSelection(); s.removeAllRanges(); s.addRange(r); note("Selected — press Ctrl+C."); }
+        catch (e) { note("Copy by hand: the value is above."); }
+      }
+      $("order-check").addEventListener("click", function(){
+        var btn = this; btn.disabled = true; btn.textContent = "Checking…";
+        note("Asking the provider about this payment…");
+        loadLive().then(function(){
+          note("Checked with the provider just now.");
+          $("order-checked").textContent = "Last checked " + new Date().toLocaleTimeString("en-GB");
+        }).catch(function(e){
+          box("err", '<div style="color:#ff9a9a">' + esc(e.message || "Could not check the status.") + '</div>');
+        }).then(function(){
+          if (!state.paid && !state.failed) { btn.disabled = false; btn.innerHTML = 'Check the blockchain now <span>↗</span>'; }
+        });
+      });
+      $("order-copy").addEventListener("click", function(){ var el = $("order-addr"); copyText(el.textContent, this, "Address copied", el); });
+      $("order-copy-amount").addEventListener("click", function(){ var el = $("order-pay-amount"); copyText(el.textContent, this, "Amount copied", el); });
+      var addrEl = $("order-addr");
+      addrEl.addEventListener("click", function(){ copyText(addrEl.textContent, $("order-copy"), "Address copied", addrEl); });
+      addrEl.addEventListener("keydown", function(ev){ if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); copyText(addrEl.textContent, $("order-copy"), "Address copied", addrEl); } });
+      // The transaction block lives in two places (pending details, paid receipt), so the copy is
+      // delegated from the page instead of bound to one container.
+      document.addEventListener("click", function(ev){
+        var b = ev.target && ev.target.closest ? ev.target.closest("[data-copy-tx]") : null;
+        if (!b) return;
+        var code = b.parentNode ? b.parentNode.querySelector("code") : null;
+        copyText(code ? code.textContent : "", b, "Transaction hash copied", code);
       });
 
       if (state.free) {

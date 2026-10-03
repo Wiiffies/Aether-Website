@@ -42,8 +42,11 @@ this directory.
 ## Test and run locally
 
 ```bash
-node ../_test-worker.mjs     # 401 checks against an in-memory D1 stub — run before every deploy
+node ../_test-worker.mjs     # 403 checks against an in-memory D1 stub — run before every deploy
 node ../_dev-server.mjs      # static site + this Worker on http://127.0.0.1:5501
+#   DEV_FAKE_PAYMENTS=waiting|paid node ../_dev-server.mjs
+#   ^ answers api.nowpayments.io locally with a stub payment (real per-coin floors; `paid` also
+#     reports actually_paid + payin_hash) so the order page's address/copy/chain UI is testable
 ```
 
 ## Deploy

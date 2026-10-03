@@ -1277,7 +1277,7 @@ globalThis.fetch = async (url) => {
     // the payment really was attempted and the vendor refused it in its own words.
     if (payMode === "minimal" || payMode === "min_unusable") return { ok: false, status: 400, text: async () => JSON.stringify({ status: false, statusCode: 400, code: "AMOUNT_MINIMAL_ERROR", message: "Crypto amount 2.7e-7 is less than minimal" }) };
     if (payMode === "server_error") return { ok: false, status: 500, text: async () => JSON.stringify({ status: false, statusCode: 500, message: "Internal error" }) };
-    return { ok: true, status: 200, text: async () => JSON.stringify({ payment_id: 777000111, payment_status: "waiting", pay_address: "ltc1qexampleaddress", pay_amount: 0.5, pay_currency: "ltc", price_amount: 30, price_currency: "eur", order_id: "aether_probe" }) };
+    return { ok: true, status: 200, text: async () => JSON.stringify({ payment_id: 777000111, payment_status: "waiting", pay_address: "ltc1qexampleaddress", pay_amount: 0.5, pay_currency: "ltc", price_amount: 30, price_currency: "eur", order_id: "aether_probe", actually_paid: 0.25, payin_hash: "deadbeefcafe0123456789" }) };
   }
   return { ok: true, status: 200, text: async () => "{}" };
 };
@@ -1312,6 +1312,11 @@ check("the owner reads their own payment (status, address, amount, order link on
   r.status === 200 && r.json.status === "waiting" && r.json.isPending === true && r.json.payAddress === "ltc1qexampleaddress" && r.json.purchaseId === paidOwnerPurchase, r.json);
 check("and the answer never carries the provider payload or customer PII",
   r.json.raw === undefined && r.json.customer_email === undefined && r.json.order_description === undefined, r.json);
+check("what the chain already knows travels with it: received so far and the transaction hash",
+  r.json.actuallyPaid === 0.25 && r.json.payinHash === "deadbeefcafe0123456789", { actuallyPaid: r.json.actuallyPaid, payinHash: r.json.payinHash });
+check("and those are the only provider fields in it - the response shape is a closed list, not a dump",
+  Object.keys(r.json).filter(k => !["ok","orderId","purchaseId","priceAmount","priceCurrency","createdAt","paymentId","status","isPaid","isPending","isFailed","payAmount","payAddress","payCurrency","validUntil","actuallyPaid","payinHash"].includes(k)).length === 0,
+  Object.keys(r.json));
 r = await call("GET", "/api/payment?purchase_id=" + encodeURIComponent(paidOwnerPurchase), { token: freshSession });
 check("another account cannot read that order by its Purchase ID -> 404", r.status === 404, r.json);
 r = await call("GET", "/api/payment?purchase_id=" + encodeURIComponent(paidOwnerPurchase), { token: reinstatedToken });
