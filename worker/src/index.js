@@ -2,9 +2,9 @@
  * Aether -- Cloudflare Worker (api.get-aether.de)
  * - POST /api/order   -> validates + emails you + Discord webhook + auto-replies
  * - POST /api/invoice -> creates NOWPayments Payment + pending email + beautiful Discord, returns payAddress
- *   type=test_purchase_bot / test_purchase_website are the temporary server-priced EUR 0.04 test items
- *   (one for each product family, real payment, same checks; the bare test_purchase name is an alias
- *   of the bot one so a page that was already open cannot break mid-checkout)
+ *   Prices are server-side (FIXED_PRICES for the packaged tiers; a quoted build must post its own
+ *   `estimate` inside QUOTE_MIN..QUOTE_MAX and it must equal the posted amount), so a tampered page
+ *   cannot buy a EUR 149 build for EUR 1. The temporary test-purchase types are gone (UNKNOWN_TYPE).
  * - POST /api/ipn     -> NOWPayments IPN callback, verifies HMAC-512, emails + Discord
  * - GET  /api/ipn     -> 405 + the exact POST callback URL (a browser probe is not a dead route)
  * - GET  /api/admin/ipn -> admin-only: last accepted/rejected IPN + whether a secret is set
@@ -28,6 +28,59 @@
 
 // ---------- helpers ----------
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
+
+// ---------- payment provider (the vendor's own payment page) ----------
+// NOWPayments answers a created payment with `invoice_url` - its own hosted payment page, which shows
+// the address, the exact amount, a QR code and a live countdown, and keeps the customer on the
+// vendor's side of the flow. That page is the preferred place to send a buyer: it is the provider's
+// official interface, it is what their own documentation recommends, and it means this site never has
+// to reimplement a crypto checkout. The order page keeps the address/amount as a fallback for the
+// case where no URL comes back, and stays the place to return to after the tab is closed.
+function providerPaymentUrl(payment){
+  if (!payment || typeof payment !== "object") return "";
+  const raw = payment.invoice_url || payment.invoiceUrl || payment.payment_url || payment.paymentUrl || "";
+  const url = String(raw || "").trim();
+  if (!url) return "";
+  // Only ever hand a customer a URL the provider actually gave us, and only over https, and only to
+  // a NOWPayments host. A tampered or unexpected value must not become an open redirect.
+  let parsed;
+  try { parsed = new URL(url); } catch { return ""; }
+  if (parsed.protocol !== "https:") return "";
+  const host = parsed.hostname.toLowerCase();
+  if (!(host === "nowpayments.io" || host.endsWith(".nowpayments.io"))) return "";
+  return parsed.toString().slice(0, 500);
+}
+
+// ---------- chat content: safe rich text ----------
+// A support message is stored as plain text and rendered with textContent, so HTML can never be
+// injected. What a customer *can* do is paste a link, and "clickable links in chat" is a real
+// requirement - so the link is extracted HERE, server-side, validated as http/https, and returned as
+// its own field. The browser never parses a URL out of message text and never builds a URL from a
+// string a user controls, and `javascript:`/`data:` can never survive the protocol check.
+const MESSAGE_URL_RE = /https?:\/\/[^\s<>"'`\\]+/gi;
+function messageLinks(text){
+  const found = String(text == null ? "" : text).match(MESSAGE_URL_RE) || [];
+  const out = [];
+  for (const raw of found) {
+    // Trailing punctuation is almost always the sentence, not the URL.
+    const cleaned = raw.replace(/[.,;:!?)\]}]+$/, "");
+    try {
+      const u = new URL(cleaned);
+      if (u.protocol !== "http:" && u.protocol !== "https:") continue;
+      if (!u.hostname || u.hostname.length > 253) continue;
+      const href = u.toString().slice(0, 500);
+      if (!out.some(l => l.href === href)) out.push({ href, label: href.replace(/^https?:\/\//, "").slice(0, 120) });
+    } catch {}
+    if (out.length >= 5) break;
+  }
+  return out;
+}
+
+// ---------- account states ----------
+// One list, used by every enforcement point (the gate, the admin panel's picker, the portal banner),
+// so a new state cannot be added in one place and forgotten in another. A state that is not in this
+// list is treated as "active" by `accountState()`.
+const ACCOUNT_STATES = ["active", "restricted", "suspended", "banned"];
 
 // ---------- security headers ----------
 // The worker only ever returns JSON, so a locked-down CSP cannot break the site.
@@ -748,7 +801,6 @@ function verifiedGate(auth, env, request){
 // lives on the server and answers with a code the frontend can branch on. An account named by
 // ADMIN_EMAILS is never blocked by this: a wrong row must never lock the operator out of the panel
 // that would fix it.
-const ACCOUNT_STATES = ["active", "restricted", "suspended", "banned"];
 function accountState(user, now){
   const raw = String((user && user.status) || "active").toLowerCase();
   const state = ACCOUNT_STATES.includes(raw) ? raw : "active";
@@ -1104,7 +1156,14 @@ async function conversationMessages(env, conv){
   } catch {
     rows = await env.DB.prepare("SELECT id, sender, body, created_at FROM messages WHERE order_id = ? ORDER BY id ASC LIMIT 500").bind(conv.order_id || "").all();
   }
-  return (rows.results || []).map(m => ({ sender: m.sender === "admin" ? "admin" : "customer", body: String(m.body || ""), created_at: m.created_at }));
+  return (rows.results || []).map(m => ({
+    sender: m.sender === "admin" ? "admin" : "customer",
+    body: String(m.body || ""),
+    created_at: m.created_at,
+    // Validated http/https links found in the message, so the browser renders an anchor without ever
+    // parsing or constructing a URL itself. The body stays plain text and is rendered as text.
+    links: messageLinks(m.body),
+  }));
 }
 async function insertConversationMessage(env, conv, sender, text, userId){
   const cid = conv && conv.conversation_id ? conv.conversation_id : null;
@@ -1306,6 +1365,7 @@ function conversationListRow(c){
     last_body: c.last_body ? String(c.last_body).slice(0,160) : "",
     last_sender: c.last_sender || "",
     last_at: c.last_at || "",
+    last_links: messageLinks(c.last_body || ""),
   };
 }
 // Support notification for a new customer message (best effort - never fails the request).
@@ -1548,16 +1608,34 @@ async function handleAdminConversations(request, env, url){
     if (text.length < 2) return json({ error:"Message too short" }, 400, env, request);
     await insertConversationMessage(env, conv, "admin", text, conv.user_id);
     await env.DB.prepare("UPDATE conversations SET status = 'answered', assigned_admin = ? WHERE conversation_id = ?").bind(auth2 ? String(auth2.user.email) : null, cid).run().catch(()=>{});
-    // tell the customer by email (best effort)
+    // Tell the customer a reply arrived, on every channel that is configured. The chat itself is the
+    // source of truth - these are only nudges - so a failure here never fails the reply. The mail
+    // carries the message; the Discord webhook carries a pointer and the link, never the contents of
+    // a private conversation beyond the label the customer already sees in the portal.
+    let notified = false;
     try {
       const owner = await env.DB.prepare("SELECT email FROM users WHERE id = ?").bind(conv.user_id).first();
       if (owner && isEmail(owner.email)) {
         const label = conv.purchase_id || conv.order_id || conv.conversation_id;
-        await sendEmail(env, { to: owner.email, subject:`[Aether] Reply to your conversation ${label}`, html: orderHtml({ title:`Aether replied - ${label}`, fields:[["Purchase", conv.purchase_id || "-"],["Message", text],["At", new Date().toLocaleString("en-GB", { timeZone:"Europe/Berlin", dateStyle:"long", timeStyle:"short" })]] }), text:`${text}\n\n- Aether support (${label})` }).catch(()=>null);
+        await sendEmail(env, {
+          to: owner.email,
+          subject:`[Aether] Reply to your conversation ${label}`,
+          html: orderHtml({ title:`Aether replied - ${label}`, fields:[["Purchase", conv.purchase_id || "-"],["Message", text],["At", new Date().toLocaleString("en-GB", { timeZone:"Europe/Berlin", dateStyle:"long", timeStyle:"short" })]] }),
+          text:`${text}\n\n- Aether support (${label})`,
+        }).then(() => { notified = true; }).catch(e => { console.warn("reply mail failed", e && e.message); });
       }
-    } catch {}
+      // The ops webhook gets the same pointer the portal shows: which thread, who it is for, and where
+      // to answer. No message body, so a support conversation never leaks into a shared channel.
+      const chatUrl = siteUrl(env) + "/account.html";
+      await sendDiscord(env, { embeds: discordEmbed({
+        title:`\uD83D\uDCAC Reply sent - ${conv.purchase_id || conv.order_id || conv.conversation_id}`,
+        color: DISCORD_ACCENT.info,
+        description:`Answered by **${escMd((auth2 && auth2.user && auth2.user.email) || "support")}** \u00B7 customer notified by email \u00B7 thread stays at ${chatUrl}`,
+        footer:"Aether support",
+      }) }).catch(e => { console.warn("reply discord failed", e && e.message); });
+    } catch (e) { console.warn("reply notify failed", e && e.message); }
     await audit(env, auth2 && auth2.user, "admin.conversation.reply", cid, text.slice(0,120));
-    return json({ ok:true, messages: await conversationMessages(env, conv) }, 200, env, request);
+    return json({ ok:true, notified, messages: await conversationMessages(env, conv) }, 200, env, request);
   }
   if (single && request.method === "GET") {
     const cid = decodeURIComponent(single[1]);
@@ -1919,6 +1997,16 @@ function resetDeliveryChannel(env){
   if (env.DISCORD_WEBHOOK_URL) return "discord";
   return "logs";
 }
+// "a***z@example.com" - enough to recognise the account, not enough to harvest it from a log.
+function maskEmail(email){
+  const s = String(email || "");
+  const at = s.lastIndexOf("@");
+  if (at <= 0) return s ? "***" : "";
+  const local = s.slice(0, at), domain = s.slice(at);
+  const head = local.slice(0, 1);
+  const tail = local.length > 2 ? local.slice(-1) : "";
+  return head + "***" + tail + domain;
+}
 function resetChannelAllows(env, email){
   const raw = String(env.RESET_DISCORD_EMAILS == null ? "" : env.RESET_DISCORD_EMAILS).trim().toLowerCase();
   if (!raw) return isAdminEmail(env, email); // default: admin accounts only
@@ -1942,8 +2030,10 @@ async function deliverResetLink(env, email, link, emailPayload){
     } catch (e) { console.warn("[reset-link] recovery channel failed, falling back to the operator log", e && e.message); }
   }
   // Last resort: the operator's log line (Cloudflare dashboard -> Workers -> aether-api -> Logs).
-  // Never printed when a real channel delivered the link.
-  console.log("[reset-link] " + email + " " + link);
+  // Never printed when a real channel delivered the link, and the account is masked: a log line is
+  // the one channel that outlives the request and that a wider set of people can read, so it carries
+  // the minimum needed to act (which account, and the link).
+  console.log("[reset-link] " + maskEmail(email) + " " + link);
   return "logs";
 }
 // Sent after every successful password reset or change. This is the cheapest detection control
@@ -2399,37 +2489,61 @@ async function handleOrder(request, env){
   return json({ ok:true, emailed: !(emailRes && emailRes.mocked), discord: !(results[1] && results[1].mocked) && !(results[1] && results[1].error), conversationId }, 200, env, request);
 }
 
-// The temporary payment-test products. Their price, package, description and meta are decided HERE
-// and nowhere else: the browser can only ask for one by name, so it can never be priced by the
-// client, attached to a normal package, or confused with a real order. There are two so both product
-// families (a Discord bot and a website) can be run through the real checkout side by side, and the
-// price sits exactly on the provider's LTC floor measured live on 2026-10-03 (EUR 0.04) - so an LTC
-// test payment is created for real, while BTC and ETH answer with their own (higher) figure instead.
-const TEST_PURCHASE_EUR = 0.04;
-const TEST_PURCHASE_ITEMS = {
-  test_purchase_bot:     { label: "Discord bot", pkg: "Test Purchase (Discord bot)" },
-  test_purchase_website: { label: "Website",     pkg: "Test Purchase (Website)" },
-  // Alias, so a checkout already open on the old single-item page still works: it resolves to the bot
-  // item and is stored under the explicit name.
-  test_purchase:         { label: "Discord bot", pkg: "Test Purchase (Discord bot)", alias:"test_purchase_bot" }
+// There are deliberately NO test products in this Worker. A "test purchase" type used to live here
+// (EUR 0.04, two variants) so the payment path could be exercised against the live provider; it is
+// gone now, together with its shop cards. A real order is the only thing this endpoint will price,
+// and a request for a type it does not sell is refused rather than quietly given a server price.
+// See SECURITY.md for how the payment path is verified without shipping a fake product.
+const SOLD_TYPES = ["discord_bot", "website", "custom", "contact"];
+// ---------- Server-side price catalog ----------
+// The checkout says WHAT is being bought, never what it costs. These numbers are the single
+// server-side source of truth: the Worker re-derives every amount from them, so a tampered page (or
+// a hand-made request) cannot buy a EUR 299 build for EUR 1. The frontend shows the same figures,
+// but if the two ever disagree the server wins and the order is recorded at the server price.
+// Keep in step with the tier cards on shop.html / website.html / discord-bot.html.
+const FIXED_PRICES = {
+  discord_bot: { BASIC: 15, PREMIUM: 30 },
+  website: { STARTER: 15, BASIC: 30, FULLSTACK: 149, ADVANCED: 299 },
 };
+// A build with no catalog price is quoted individually: the builder's figure is an ESTIMATE that a
+// human confirms in writing before work starts, so it may be any number in this range. It still has
+// to be the exact figure the customer was shown, so an order can never carry a surprise amount.
+const QUOTE_MIN = 50, QUOTE_MAX = 5000;
 async function handleInvoice(request, env){
   let body; try{ body=await request.json(); }catch{ return json({ error:"Invalid JSON" }, 400, env, request); }
-  const testItem = TEST_PURCHASE_ITEMS[String(body.type||"")] || null;
-  const isTestPurchase = !!testItem;
-  let amount = isTestPurchase ? TEST_PURCHASE_EUR : Number(body.amount ?? body.price_amount ?? body.estimatedPrice);
-  if(!isTestPurchase){
-    if(!Number.isFinite(amount)||amount<1) return json({ error:"Valid amount required" }, 400, env, request);
-    if(amount>5000) return json({ error:"Amount too large" }, 400, env, request);
-  }
+  const requestedType = String(body.type || "custom").slice(0, 40);
+  if (!SOLD_TYPES.includes(requestedType)) return json({ error:"Unknown order type \u2014 pick a package from the shop.", code:"UNKNOWN_TYPE" }, 400, env, request);
+  const pkg = String(body.package || body.tier || "Custom").slice(0,40);
+  const stated = Number(body.amount ?? body.price_amount ?? body.estimatedPrice);
   // 99999% -- checkout is ACCOUNT-ONLY: there is no guest purchase. The account supplies the
   // customer email and Discord, the order is filed to it, and portal chat/history follow from it.
+  // Authentication comes before pricing on purpose: a signed-out caller learns nothing about the
+  // price catalog, and cannot make the Worker do catalog work on their behalf.
   const earlyAuth=await requireAuth(request, env).catch(()=>null);
   if(!earlyAuth) return json({ error:"Checkout requires an account \u2014 create one or sign in, then pay.", code:"ACCOUNT_REQUIRED" }, 401, env, request);
   const invoiceGate=verifiedGate(earlyAuth, env, request);
   if(invoiceGate) return invoiceGate;
   const statusGate=accountGate(earlyAuth, env, request, "write");
   if(statusGate) return statusGate;
+  // `let`, not `const`: the promo below may reduce it (to exactly EUR 0 for a 100% test code).
+  let amount;
+  const fixed = FIXED_PRICES[requestedType] ? FIXED_PRICES[requestedType][pkg.trim().toUpperCase()] : undefined;
+  if (Number.isFinite(fixed) && fixed > 0) {
+    // Fixed-price tier: the catalog decides, and a browser that posted a different number is
+    // simply ignored. (A 100% promo is applied further down, on the server price.)
+    amount = fixed;
+  } else {
+    // Quoted build: the amount must equal the estimate the customer was shown, inside the range a
+    // quote can cover. This keeps the free-form builder price from becoming a free-form order price.
+    const estimate = Number(body.estimate ?? body.estimatedPrice ?? stated);
+    if (!Number.isFinite(estimate) || estimate < QUOTE_MIN || estimate > QUOTE_MAX) {
+      return json({ error:`That build has no fixed price \u2014 send its estimate. Quoted builds start at \u20AC${QUOTE_MIN}.`, code:"ESTIMATE_REQUIRED" }, 400, env, request);
+    }
+    if (!Number.isFinite(stated) || Math.abs(stated - estimate) > 0.01) {
+      return json({ error:"The amount does not match the estimate \u2014 reopen the builder and try again.", code:"ESTIMATE_MISMATCH" }, 400, env, request);
+    }
+    amount = estimate;
+  }
   const accountEmail=(earlyAuth.user && isEmail(earlyAuth.user.email)) ? String(earlyAuth.user.email).trim() : "";
   const discord=String(body.discord||body.discordUsername||(earlyAuth.user && earlyAuth.user.discord)||"").trim().slice(0,120);
   // The account email always wins; a posted email is only a fallback for an unusable account row.
@@ -2440,14 +2554,10 @@ async function handleInvoice(request, env){
   // free and no payment is created for it, so a free order needs no coin. Everything that will
   // actually create a NOWPayments payment is validated exactly as strictly as before.
   const payCurrency=String(body.pay_currency||body.payCurrency||body.coin||"").toLowerCase().trim();
-  const type=isTestPurchase ? (testItem.alias || String(body.type||"")) : String(body.type||"custom").slice(0,40);
-  const pkg=isTestPurchase ? testItem.pkg : String(body.package||body.tier||"Custom").slice(0,40);
-  const description=isTestPurchase
-    ? `Test Purchase - real NOWPayments payment (EUR ${TEST_PURCHASE_EUR.toFixed(2)}) - ${testItem.label}`
-    : String(body.description||body.orderDescription||`${type} ${pkg} \u2014 Aether`).slice(0,200);
-  // A test purchase carries no client options at all (and a normal order can never claim its type).
-  const meta=isTestPurchase ? { test:true, variant:testItem.label } : (body.meta||{});
-  const extraText=isTestPurchase ? "" : String(body.extra||"").slice(0,2000);
+  const type=requestedType;
+  const description=String(body.description||body.orderDescription||`${type} ${pkg} \u2014 Aether`).slice(0,200);
+  const meta=(body.meta && typeof body.meta === "object") ? body.meta : {};
+  const extraText=String(body.extra||"").slice(0,2000);
   if(body.website||body._gotcha) return json({ ok:true, mocked:true }, 200, env, request);
 
   // promo integration
@@ -2518,32 +2628,35 @@ async function handleInvoice(request, env){
   }
   if (!hasDb(env)) purchaseId = "";
 
+  // The operator is told, but the answer never depends on it: a mail or webhook outage must not fail
+  // a checkout. Failures are logged (so they are visible in Workers Logs) instead of silently swallowed.
   let emailOk=true;
   const toList = ["questions@get-aether.de"];
   try{
-    await Promise.all([
+    const results = await Promise.all([
       sendEmail(env, {
         to: toList,
-        subject:`${freeOrder ? `[FREE TEST] No payment required \u2014 ${type} ${pkg}` : `[PENDING] ${type} ${pkg} \u2014 ${payCurrency.toUpperCase()} \u2014 \u20AC${amount}`} \u2014 ${discord||"\u2014"} \u2014 ${orderId}`.slice(0,180),
-        html: orderHtml({ title:`${freeOrder ? "Free test order \u2014 no payment required" : `New payment started \u2014 ${payCurrency.toUpperCase()}`} \u2014 \u20AC${amount} \u2014 ${orderId}`, fields: pendingFields, note: freeOrder
-          ? `A 100% test promo (${appliedPromo}) covered the whole amount, so NO crypto payment was created and nothing will be charged. This is a test order \u2014 deliver only if you mean to.`
+        subject:`${freeOrder ? `[PROMO ${appliedPromo || "100%"}] No payment required \u2014 ${type} ${pkg}` : `[PENDING] ${type} ${pkg} \u2014 ${payCurrency.toUpperCase()} \u2014 \u20AC${amount}`} \u2014 ${discord||"\u2014"} \u2014 ${orderId}`.slice(0,180),
+        html: orderHtml({ title:`${freeOrder ? "Free order (promo) \u2014 no payment required" : `New payment started \u2014 ${payCurrency.toUpperCase()}`} \u2014 \u20AC${amount} \u2014 ${orderId}`, fields: pendingFields, note: freeOrder
+          ? `A 100% promo (${appliedPromo}) covered the whole amount, so NO crypto payment was created and nothing will be charged. The order is recorded as paid/free.`
           : `Customer started a NOWPayments Payment (pay_currency=${payCurrency.toUpperCase()}) \u2014 IPN will be sent to ${FIXED_IPN_URL}. You\u2019ll get a \u2705 PAID email when status becomes confirmed/finished.` }),
         text: pendingFields.map(([k,v])=>`${k}: ${v}`).join("\n"), replyTo: email,
-      }),
+      }).catch(e => { console.warn("pending mail failed", e && e.message); emailOk = false; return null; }),
       sendDiscord(env, {
         embeds: discordEmbed({
-          title: `${freeOrder ? "\uD83E\uDDEA Free test order" : "\u23F3 Payment started"} \u2014 ${freeOrder ? "NO PAYMENT" : payCurrency.toUpperCase()} \u00B7 \u20AC${amount} \u00B7 ${type} ${pkg}`,
+          title: `${freeOrder ? "\uD83C\uDFF7\uFE0F Free order (promo)" : "\u23F3 Payment started"} \u2014 ${freeOrder ? "NO PAYMENT" : payCurrency.toUpperCase()} \u00B7 \u20AC${amount} \u00B7 ${type} ${pkg}`,
           color: DISCORD_ACCENT.pending,
           fields: pendingFields.slice(0,18),
           description: freeOrder
-            ? `${escMd(discord||"\u2014")} \u00B7 ${escMd(email)} \u00B7 **\u20AC0.00 due** \u00B7 \uD83C\uDFF7\uFE0F ${escMd(appliedPromo||"test promo")} covered the amount \u2014 **no payment was created and nothing is charged**. Test order only.`
+            ? `${escMd(discord||"\u2014")} \u00B7 ${escMd(email)} \u00B7 **\u20AC0.00 due** \u00B7 \uD83C\uDFF7\uFE0F ${escMd(appliedPromo||"promo")} covered the amount \u2014 **no payment was created and nothing is charged**.`
             : `${escMd(discord||"\u2014")} \u00B7 ${escMd(email)} \u00B7 **${payCurrency.toUpperCase()} \u2192 \u20AC${amount}**${appliedPromo ? ` \u00B7 \uD83C\uDFF7\uFE0F ${escMd(appliedPromo)} \u2212\u20AC${discount}` : ""} \u2014 IPN \u2192 ${FIXED_IPN_URL} \u2014 you\u2019ll get a \u2705 **PAID** ping on **confirmed/finished**.`,
           footer: `Order ${orderId} \u2022 ${submitted} \u2022 ${FIXED_IPN_URL}`,
-          author: { name: freeOrder ? "Aether Payments \u2014 FREE TEST" : "Aether Payments \u2014 PENDING" }
+          author: { name: freeOrder ? "Aether Payments \u2014 FREE (PROMO)" : "Aether Payments \u2014 PENDING" }
         })
-      }).catch(()=>null)
+      }).catch(e => { console.warn("pending discord failed", e && e.message); return null; })
     ]);
-  }catch(e){ console.warn("pending notify failed", e.message); emailOk=false; }
+    void results;
+  }catch(e){ console.warn("pending notify failed", e && e.message); emailOk=false; }
 
   if (freeOrder) {
     // No payment exists, so there is nothing to pay, poll or confirm by IPN: answer the checkout
@@ -2568,11 +2681,16 @@ async function handleInvoice(request, env){
     if (hasDb(env) && pid) {
       try { await env.DB.prepare("UPDATE orders SET payment_id = ?, status = 'waiting' WHERE order_id = ?").bind(String(pid), orderId).run(); } catch{}
     }
+    // The provider's own hosted payment page, when it gave us one. Validated (https, nowpayments.io
+    // host) so a value we did not expect can never become an open redirect.
+    const paymentUrl = providerPaymentUrl(payment);
     return json({
       ok:true, orderId, purchaseId,
       invoiceId: pid,
       paymentId: pid,
-      invoiceUrl: payment.invoice_url || payment.invoiceUrl || null,
+      invoiceUrl: paymentUrl || null,
+      // Kept for older clients that already look for this name.
+      paymentUrl: paymentUrl || null,
       payAddress: payAddr,
       payAmount: payAmt,
       payCurrency: payCurrency,
@@ -2644,7 +2762,10 @@ async function handleIpn(request, env){
     let ok=false;
     for(const s of secrets){ if(await verifyIpnSignature(payload, sig, s)){ ok=true; break; } }
     if(!ok){
-      console.warn("IPN bad signature", { sig:(sig ? sig.slice(0,20) : ""), payload:raw.slice(0,500)});
+      // Never the payload or the signature itself: a rejected callback is unauthenticated input, and
+      // anything logged here is readable in the Cloudflare dashboard. Sizes and flags are enough to
+      // tell "wrong secret" from "nothing is sending a signature at all".
+      console.warn("IPN bad signature", { hadSignature: !!sig, sigLength: String(sig||"").length, payloadBytes: raw.length });
       await recordIpn(env, false, { reason:"bad_signature", hadSignature: !!sig, payloadBytes: raw.length });
       return json({ error:"Bad signature" }, 401, env, request);
     }
@@ -2695,9 +2816,15 @@ async function handleIpn(request, env){
     ["Description", String(payload.order_description||payload.orderDescription||"\u2014").slice(0,800), false],
     ["Customer Email", String(payload.customer_email||payload.customerEmail||"\u2014"), true],
   ];
-  for(const [k,v] of Object.entries(payload).slice(0,30)){
-    if(["payment_status","order_id","price_amount","pay_currency","pay_amount","payment_id","order_description"].includes(k)) continue;
-    fields.push([k, typeof v==="object"? JSON.stringify(v).slice(0,1000): String(v).slice(0,500), true]);
+  // Deliberately NOT the whole vendor payload. The callback carries the customer's email, sometimes
+  // their wallet address and the provider's internal fields, and this data is copied into two places
+  // we do not control (an inbox and a Discord channel). Only the facts support needs are carried:
+  // status, ids, amounts, currency and the transaction hash.
+  const safeIpnExtras = ["payin_hash","outcome_hash","outcome_amount","outcome_currency","actually_paid","partially_paid_amount","purchase_id","valid_until","expiration_estimate_date"];
+  for(const k of safeIpnExtras){
+    const v = payload[k];
+    if(v==null || String(v).trim()==="") continue;
+    fields.push([k, String(v).slice(0,200), true]);
   }
   let subjectPrefix = "\u2139\uFE0F IPN";
   if(isPaid) subjectPrefix = "\u2705 PAID";
@@ -2713,14 +2840,16 @@ async function handleIpn(request, env){
       sendEmail(env, {
         to: toList,
         subject:`${title} \u2014 \u20AC${priceAmount} \u2014 ${payAmount} ${String(payCurrency).toUpperCase()}`.slice(0,180),
-        html: orderHtml({ title: `${emoji} ${title}`, fields, note: raw.slice(0,6000) }),
-        text: fields.map(([k,v])=>`${k}: ${v}`).join("\n")+`\n\nRaw:\n${raw.slice(0,4000)}`,
+        // The raw payload stays in the Worker log (where only the operator can read it) instead of
+        // being mailed or posted into Discord, which would spread customer PII to third parties.
+        html: orderHtml({ title: `${emoji} ${title}`, fields, note: `Full payload: ${raw.length} bytes \u2014 in Workers Logs for this request.` }),
+        text: fields.map(([k,v])=>`${k}: ${v}`).join("\n") + `\n\n(Full payload: ${raw.length} bytes \u2014 see Workers Logs.)`,
       }).catch(e=>{ console.error("IPN email failed", e.message); }),
       sendDiscord(env, {
         embeds: discordEmbed({
           title, color: isPaid? DISCORD_ACCENT.paid : isPartiallyPaid? DISCORD_ACCENT.partially : isFailed? DISCORD_ACCENT.failed : DISCORD_ACCENT.pending,
           fields: fields.slice(0,18),
-          description: isPaid ? `${emoji} Payment **${escMd(status)}** \u2014 ${escMd(String(priceAmount))} ${escMd(String(payload.price_currency||"EUR"))} \u2192 ${escMd(String(payAmount))} ${escMd(String(payCurrency).toUpperCase())} \u2014 **99999% reliable \u2705**` : isPartiallyPaid ? `\u26A0\uFE0F Partially paid \u2014 ${escMd(status)} \u2014 ${escMd(orderId)} \u2014 check amount` : `Status: **${escMd(status)}** \u2014 ${escMd(orderId)}`,
+          description: isPaid ? `${emoji} Payment **${escMd(status)}** \u2014 ${escMd(String(priceAmount))} ${escMd(String(payload.price_currency||"EUR"))} \u2192 ${escMd(String(payAmount))} ${escMd(String(payCurrency).toUpperCase())}` : isPartiallyPaid ? `\u26A0\uFE0F Partially paid \u2014 ${escMd(status)} \u2014 ${escMd(orderId)} \u2014 check amount` : `Status: **${escMd(status)}** \u2014 ${escMd(orderId)}`,
           footer: `NOWPayments IPN \u2022 ${new Date().toLocaleString("en-GB",{timeZone:"Europe/Berlin"})} \u2022 ${FIXED_IPN_URL}`,
           author: { name: isPaid ? "Aether Payments \u2014 PAID \u2705" : isFailed ? "Aether Payments \u2014 FAILED" : "Aether Payments \u2014 IPN" }
         })
@@ -2806,6 +2935,9 @@ async function handlePaymentStatus(request, env, url){
       validUntil: data.valid_until || data.expiration_estimate_date || "",
       actuallyPaid: Number.isFinite(Number(data.actually_paid)) ? Number(data.actually_paid) : null,
       payinHash: String(data.payin_hash || data.outcome_hash || "").trim().slice(0, 128),
+      // The provider's own hosted payment page, so the order page can offer "continue on NOWPayments"
+      // for an order that was created before the tab was closed. Same validation as at creation.
+      paymentUrl: providerPaymentUrl(data) || "",
     }), 200, env, request);
   }catch(e){
     console.error("payment status lookup failed", e && e.message);

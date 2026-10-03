@@ -289,7 +289,7 @@
               <span style="font:10px 'DM Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#85878b">Total due</span>
               <span data-total style="font-size:24px;font-weight:600;letter-spacing:-.045em;color:#fff">${eur(opts.amount)}</span>
             </div>
-            <div style="margin-top:8px;font-size:10px;line-height:1.6;color:#6f7277">Crypto via NOWPayments — BTC / LTC / ETH. Hosting, domain and database are not included.</div>
+            <div style="margin-top:8px;font-size:10px;line-height:1.6;color:#6f7277">Crypto via NOWPayments — BTC / LTC / ETH. Hosting, domain and database are not included. Custom work is made to order, so <b style="color:#85878b">all sales are final — no refunds</b> (<a href="/terms.html" target="_blank" rel="noopener" style="color:#85878b">Terms</a> §6). Ask anything before you pay.</div>
           </div>
 
           <div data-pay-fields style="margin-top:16px;display:grid;gap:12px">
@@ -608,7 +608,34 @@
           if(purchaseId) setTimeout(()=>{ location.href = "order.html?purchase_id=" + encodeURIComponent(purchaseId); }, 900);
           return;
         }
-        // Payment API returns payment data (payAddress, payAmount) — show address + poll for verified payment before redirect
+        // The provider's own hosted payment page is the preferred destination: it is NOWPayments'
+        // official interface (address, amount, QR, countdown) and it keeps the customer on the
+        // vendor's side of the flow. It is opened in a new tab so this page — and the order it just
+        // created — is never lost, and the same order stays reachable from the account afterwards.
+        const providerUrl = result && (result.invoiceUrl || result.paymentUrl || result.invoice_url);
+        if(providerUrl){
+          const purchase = result.purchaseId || result.purchase_id || "";
+          msg.style.color="#c8d0d8";
+          showResult(`
+            <div style="padding:12px;border:1px solid #2a7a3a;border-radius:8px;background:rgba(46,160,67,.08)">
+              <div style="font:10px 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#8ee0a0;margin-bottom:8px">\u2713 Payment created</div>
+              <div style="font-size:13px;font-weight:700;letter-spacing:-.02em;color:#fff">Finish the payment on NOWPayments</div>
+              <div style="margin-top:6px;font-size:11px;line-height:1.6;color:#9aa0a6">The provider's payment page has opened in a new tab \u2014 it shows the exact amount, the address and a QR code. If it did not open, use the button below.</div>
+              <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+                <a href="${esc(providerUrl)}" target="_blank" rel="noopener noreferrer" style="flex:1;min-width:160px;text-align:center;padding:11px 14px;border-radius:6px;background:#fff;color:#000;font-size:11px;font-weight:700;text-decoration:none">Open the payment page \u2197</a>
+                ${purchase?`<a href="order.html?purchase_id=${encodeURIComponent(purchase)}" style="flex:1;min-width:160px;text-align:center;padding:11px 14px;border-radius:6px;border:1px solid #333;background:#141519;color:#fff;font-size:11px;font-weight:700;text-decoration:none">Track this order \u2197</a>`:``}
+              </div>
+              <div style="margin-top:10px;font-size:10px;line-height:1.6;color:#7a7d82">Nothing to remember: this order is in your account, and the same page can be reopened from there if you close everything. Status updates come from the provider's verified callback \u2014 not from this browser.</div>
+              <div style="margin-top:10px"><button type="button" data-close-payment style="padding:10px 14px;border-radius:6px;border:1px solid #333;background:transparent;color:#fff;font-size:11px;cursor:pointer">Close</button></div>
+            </div>`);
+          confirm.textContent = "Payment created \u2713";
+          confirm.style.display = "none";
+          const closeProvider = msg.querySelector("[data-close-payment]");
+          if(closeProvider) closeProvider.addEventListener("click", close);
+          try { window.open(providerUrl, "_blank", "noopener,noreferrer"); } catch { /* popup blocked - the button above is the way */ }
+          return;
+        }
+        // No hosted page came back: show the address + amount here and poll for verified payment.
         if(result && (result.payAddress || result.pay_address)){
           const addr=result.payAddress||result.pay_address;
           const amt=result.payAmount||result.pay_amount||"";
@@ -705,12 +732,6 @@
           if(closeBtn) closeBtn.addEventListener('click', ()=>{ clearInterval(pollTimer); stopped=true; close(); });
           overlay.addEventListener('click', (e)=>{ if(e.target===overlay){ clearInterval(pollTimer); }});
           document.addEventListener('keydown', function onEsc(e){ if(e.key==='Escape'){ clearInterval(pollTimer); document.removeEventListener('keydown', onEsc);} });
-          return;
-        }
-        if(result && result.invoiceUrl){
-          msg.textContent = "Redirecting…";
-          msg.style.color = "#8ee0a0";
-          location.href = result.invoiceUrl;
           return;
         }
         if(result && result.ok){

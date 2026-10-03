@@ -162,12 +162,27 @@
       + '</div>';
   }
 
+  // A message body is always rendered as TEXT (escaped), never as HTML - so a message cannot inject
+  // markup. Links are clickable, but they come from the server as validated http/https entries in
+  // `links`, so the browser never has to find or build a URL out of message text and a `javascript:`
+  // or `data:` URL can never reach an href. `noreferrer` keeps the thread out of the target's logs.
+  function linkRow(m){
+    var links = (m && m.links) || [];
+    if (!links.length) return "";
+    return '<span class="ac-links">' + links.map(function(l){
+      var href = String(l && l.href || "");
+      if (!/^https?:\/\//i.test(href)) return "";
+      var label = String(l && l.label || href).slice(0, 80);
+      return '<a href="' + esc(href) + '" target="_blank" rel="noopener noreferrer nofollow">' + esc(label) + '</a>';
+    }).join(" ") + '</span>';
+  }
   function renderThread(){
     var c = current || {};
     var st = statusLabel(c.status);
     var msgs = messages.map(function(m){
       var mine = String(m.sender || "").toLowerCase() !== "admin";
       return '<div class="ac-msg ' + (mine ? "mine" : "theirs") + '">' + esc(m.body || "")
+        + linkRow(m)
         + '<span class="meta">' + esc(mine ? "You" : "Aether") + (m.created_at ? " · " + esc(when(m.created_at)) : "") + '</span></div>';
     }).join("");
     var closed = String(c.status || "").toLowerCase() === "closed";

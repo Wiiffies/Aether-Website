@@ -60,7 +60,7 @@ who is allowed to do anything — every authorisation decision happens in the Wo
 
 | Path | Purpose |
 | --- | --- |
-| `*.html` | Pages: shop, builders, checkout, portal, Beta, admin, auth flows, errors |
+| `*.html` | Pages: shop, builders, checkout, portal, Beta, admin, auth flows, errors, legal (`terms`/`privacy`/`cookies`/`imprint`) |
 | `public/checkout.js` | Frontend API client (`auth.*`, `portal.*`, `admin.*`, checkout, promo) |
 | `public/aether-config.js` | Public config only — no secrets, ever |
 | `public/*.css` | `aether.css` (site), `pages.css`, `portal.css`, `ui.css` (shared UI layer) |
@@ -84,7 +84,7 @@ who is allowed to do anything — every authorisation decision happens in the Wo
 
 ```bash
 node _dev-server.mjs      # http://127.0.0.1:5501 — static site AND /api/* through the real Worker
-node _test-worker.mjs     # 278 checks, no credentials needed
+node _test-worker.mjs     # 410 checks, no credentials needed
 node _check-inline-js.mjs *.html
 node _check-markup.mjs
 node _check-email-regex.mjs

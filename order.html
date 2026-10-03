@@ -45,9 +45,9 @@
       <button type="button" id="order-copy-amount" class="outline-button" style="margin:0 0 0 8px;padding:4px 10px;font-size:11px">Copy amount</button>
       · network fee on top. <span id="order-window"></span>
     </p>
-    <div id="order-live-extra" style="display:none;margin-top:10px;font:11px 'DM Mono',monospace;line-height:1.9;color:#9aa0a6"></div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;align-items:center">
-      <button type="button" id="order-check" class="purchase-button" style="margin:0">Check the blockchain now <span>↗</span></button>
+    <div id="order-live-extra" style="display:none;margin-top:10px;font:11px 'DM Mono',monospace;line-height:1.9;color:#9aa0a6"></div>      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;align-items:center">
+        <a id="order-provider" class="purchase-button" href="#" target="_blank" rel="noopener noreferrer" style="margin:0;display:none">Pay on NOWPayments <span>↗</span></a>
+        <button type="button" id="order-check" class="purchase-button" style="margin:0">Check the blockchain now <span>↗</span></button>
       <span id="order-checked" style="font:10px 'DM Mono',monospace;color:#60636a"></span>
       <a class="outline-button" id="order-account" href="account.html">Open in your account →</a>
     </div>
@@ -70,9 +70,9 @@
     <button type="button" id="order-refresh" class="outline-button" style="background:#111214;color:#fff;border:1px solid #333">Reload this page</button>
   </div>
   <a class="back-link" href="shop.html">← Back to the shop</a>
-</main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
+</main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><nav class="footer-legal"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="cookies.html">Cookies</a><a href="imprint.html">Imprint</a><a href="#" data-cookie-settings>Cookie settings</a></nav><span>© 2026 Aether</span></footer>
 <script src="public/aether-config.js?v=9"></script>
-<script src="public/checkout.js?v=14"></script>
+<script src="public/checkout.js?v=15"></script>
 <script src="public/aether.js?v=7" defer></script>
 <script src="public/chat.js?v=1" defer></script>
 <script>
@@ -166,7 +166,17 @@
         : "The provider keeps a pending payment open for a limited time (usually about an hour). After that it expires and nothing was charged.";
       var extraEl = $("order-live-extra");
       if (extraEl) { extraEl.innerHTML = chainFacts(live); extraEl.style.display = extraEl.innerHTML ? "" : "none"; }
+      // The provider's own payment page, for an order that was created before the tab was closed. It
+      // is the official interface and the only place a payment can actually be completed - the order
+      // page never pretends to be a checkout.
+      var providerLink = $("order-provider");
+      if (providerLink) {
+        var purl = String(live.paymentUrl || "");
+        if (/^https:\/\/[^\s]+$/.test(purl)) { providerLink.href = purl; providerLink.style.display = ""; }
+        else providerLink.style.display = "none";
+      }
     } else if (paid || failed) {
+      var providerLink2 = $("order-provider"); if (providerLink2) providerLink2.style.display = "none";
       $("order-pay").style.display = "none";
       var extraEl2 = $("order-live-extra"); if (extraEl2) extraEl2.style.display = "none";
     }
@@ -300,4 +310,4 @@
   }
   boot();
 })();
-</script></body></html>
+</script><script src="public/consent.js?v=1" defer></script></body></html>

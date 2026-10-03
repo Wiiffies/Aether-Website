@@ -418,3 +418,44 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
       `payin_hash`. Opt-in — a normal run is untouched.
 - [ ] MANUAL: re-run the **LTC** test card on the live site after this deploy and confirm the order
       page's copy buttons and "Check the blockchain now" behave the same against the real provider.
+
+## 18. Full audit pass — pricing, legal, privacy, UX (2026-10-03, not yet pushed)
+
+- [x] **The browser can no longer name the price.** `handleInvoice` used to trust the posted
+      `amount`; the Worker now owns every price. `FIXED_PRICES`: `discord_bot` BASIC 15 /
+      PREMIUM 30, `website` STARTER 15 / BASIC 30 / FULLSTACK 149 / ADVANCED 299 — a posted amount
+      is ignored for those. A quoted build must post `estimate` inside `QUOTE_MIN`..`QUOTE_MAX`
+      (50..5000) **and** `amount` must equal it, else `400 ESTIMATE_REQUIRED` / `400
+      ESTIMATE_MISMATCH`; `pkg` is normalised case-insensitively; `SOLD_TYPES =
+      ["discord_bot","website","custom","contact"]`. The auth check runs **before** pricing, so a
+      signed-out probe learns nothing about the catalog. The three builders send the pre-discount
+      subtotal as `estimate`.
+- [x] **The temporary test purchases are gone** — `shop.html` cards and the worker branch removed;
+      `test_purchase*` answers `400 UNKNOWN_TYPE` with no order row, and the tests assert the
+      refusal rather than the pricing.
+- [x] **Legal pages exist:** `terms.html`, `privacy.html`, `cookies.html`, `imprint.html` (no
+      invented company/DPO data; missing manual details flagged), extensionless aliases
+      (`terms/`, `privacy/`, `cookies/`, `imprint/index.html` — canonical + noindex + redirect),
+      a site-wide footer legal nav with a Cookie settings link, and `public/consent.js` +
+      `public/legal.css` (first-visit notice, accept/reject/customise recorded in `localStorage`;
+      no analytics, advertising or tracking exists to switch off, and the policy says so).
+- [x] **No-refund policy (operator's decision, 2026-10-03):** Terms §6 is "No refunds" — all sales
+      are final, an order cannot be cancelled once confirmed and paid (custom work made to
+      specification; the EU withdrawal right does not apply, § 312g(2) No. 1 BGB), and the pay
+      modal says so with a link to §6 before payment. The one thing that cannot be excluded stays
+      honest: if **we** cancel work we cannot deliver, the payment for the undelivered part is
+      returned, and statutory rights for non-delivery or defects are untouched.
+- [x] **IPN + notification hygiene:** the customer receipt fires once per purchase (transition into
+      `paid`), rejected signatures log only sizes/flags, and `safeIpnExtras()` allowlists what may
+      be logged so vendor payloads/customer PII never reach mail or Discord.
+- [x] **Sanitisation:** `cleanMessage()` strips control characters, normalises CRLF and caps at 4000
+      chars server-side; `chat.js` linkifies only safe schemes and renders through `esc()`.
+- [x] **Tests: 410 checks, 0 failed (7 new)** — price tampering at a fixed tier, the estimate rules
+      (missing / mismatched / under the floor), the minimum-refusal figure, and the removed types.
+      All 8 guards green; `worker/src/index.js` sha256
+      `0fc4419728b6fa303836e515de89de06441037c669bfab689b1c8e881677a8ed`, 214 765 bytes (LF), 0
+      non-ASCII.
+- [ ] MANUAL: fill in the imprint's real operator details (name, address, contact) before launch;
+      the page ships with honest placeholders flagged in this repo.
+- [ ] Not implemented (audit findings, deliberate scope): images in the support chat (CSP already
+      allows `img-src 'self' data:`), and a terms-acceptance checkbox at registration.

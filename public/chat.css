@@ -82,3 +82,6 @@
   .ac-launch{right:12px;bottom:12px}
   .ac-panel{right:12px;left:12px;width:auto;bottom:66px;max-height:74vh}
 }
+.ac-links{display:block;margin-top:6px;display:flex;flex-wrap:wrap;gap:6px}
+.ac-links a{font-size:11px;color:#8ecbff;text-decoration:underline;text-underline-offset:2px;word-break:break-all}
+.ac-links a:hover{color:#fff}

@@ -227,9 +227,9 @@
 
   <div class="detail-list" style="margin-top:46px"><div><b>Delivery</b><span>Source files + setup notes. You host on your own VPS, Raspberry Pi, or any Node/Python host.</span></div><div><b>Payment</b><span>Bitcoin, Litecoin, Ethereum via NOWPayments.</span></div><div><b>Reply time</b><span>I most likely reply within 3 days.</span></div><div><b>Questions?</b><span><a href="contact.html" style="color:#fff">Contact us</a> or email questions@get-aether.de</span></div></div>
   <a class="back-link" href="shop.html">← Back to shop</a>
-</main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><span>© 2026 Aether</span></footer>
+</main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><nav class="footer-legal"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="cookies.html">Cookies</a><a href="imprint.html">Imprint</a><a href="#" data-cookie-settings>Cookie settings</a></nav><span>© 2026 Aether</span></footer>
 <script src="public/aether-config.js?v=9"></script>
-<script src="public/checkout.js?v=14"></script>
+<script src="public/checkout.js?v=15"></script>
 <script src="public/aether.js?v=7" defer></script><script src="public/chat.js?v=1" defer></script>
 <script>
 (() => {
@@ -555,6 +555,10 @@
         }
         const res = await C.createInvoice({
           amount: subtotal,
+          // The estimate travels separately so the Worker can verify it against the amount being
+          // charged: a quoted build is priced by the estimate the customer was shown. (Fixed-price
+          // tiers ignore the posted amount entirely - the server catalog wins.)
+          estimate: subtotal,
           type: 'discord_bot',
           package: 'Custom',
           discord, email,
@@ -569,4 +573,4 @@
     });
   });
 })();
-</script></body></html>
+</script><script src="public/consent.js?v=1" defer></script></body></html>

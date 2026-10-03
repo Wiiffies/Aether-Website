@@ -27,6 +27,15 @@ this directory.
 
 **Never put a secret in `wrangler.toml`.** Secrets exist only as Worker secrets.
 
+## Prices are server-side
+
+`POST /api/invoice` never trusts the browser's `amount`. `FIXED_PRICES` owns the packaged tiers
+(`discord_bot` BASIC 15 / PREMIUM 30; `website` STARTER 15 / BASIC 30 / FULLSTACK 149 /
+ADVANCED 299); a quoted build must post `estimate` within `QUOTE_MIN`..`QUOTE_MAX` (50..5000) and
+it must equal the posted `amount`, else `ESTIMATE_REQUIRED`/`ESTIMATE_MISMATCH`. `SOLD_TYPES` gates
+the type list (`UNKNOWN_TYPE` otherwise), and the auth check runs **before** pricing so a signed-out
+probe cannot read the catalog. The frontend builders send the pre-discount subtotal as `estimate`.
+
 ## Rules that must not be broken
 
 - **ASCII only.** Write every non-ASCII character as `\uXXXX`; `../_build_chunks.mjs` aborts if it
@@ -42,7 +51,7 @@ this directory.
 ## Test and run locally
 
 ```bash
-node ../_test-worker.mjs     # 403 checks against an in-memory D1 stub — run before every deploy
+node ../_test-worker.mjs     # 410 checks against an in-memory D1 stub — run before every deploy
 node ../_dev-server.mjs      # static site + this Worker on http://127.0.0.1:5501
 #   DEV_FAKE_PAYMENTS=waiting|paid node ../_dev-server.mjs
 #   ^ answers api.nowpayments.io locally with a stub payment (real per-coin floors; `paid` also

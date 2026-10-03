@@ -253,12 +253,16 @@ check("admin delete with junk id -> 403/404 not a crash", r.status === 404 || r.
 console.log("\n--- signed in: the account supplies the email ---");
 r = await call("POST", "/api/invoice", { body: { amount: 42, pay_currency: "eth", type: "website", package: "Custom", description: "No email and not signed in" } });
 check("invoice while signed out -> 401 account required", r.status === 401 && r.json.code === "ACCOUNT_REQUIRED", r.json);
+// Pricing is only reachable once authenticated: a signed-out caller must not be able to probe the
+// catalog or the estimate rules (the 401 above is answered before any pricing runs).
+r = await call("POST", "/api/invoice", { body: { amount: 15, pay_currency: "btc", type: "website", package: "STARTER" } });
+check("a signed-out caller learns nothing about pricing -> still ACCOUNT_REQUIRED", r.status === 401 && r.json.code === "ACCOUNT_REQUIRED", r.json);
 r = await call("POST", "/api/auth/register", { body: { email: "member@example.com", password: "memberpass1", discord: "member#7" } });
 check("member account created", r.status === 200 && !!r.json.token, r.json);
 const memberToken = r.json.token;
 const memberId = env.DB.db.prepare("SELECT id FROM users WHERE email = ?").get("member@example.com").id;
 
-r = await call("POST", "/api/invoice", { body: { amount: 42, pay_currency: "eth", type: "website", package: "Custom", description: "Signed in, nothing typed" }, token: memberToken });
+r = await call("POST", "/api/invoice", { body: { amount: 30, pay_currency: "eth", type: "website", package: "BASIC", description: "Signed in, nothing typed" }, token: memberToken });
 check("signed-in invoice needs no email (reaches NOWPayments -> 503)", r.status === 503 && !!r.json.orderId, r.json);
 const acctOrderId = r.json.orderId || "__none__";
 const acctRow = env.DB.db.prepare("SELECT user_id, email FROM orders WHERE order_id = ?").get(acctOrderId);
@@ -529,7 +533,7 @@ console.log("\n--- hardening: input caps / error hygiene ---");
 r = await call("POST", "/api/order", { body: { type: "website", description: "ok description", amount: 5 }, contentLength: 90000 });
 check("oversized payload -> 413", r.status === 413, r.json);
 const hugeDesc = "y".repeat(20000);
-r = await call("POST", "/api/invoice", { body: { amount: 25, pay_currency: "btc", email: "member@example.com", description: hugeDesc }, token: freshSession });
+r = await call("POST", "/api/invoice", { body: { amount: 30, pay_currency: "btc", email: "member@example.com", type: "website", package: "BASIC", description: hugeDesc }, token: freshSession });
 const hugeRow = env.DB.db.prepare("SELECT description FROM orders WHERE order_id = ?").get(r.json.orderId || "__none__");
 check("oversized description is truncated before it reaches storage", hugeRow && String(hugeRow.description).length <= 200, hugeRow && String(hugeRow.description).length);
 r = await call("GET", "/api/payment/123456");
@@ -1042,49 +1046,47 @@ check("a normal code on a test item never raises its price (floor does not apply
 r = await call("GET", "/api/promo?code=NOPE&amount=30");
 check("unknown codes are still invalid", r.json.valid === false, r.json);
 
-// The test purchases: the server owns their price (EUR 0.04), package, description and meta, and
-// there is one per product family. Both posted amount/package/description/meta are ignored.
-r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 0.02, pay_currency: "btc", type: "test_purchase_bot", package: "PREMIUM", description: "evil", meta: { tier: "PREMIUM" } } });
-check("the bot test reaches the normal invoice path and is priced by the server", r.status === 503 && typeof r.json.orderId === "string", { status: r.status, body: r.json });
-const testRow = env.DB.db.prepare("SELECT amount, type, package, description, meta, status, user_id FROM orders WHERE order_id = ?").get(r.json.orderId);
-check("bot test: price, package and meta are server-fixed - the posted values are ignored",
-  testRow && testRow.amount === 0.04 && testRow.type === "test_purchase_bot" && testRow.package === "Test Purchase (Discord bot)" && /Test Purchase/.test(testRow.description) && /Discord bot/.test(testRow.description) && JSON.parse(testRow.meta).test === true && JSON.parse(testRow.meta).variant === "Discord bot" && testRow.status === "pending", testRow);
-check("the test purchase is filed to the signed-in account", testRow && testRow.user_id === memberId, testRow);
+// There are no test products any more: a test type must be refused outright, and a real type must
+// never be priced by the client. These are the checks that keep the removed path removed.
+r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 0.02, pay_currency: "btc", type: "test_purchase_bot", package: "PREMIUM", description: "evil" } });
+check("the removed test-purchase type is refused, not silently repriced -> 400 UNKNOWN_TYPE",
+  r.status === 400 && r.json.code === "UNKNOWN_TYPE", { status: r.status, body: r.json });
+check("and no order row was written for it",
+  !env.DB.db.prepare("SELECT 1 AS x FROM orders WHERE type = 'test_purchase_bot'").get(), null);
 
-r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 30, pay_currency: "eth", type: "test_purchase_website", package: "BASIC", description: "evil", meta: { tier: "BASIC" } } });
-check("the website test reaches the normal invoice path and is priced by the server", r.status === 503 && typeof r.json.orderId === "string", { status: r.status, body: r.json });
-const webRow = env.DB.db.prepare("SELECT amount, type, package, description, meta FROM orders WHERE order_id = ?").get(r.json.orderId);
-check("website test: its own package, its own meta, and the same fixed price",
-  webRow && webRow.amount === 0.04 && webRow.type === "test_purchase_website" && webRow.package === "Test Purchase (Website)" && /Website/.test(webRow.description) && JSON.parse(webRow.meta).variant === "Website", webRow);
+for (const dead of ["test_purchase", "test_purchase_website", "test_purchase_pro", "test", "admin", "free"]) {
+  r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 30, pay_currency: "ltc", type: dead } });
+  check("an unsold type (" + dead + ") cannot be ordered at any price -> 400 UNKNOWN_TYPE",
+    r.status === 400 && r.json.code === "UNKNOWN_TYPE", { status: r.status, body: r.json });
+}
 
-r = await call("POST", "/api/invoice", { token: freshSession, body: { pay_currency: "ltc", type: "test_purchase" } });
-const aliasRow = env.DB.db.prepare("SELECT amount, type, package FROM orders WHERE order_id = ?").get(r.json.orderId);
-check("the old single-item name still works and is stored under the explicit bot type (an open page cannot break)",
-  r.status === 503 && aliasRow && aliasRow.type === "test_purchase_bot" && aliasRow.amount === 0.04, aliasRow);
+// Price tampering: the browser posts EUR 0.04 for a EUR 15 tier. The catalog decides the price, so
+// the request proceeds at EUR 15 (the stub provider has no key here -> 503 with an orderId).
+r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 0.04, pay_currency: "btc", type: "discord_bot", package: "BASIC" } });
+check("a fixed-price tier ignores a browser that posts EUR 0.04 and charges the catalog price", r.status === 503 && typeof r.json.orderId === "string", r.json);
+const tamperRow = env.DB.db.prepare("SELECT amount, type, package FROM orders WHERE order_id = ?").get(r.json.orderId || "__none__");
+check("the tampered amount never reaches the order: it is recorded at the catalog price", tamperRow && tamperRow.amount === 15, tamperRow);
+// A quoted build is different: its estimate must be stated and match, so a missing estimate is a
+// refusal, not a silent EUR 1 order.
+r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 42, pay_currency: "btc", type: "website", package: "Custom" } });
+check("a quoted build with no estimate -> 400 ESTIMATE_REQUIRED", r.status === 400 && r.json.code === "ESTIMATE_REQUIRED", r.json);
+r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 5, estimate: 149, pay_currency: "btc", type: "website", package: "Custom" } });
+check("a quoted build whose amount does not match the estimate -> 400 ESTIMATE_MISMATCH", r.status === 400 && r.json.code === "ESTIMATE_MISMATCH", r.json);
+r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 49, estimate: 49, pay_currency: "btc", type: "website", package: "Custom" } });
+check("a quoted build under the EUR 50 floor -> 400, no EUR 1 custom website", r.status === 400 && r.json.code === "ESTIMATE_REQUIRED", r.json);
+r = await call("POST", "/api/invoice", { body: { amount: 30, pay_currency: "btc", type: "website", package: "BASIC" } });
+check("checkout still requires an account -> 401", r.status === 401 && r.json.code === "ACCOUNT_REQUIRED", r.json);
 
-r = await call("POST", "/api/invoice", { token: freshSession, body: { pay_currency: "ltc", type: "test_purchase_pro" } });
-check("an invented test-ish type is not granted the test price -> 400 Valid amount required",
-  r.status === 400 && /Valid amount required/.test(String(r.json.error)), { status: r.status, body: r.json });
-
-r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 0.04, pay_currency: "btc", type: "discord_bot" } });
-check("a normal product cannot be bought at the test price -> 400", r.status === 400, r.json);
-r = await call("POST", "/api/invoice", { body: { amount: 0.04, pay_currency: "btc", type: "test_purchase_website" } });
-check("the test purchases still require an account -> 401", r.status === 401 && r.json.code === "ACCOUNT_REQUIRED", r.json);
-
-// A 100% test promo on the test item: a free order, and no NOWPayments call at all (this env has
-// no API key - a real call would fail - so a 200 proves the payment was skipped on purpose).
-r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 0.04, pay_currency: "btc", type: "test_purchase_bot", promoCode: "TESTFULL" } });
-check("test item + 100% test code -> free order, no payment created", r.status === 200 && r.json.ok === true && r.json.free === true && r.json.priceAmount === 0 && r.json.promoApplied === "TESTFULL" && typeof r.json.purchaseId === "string", r.json);
-const freeRow = env.DB.db.prepare("SELECT amount, status, promo_code, discount FROM orders WHERE order_id = ?").get(r.json.orderId);
-check("the free order is recorded honestly (status free, EUR 0, promo + discount)", freeRow && freeRow.status === "free" && freeRow.amount === 0 && freeRow.promo_code === "TESTFULL" && freeRow.discount === 0.04, freeRow);
-
+// A 100% test promo: a free order, and no NOWPayments call at all (this env has no API key - a real
+// call would fail - so a 200 proves the payment was skipped on purpose).
 r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 30, pay_currency: "btc", type: "discord_bot", package: "BASIC", promoCode: "TESTFULL" } });
-check("the same test code on a normal item also creates a free order (deliberate and test-only)", r.status === 200 && r.json.free === true, r.json);
-const freeRow2 = env.DB.db.prepare("SELECT amount, status, discount FROM orders WHERE order_id = ?").get(r.json.orderId);
-check("an item discounted to zero is recorded as free, never as paid", freeRow2 && freeRow2.status === "free" && freeRow2.amount === 0 && freeRow2.discount === 30, freeRow2);
+check("a 100% test code creates a free order and no payment", r.status === 200 && r.json.ok === true && r.json.free === true && r.json.priceAmount === 0 && r.json.promoApplied === "TESTFULL" && typeof r.json.purchaseId === "string", r.json);
+const freeRow = env.DB.db.prepare("SELECT amount, status, promo_code, discount FROM orders WHERE order_id = ?").get(r.json.orderId);
+// The discount is applied to the SERVER price (EUR 15 for BASIC), not to whatever the browser posted.
+check("the free order is recorded honestly (status free, EUR 0, promo + discount)", freeRow && freeRow.status === "free" && freeRow.amount === 0 && freeRow.promo_code === "TESTFULL" && freeRow.discount === 15, freeRow);
 
-r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 0.04, pay_currency: "btc", type: "test_purchase_bot", promoCode: "WELCOME10" } });
-check("a normal code cannot zero the test item (whole-euro rounding) -> still payable", r.status === 503 && typeof r.json.orderId === "string", { status: r.status, body: r.json });
+r = await call("POST", "/api/invoice", { token: freshSession, body: { amount: 30, pay_currency: "btc", type: "website", package: "BASIC", promoCode: "WELCOME10" } });
+check("an ordinary promo leaves a payable amount -> the payment path is reached", r.status === 503 && typeof r.json.orderId === "string", { status: r.status, body: r.json });
 
 // A free order creates no payment, so it needs no coin - and everything that does create one is
 // still validated just as strictly as before.
@@ -1269,7 +1271,11 @@ globalThis.fetch = async (url) => {
     }
     if (payMode === "min_unusable") return { ok: true, status: 200, text: async () => JSON.stringify({ min_amount: 0.00003 }) };
     if (payMode === "min_absurd") return { ok: true, status: 200, text: async () => JSON.stringify({ min_amount: 0.00003, fiat_equivalent: 999999 }) };
-    if (payMode === "min_at_price") return { ok: true, status: 200, text: async () => JSON.stringify({ min_amount: 0.0006, fiat_equivalent: 0.04 }) };
+    if (payMode === "min_at_price") return { ok: true, status: 200, text: async () => JSON.stringify({ min_amount: 0.00004, fiat_equivalent: 2.2 }) };
+    // A floor ABOVE the tier's price: used to prove a real product priced under the provider's
+    // minimum is refused in plain English before any payment exists. (The tier is EUR 15, so the
+    // stub floor is EUR 22 - the assertion below looks for that figure.)
+    if (payMode === "min_high") return { ok: true, status: 200, text: async () => JSON.stringify({ min_amount: 0.0004, fiat_equivalent: 22 }) };
     return { ok: true, status: 200, text: async () => JSON.stringify({ min_amount: 0.00003, fiat_equivalent: 2.2 }) };
   }
   if (u.includes("/v1/payment")) {
@@ -1277,7 +1283,9 @@ globalThis.fetch = async (url) => {
     // the payment really was attempted and the vendor refused it in its own words.
     if (payMode === "minimal" || payMode === "min_unusable") return { ok: false, status: 400, text: async () => JSON.stringify({ status: false, statusCode: 400, code: "AMOUNT_MINIMAL_ERROR", message: "Crypto amount 2.7e-7 is less than minimal" }) };
     if (payMode === "server_error") return { ok: false, status: 500, text: async () => JSON.stringify({ status: false, statusCode: 500, message: "Internal error" }) };
-    return { ok: true, status: 200, text: async () => JSON.stringify({ payment_id: 777000111, payment_status: "waiting", pay_address: "ltc1qexampleaddress", pay_amount: 0.5, pay_currency: "ltc", price_amount: 30, price_currency: "eur", order_id: "aether_probe", actually_paid: 0.25, payin_hash: "deadbeefcafe0123456789" }) };
+    // A created payment: the vendor's own hosted page, plus the fields the order page reads.
+    if (payMode === "no_invoice_url") return { ok: true, status: 200, text: async () => JSON.stringify({ payment_id: 777000111, payment_status: "waiting", pay_address: "ltc1qexampleaddress", pay_amount: 0.5, pay_currency: "ltc", price_amount: 30, price_currency: "eur", order_id: "aether_probe" }) };
+    return { ok: true, status: 200, text: async () => JSON.stringify({ payment_id: 777000111, payment_status: "waiting", pay_address: "ltc1qexampleaddress", pay_amount: 0.5, pay_currency: "ltc", price_amount: 30, price_currency: "eur", order_id: "aether_probe", invoice_url: "https://nowpayments.io/payment/?iid=777000111", actually_paid: 0.25, payin_hash: "deadbeefcafe0123456789" }) };
   }
   return { ok: true, status: 200, text: async () => "{}" };
 };
@@ -1291,18 +1299,6 @@ check("the minimum amount is asked for before the payment is created", payCalls.
 check("and in the direction the provider answers (coin -> EUR), which is what made the live lookup fail",
   payCalls.some(u => u.includes("/v1/min-amount") && /currency_from=ltc/.test(u) && u.includes("currency_to=eur") && u.includes("fiat_equivalent=eur")), payCalls.filter(u => u.includes("min-amount")));
 
-r = await call("POST", "/api/invoice", { token: reinstatedToken, body: { type: "test_purchase", pay_currency: "btc" } });
-const belowMinOrder = r.json.orderId;
-check("an amount below the provider minimum -> 400, not a 500 crash", r.status === 400 && r.json.code === "AMOUNT_BELOW_MINIMUM", { status: r.status, body: r.json });
-check("the refusal is plain English and names the real minimum",
-  /minimum/i.test(String(r.json.error)) && /2\.20/.test(String(r.json.error)) && /Nothing was charged/i.test(String(r.json.error)), r.json.error);
-check("the refusal leaks no provider payload, no key and no internal detail",
-  !/np-test-key|min_amount|api\.nowpayments/.test(JSON.stringify(r.json)), r.json);
-r = await call("GET", "/api/orders", { token: reinstatedToken });
-const belowMinRow = (r.json.orders || []).find(o => o.order_id === belowMinOrder) || {};
-check("a payment that was never created does not leave a completed order behind",
-  belowMinRow.status === "failed" && belowMinRow.payment_id == null, { status: belowMinRow.status, payment_id: belowMinRow.payment_id });
-
 r = await call("GET", "/api/payment/777000111");
 check("payment status without a session -> 401 (a payment id is not a credential)", r.status === 401, r.json);
 r = await call("GET", "/api/payment/777000111", { token: freshSession });
@@ -1315,8 +1311,10 @@ check("and the answer never carries the provider payload or customer PII",
 check("what the chain already knows travels with it: received so far and the transaction hash",
   r.json.actuallyPaid === 0.25 && r.json.payinHash === "deadbeefcafe0123456789", { actuallyPaid: r.json.actuallyPaid, payinHash: r.json.payinHash });
 check("and those are the only provider fields in it - the response shape is a closed list, not a dump",
-  Object.keys(r.json).filter(k => !["ok","orderId","purchaseId","priceAmount","priceCurrency","createdAt","paymentId","status","isPaid","isPending","isFailed","payAmount","payAddress","payCurrency","validUntil","actuallyPaid","payinHash"].includes(k)).length === 0,
+  Object.keys(r.json).filter(k => !["ok","orderId","purchaseId","priceAmount","priceCurrency","createdAt","paymentId","status","isPaid","isPending","isFailed","payAmount","payAddress","payCurrency","validUntil","actuallyPaid","payinHash","paymentUrl"].includes(k)).length === 0,
   Object.keys(r.json));
+check("the owner can also be sent back to the provider's payment page for an order they already made",
+  r.json.paymentUrl === "https://nowpayments.io/payment/?iid=777000111", r.json.paymentUrl);
 r = await call("GET", "/api/payment?purchase_id=" + encodeURIComponent(paidOwnerPurchase), { token: freshSession });
 check("another account cannot read that order by its Purchase ID -> 404", r.status === 404, r.json);
 r = await call("GET", "/api/payment?purchase_id=" + encodeURIComponent(paidOwnerPurchase), { token: reinstatedToken });
@@ -1350,23 +1348,58 @@ check("a genuine provider outage stays a plain provider error, not a fake minimu
 check("and that order is failed too, so nothing looks like money still on its way",
   (await call("GET", "/api/orders", { token: reinstatedToken })).json.orders.find(o => o.order_id === outageOrder).status === "failed", outageOrder);
 
+// A real product priced under the provider's floor for the chosen coin: the pre-flight refuses it
+// before any payment exists, in plain English, with the figure the provider gave us. The tier is
+// fixed-price (the catalog sets EUR 15) and the stub floor is EUR 22, so the refusal has to come
+// from the floor check rather than from the number the request posted. This runs here, after the
+// other coins' minimums have been used, because a minimum is cached per coin for six hours and a
+// "high" answer would otherwise poison the payable checks below.
+payMode = "min_high";
+r = await call("POST", "/api/invoice", { token: reinstatedToken, body: { amount: 15, pay_currency: "eth", type: "discord_bot", package: "BASIC" } });
+const belowMinOrder = r.json.orderId;
+check("an amount below the provider minimum -> 400, not a 500 crash", r.status === 400 && r.json.code === "AMOUNT_BELOW_MINIMUM", { status: r.status, body: r.json });
+check("the refusal is plain English and names the real minimum",
+  /minimum/i.test(String(r.json.error)) && /22\.00/.test(String(r.json.error)) && /Nothing was charged/i.test(String(r.json.error)), r.json.error);
+check("the refusal leaks no provider payload, no key and no internal detail",
+  !/np-test-key|min_amount|api\.nowpayments/.test(JSON.stringify(r.json)), r.json);
+r = await call("GET", "/api/orders", { token: reinstatedToken });
+const belowMinRow = (r.json.orders || []).find(o => o.order_id === belowMinOrder) || {};
+check("a payment that was never created does not leave a completed order behind",
+  belowMinRow.status === "failed" && belowMinRow.payment_id == null, { status: belowMinRow.status, payment_id: belowMinRow.payment_id });
+
 // A minimum in the wrong unit (the coin amount read as euros) must never block an order that is
-// perfectly payable - the sanity ceiling exists for exactly this.
+// perfectly payable - the sanity ceiling exists for exactly this. A different coin, so the cached
+// "high" answer above cannot interfere.
 payMode = "min_absurd";
-r = await call("POST", "/api/invoice", { token: reinstatedToken, body: { amount: 30, pay_currency: "eth", type: "discord_bot", package: "BASIC" } });
+r = await call("POST", "/api/invoice", { token: reinstatedToken, body: { amount: 30, pay_currency: "ltc", type: "discord_bot", package: "BASIC" } });
 check("an unusable minimum (a figure in the wrong unit) never blocks a payable order",
   r.status === 200 && r.json.paymentId === 777000111, { status: r.status, body: r.json });
 
-// The point of the two test items is to produce a REAL payment, so with the provider's floor at
-// EUR 0.04 (the figure measured live for LTC on 2026-10-03) the item has to clear it exactly - being
-// a cent under would make the item useless for the one job it has.
+// An amount exactly on the provider's floor must still create a payment: the check has to be "below",
+// never "at or below", or a legitimate order would be refused for being exactly payable.
 payMode = "min_at_price";
-r = await call("POST", "/api/invoice", { token: reinstatedToken, body: { type: "test_purchase_website", pay_currency: "eth" } });
-const paidTestRow = env.DB.db.prepare("SELECT amount, status, payment_id, type, package FROM orders WHERE order_id = ?").get(r.json.orderId);
-check("the EUR 0.04 test item creates a real payment when the provider's floor is exactly EUR 0.04",
-  r.status === 200 && r.json.paymentId === 777000111 && r.json.payCurrency === "eth", { status: r.status, body: r.json });
-check("and it leaves a waiting order carrying that payment, priced by the server",
-  paidTestRow && paidTestRow.amount === 0.04 && paidTestRow.status === "waiting" && String(paidTestRow.payment_id) === "777000111" && paidTestRow.type === "test_purchase_website", paidTestRow);
+// The catalog price is what gets charged; the stub provider's floor for this coin is exactly that
+// price, so this proves a tier priced ON the provider's floor still creates a payment (the check
+// has to be "below", never "at or below").
+r = await call("POST", "/api/invoice", { token: reinstatedToken, body: { amount: 15, pay_currency: "btc", type: "discord_bot", package: "BASIC" } });
+const atFloorRow = env.DB.db.prepare("SELECT amount, status, payment_id, type FROM orders WHERE order_id = ?").get(r.json.orderId);
+check("an amount exactly on the provider's floor is payable",
+  r.status === 200 && r.json.paymentId === 777000111, { status: r.status, body: r.json });
+check("and it leaves a waiting order carrying that payment",
+  atFloorRow && atFloorRow.amount === 15 && atFloorRow.status === "waiting" && String(atFloorRow.payment_id) === "777000111", atFloorRow);
+payMode = "ok";
+
+// The provider's own hosted payment page: when NOWPayments answers with an invoice_url, the customer
+// must be able to follow it, and anything that is not an https NOWPayments URL must be dropped
+// instead of becoming an open redirect.
+payMode = "ok";
+r = await call("POST", "/api/invoice", { token: reinstatedToken, body: { amount: 30, pay_currency: "ltc", type: "discord_bot", package: "BASIC" } });
+check("the provider's payment page is passed through to the checkout",
+  r.status === 200 && r.json.invoiceUrl === "https://nowpayments.io/payment/?iid=777000111" && r.json.paymentUrl === r.json.invoiceUrl, { status: r.status, invoiceUrl: r.json.invoiceUrl });
+payMode = "no_invoice_url";
+r = await call("POST", "/api/invoice", { token: reinstatedToken, body: { amount: 30, pay_currency: "ltc", type: "discord_bot", package: "BASIC" } });
+check("a payment without a hosted page still answers (the order page is the fallback)",
+  r.status === 200 && r.json.invoiceUrl === null && r.json.payAddress === "ltc1qexampleaddress", { status: r.status, invoiceUrl: r.json.invoiceUrl });
 payMode = "ok";
 
 console.log("\n--- admin chat search and filtering ---");

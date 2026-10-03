@@ -1,0 +1,117 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="theme-color" content="#08080a"><title>Cookie Policy — Aether</title>
+<meta name="description" content="Every cookie and every piece of browser storage get-aether.de uses, what each one does, how long it lasts and whether it needs consent.">
+<meta name="robots" content="noindex">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Aether">
+<meta property="og:title" content="Cookie Policy — Aether">
+<meta property="og:description" content="Every cookie and every piece of browser storage get-aether.de uses, what each one does and how long it lasts.">
+<meta property="og:url" content="https://get-aether.de/cookies.html">
+<meta property="og:image" content="https://get-aether.de/public/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Cookie Policy — Aether">
+<meta name="twitter:description" content="Every cookie and every piece of browser storage get-aether.de uses.">
+<meta name="twitter:image" content="https://get-aether.de/public/og.png"><link rel="icon" href="public/aether-logo.png" type="image/png"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="public/aether.css?v=7"><link rel="stylesheet" href="public/pages.css?v=7"><link rel="stylesheet" href="public/ui.css?v=7"><link rel="stylesheet" href="public/legal.css?v=1">
+</head><body><header class="site-header"><a class="brand" href="index.html"><img src="public/aether-logo.png" alt=""><b>Aether</b></a><nav class="nav"><a href="index.html#services">Services</a><a href="shop.html">Shop</a><a href="about.html">About</a><a href="contact.html">Contact</a><a href="donate.html">Donate</a><a href="account.html">Account</a></nav><a class="header-cta" href="shop.html">Purchase <span>↗</span></a><button class="menu-btn" aria-label="Open menu">☰</button></header><main class="page-main legal">
+<span class="page-kicker">Legal</span>
+<h1>Cookie<br><em>Policy.</em></h1>
+<p class="page-lead">This site uses <b>one cookie</b> and a few small pieces of browser storage. There is no analytics, no advertising and no tracking — so there is nothing to switch off, and nothing here is waiting for your consent before it runs.</p>
+<p class="legal-meta">Effective date: <b>3 October 2026</b> · Last updated: <b>3 October 2026</b> · Version 1.0</p>
+
+<div class="legal-note">
+  <b>Why there is no "Accept all / Reject all" wall:</b> consent is only required for storage that is not strictly necessary — analytics, advertising, social plugins and similar. This site has none of those. Everything listed below is either strictly necessary to deliver the service you asked for (§ 25(2) TDDDG, Art. 5(3) ePrivacy) or is a preference you set yourself. We still show a small notice on your first visit, and you can change or withdraw your choice at any time with the button at the bottom of this page.
+</div>
+
+<h2>1. Strictly necessary</h2>
+<p>These are required for the site to work. They cannot be switched off while you use the service — without the session cookie you could not sign in, and there is no account-free way to buy.</p>
+<table class="legal-table">
+  <tr><th>Name</th><th>Type</th><th>Purpose</th><th>Duration</th><th>Provider</th><th>Consent</th></tr>
+  <tr>
+    <td><code>__Host-aether_session</code></td>
+    <td>Cookie, first-party</td>
+    <td>Keeps you signed in. It holds a random session token; the database stores only its SHA-256 hash, and the cookie is <code>HttpOnly</code>, <code>Secure</code> and <code>SameSite=Lax</code>, so JavaScript cannot read it and it is not sent on cross-site requests.</td>
+    <td>14 days, or until you sign out</td>
+    <td>Aether (get-aether.de)</td>
+    <td>Not required — strictly necessary</td>
+  </tr>
+  <tr>
+    <td><code>aether_session</code></td>
+    <td>Cookie, first-party</td>
+    <td>Local development only. Browsers reject a <code>__Host-</code> cookie over plain HTTP, so the local dev server translates the production cookie name. It never appears on the live site.</td>
+    <td>Session</td>
+    <td>Aether (local dev server)</td>
+    <td>Not required — development only</td>
+  </tr>
+  <tr>
+    <td><code>cf_clearance</code>, <code>__cf_bm</code></td>
+    <td>Cookie, first-party (set by the CDN)</td>
+    <td>Set by Cloudflare, the network this site runs on, to distinguish real visitors from automated traffic and to protect the site from attacks. Only present if a security check has run for your connection.</td>
+    <td>Up to 30 minutes (<code>__cf_bm</code>) / up to 1 year (<code>cf_clearance</code>)</td>
+    <td>Cloudflare, Inc.</td>
+    <td>Not required — strictly necessary for security</td>
+  </tr>
+  <tr>
+    <td>Cloudflare Turnstile</td>
+    <td>Third-party script + challenge</td>
+    <td>Loaded on the registration and password-reset pages only, to stop automated sign-ups and reset abuse. It may set its own storage while solving a challenge. No advertising or cross-site tracking is involved.</td>
+    <td>While the challenge is solved</td>
+    <td>Cloudflare, Inc.</td>
+    <td>Not required — strictly necessary for security</td>
+  </tr>
+</table>
+
+<h2>2. Preferences</h2>
+<p>These remember choices you make. They contain no identifiers and are never sent to us or to anyone else.</p>
+<table class="legal-table">
+  <tr><th>Name</th><th>Type</th><th>Purpose</th><th>Duration</th><th>Provider</th><th>Consent</th></tr>
+  <tr>
+    <td><code>aether_consent_v1</code></td>
+    <td>localStorage, first-party</td>
+    <td>Remembers the choice you made in the cookie notice, so the notice does not reappear on every page. It stores a version number, your choice and a timestamp — nothing about you.</td>
+    <td>Until you clear it or change your choice</td>
+    <td>Aether</td>
+    <td>Set by your own choice</td>
+  </tr>
+  <tr>
+    <td><code>aether_chat_v1</code></td>
+    <td>localStorage, first-party</td>
+    <td>Remembers whether the support chat panel was open and which conversation you were reading, so a page reload does not lose your place. It stores a conversation id, not message contents.</td>
+    <td>Until you clear it</td>
+    <td>Aether</td>
+    <td>Set by your own choice</td>
+  </tr>
+  <tr>
+    <td><code>aether_token</code></td>
+    <td>sessionStorage, first-party</td>
+    <td>A short-lived copy of the session token for pages that talk to the API from a different tab context. Cleared when the tab closes. Only present while you are signed in.</td>
+    <td>Session (per tab)</td>
+    <td>Aether</td>
+    <td>Not required — strictly necessary</td>
+  </tr>
+</table>
+
+<h2>3. Analytics and marketing</h2>
+<div class="legal-note warn">
+  <b>None.</b> This site runs no analytics service, no advertising network, no social media pixel, no A/B testing tool and no session recorder. There is no Google Analytics, no Meta pixel, no TikTok pixel and no heatmap. Nothing about your browsing is profiled, and no data is sold or shared for advertising.
+</div>
+<p>Because there is no non-essential storage, choosing "Reject" in the notice changes nothing about how the site behaves — it only records that you did not want to be asked again. That is a deliberate design choice: we would rather not collect the data than build a consent theatre around it.</p>
+
+<h2>4. Change or withdraw your choice</h2>
+<p>You can reopen the notice and change your answer at any time. This clears any preference stored by that choice; strictly necessary storage stays, because the site cannot work without it.</p>
+<div class="legal-nav">
+  <a href="#" data-cookie-settings>Open cookie settings</a>
+  <a href="privacy.html">Privacy Policy</a>
+  <a href="terms.html">Terms of Service</a>
+  <a href="imprint.html">Imprint</a>
+</div>
+
+<h2>5. How to remove everything from your browser</h2>
+<p>Your browser's own settings let you see and delete cookies and site data at any time — usually under "Privacy", "Cookies and site data" or "Clear browsing data". Deleting the session cookie signs you out; nothing else on the site depends on it.</p>
+
+<h2>6. Contact</h2>
+<p>Questions about this policy: <a href="mailto:questions@get-aether.de">questions@get-aether.de</a>. How we handle personal data generally, and the rights you have, is described in the <a href="privacy.html">Privacy Policy</a>.</p>
+
+<a class="back-link" href="index.html">← Back home</a>
+</main><footer class="site-footer section-wrap"><a class="brand" href="index.html"><b>Aether</b></a><nav class="footer-legal"><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="cookies.html">Cookies</a><a href="imprint.html">Imprint</a><a href="#" data-cookie-settings>Cookie settings</a></nav><span>© 2026 Aether</span></footer>
+<script src="public/aether.js?v=7" defer></script><script src="public/consent.js?v=1" defer></script></body></html>

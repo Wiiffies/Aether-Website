@@ -182,11 +182,14 @@ async function serveStatic(pathname, res) {
   const target = resolve(join(ROOT, normalize(rel).replace(/^(\.\.[/\\])+/, "")));
   if (!target.startsWith(ROOT)) { res.writeHead(403).end("Forbidden"); return; }
   try {
-    const info = await stat(target);
-    if (info.isDirectory()) { res.writeHead(404).end("Not found"); return; }
-    const body = await readFile(target);
+    // GitHub Pages redirects `/terms` to `/terms/` and serves the directory's index.html, which is
+    // exactly why the extensionless aliases exist. Mirror it here (directory -> index.html) so a
+    // broken alias is caught locally instead of on the live site.
+    let file = target;
+    if ((await stat(file)).isDirectory()) file = join(file, "index.html");
+    const body = await readFile(file);
     res.writeHead(200, {
-      "content-type": MIME[extname(target).toLowerCase()] || "application/octet-stream",
+      "content-type": MIME[extname(file).toLowerCase()] || "application/octet-stream",
       "cache-control": "no-store",
       // The same policy the edge applies (a Cloudflare Response Header Transform rule sets these on
       // get-aether.de and www, skipping /api/*). Serving them here means a policy that would break a
