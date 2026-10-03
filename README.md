@@ -77,6 +77,7 @@ who is allowed to do anything — every authorisation decision happens in the Wo
 | `_check-inline-js.mjs`, `_check-email-regex.mjs` | Small static checks that have already caught real bugs |
 | `_check-assets.mjs` | Publishing-metadata guard: every shared asset is versioned and all references to the same asset agree, `public/og.png` at 1200x630, description + `og:image` on every public page |
 | `_check-markup.mjs` | Markup guard: no end tag is followed by another `<` (a missing `>` makes the parser drop the tag — that is how the nav stopped closing on every page), every element with a required end tag is balanced, no duplicate `id` |
+| `_check-emoji.mjs` | No-emoji guard: notifications and pages use plain-text labels (`PAID`, `FAILED`, `PENDING`), so any glyph in an emoji block fails the build. Decodes `\uXXXX` escapes (including surrogate pairs) in shipped code and validates its own allowlist of functional glyphs |
 | `_make-logo.mjs` | Regenerates the site logo from the original brand asset — no image libraries, just `zlib` |
 | `_make-og.mjs` | Regenerates `public/og.png` (1200x630 dark card + the brand mark) from the same asset |
 
@@ -89,6 +90,7 @@ node _check-inline-js.mjs *.html
 node _check-markup.mjs
 node _check-email-regex.mjs
 node _check-assets.mjs
+node _check-emoji.mjs
 # add REQUIRE_EMAIL_VERIFICATION=true to exercise the unconfirmed-address paths
 ```
 

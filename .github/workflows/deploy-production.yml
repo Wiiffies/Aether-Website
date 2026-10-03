@@ -58,6 +58,8 @@ jobs:
         run: node _check-program.mjs
       - name: Pages stay loadable under the deployed CSP
         run: node _check-headers.mjs
+      - name: No emoji in the product
+        run: node _check-emoji.mjs
       - name: Worker is ASCII-only and compiles
         run: |
           node --check worker/src/index.js

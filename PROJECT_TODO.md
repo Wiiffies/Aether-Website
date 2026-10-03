@@ -476,5 +476,17 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
       monochrome functional glyphs (menu icon, check/cross marks, copy feedback) stay, and
       `checkout.js` moved to `?v=16`. A scan of every tracked text file reports none left; the
       worker is back to 0 non-ASCII bytes.
+- [x] **`_check-emoji.mjs` guards the no-emoji rule in CI (2026-10-03, all three workflows).** A
+      grep is not enough here, and building it proved why: the Worker's emoji were written as
+      `\uD83D\uDCAC` escapes, five ASCII characters that are invisible to a text scan, and the pair
+      has to be decoded before it can be judged (`\uD83D` alone is a lone surrogate, `\uDCAC` alone
+      is a low surrogate — neither is an emoji, the pair is). The guard therefore scans literals,
+      decodes escapes in shipped code, treats a lone surrogate as a broken pair rather than
+      ignoring it, and validates its own allowlist so a glyph cannot be listed outside an emoji
+      block. Seven functional glyphs are allowed by name (`☰` `✓` `✕` `♦` `▶` `►` `▼`). Failure
+      modes proven by injection: a literal emoji in a page, a BMP escape in the Worker, a
+      surrogate-pair escape in the Worker, and a bogus allowlist entry — all four exit 1; the
+      baseline exits 0. `_test-worker.mjs`'s non-ASCII signature fixture switched from an emoji to
+      CJK text (`\u4e2d\u6587`) so the guard needs no exclusion for test data.
 - [ ] Not implemented (audit findings, deliberate scope): images in the support chat (CSP already
       allows `img-src 'self' data:`), and a terms-acceptance checkbox at registration.

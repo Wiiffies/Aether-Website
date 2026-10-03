@@ -1003,7 +1003,9 @@ const failed = ipnPayload("failed");
 r = await call("POST", "/api/ipn", { body: failed, headers: { "x-nowpayments-sig": npSig(failed, "ipn-secret-test") } });
 check("failed is recorded as failed", r.status === 200 && ipnDbStatus() === "failed", ipnDbStatus());
 
-const unicodePayload = ipnPayload("finished", { order_description: "Aether \u2014 caf\u00e9 \uD83C\uDF89" });
+// Non-ASCII on purpose (multi-byte UTF-8 through the signature algorithm); CJK rather than an emoji,
+// so the emoji guard in _check-emoji.mjs stays strict everywhere without an exclusion for test data.
+const unicodePayload = ipnPayload("finished", { order_description: "Aether \u2014 caf\u00e9 \u4e2d\u6587" });
 r = await call("POST", "/api/ipn", { body: unicodePayload, headers: { "x-nowpayments-sig": npSig(unicodePayload, "ipn-secret-test") } });
 check("a payload with non-ASCII text verifies with the documented Node algorithm (raw JSON.stringify)", r.status === 200, r.json);
 

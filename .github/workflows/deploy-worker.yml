@@ -61,6 +61,8 @@ jobs:
         run: node _check-deploy-config.mjs
       - name: Pages stay loadable under the deployed CSP
         run: node _check-headers.mjs
+      - name: No emoji in the product
+        run: node _check-emoji.mjs
       - name: Skip notice when the token is absent
         if: ${{ env.CLOUDFLARE_API_TOKEN == '' && env.CLOUDFLARE_API_TOKEN_TYPO == '' }}
         run: echo "::notice::CLOUDFLARE_API_TOKEN is not configured - skipping the worker deploy (checks still ran)."
