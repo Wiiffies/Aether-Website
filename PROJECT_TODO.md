@@ -348,16 +348,37 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
       never a URL.
 - [x] English consistency verified: every page is `lang="en"` and no German UI string remains
       (`COMMON_PASSWORDS` entries excepted).
-- [x] **388 Worker checks** (was 334: 54 new for account status, IP restrictions, the payment minimum,
-      ownership and admin-chat search/filter), `node --check` clean, 0 non-ASCII bytes in the Worker,
-      and all 8 guard scripts green (`_check-assets` now sees 20 pages incl. `chat.js?v=1` and
-      `checkout.js?v=13`).
+- [x] **The live payment failure, diagnosed from the provider's own answer (2026-10-03).** The
+      customer sentence was honest but still hid the cause, so **Workers Logs were enabled for
+      `aether-api`** (they had never been on, so nothing was ever stored) and the next attempt
+      logged `400 code AMOUNT_MINIMAL_ERROR "Crypto amount 2.7e-7 is less than minimal"` — a valid
+      key and a genuinely below-minimum amount. Two assumptions were ours and wrong: the vendor says
+      *"less than minimal"* while the classifier matched only *"less than the min"*, and the
+      pre-flight asked the pair **backwards** (`eur -> coin`; the vendor pays coin -> fiat), whose
+      refusal the fail-open swallowed, so the doomed payment was created anyway. Fixed: the pair
+      points the vendor's way, only the fiat figure is trusted (a coin amount compared against a EUR
+      price would refuse payable orders), an absurd figure is ignored, every lookup failure is
+      logged instead of silently returning `0`, and the classifier reads the vendor's `code` too —
+      so a below-minimum refusal now answers `400 AMOUNT_BELOW_MINIMUM` with one sentence naming the
+      real figure.
+- [x] **395 Worker checks** (was 388: 7 new, one of which reproduces the production failure
+      verbatim), `node --check` clean, 0 non-ASCII bytes in the Worker, and all 8 guard scripts green
+      (`_check-assets` now sees 20 pages incl. `chat.js?v=1` and `checkout.js?v=13`).
 - [x] Live D1 got the additive migration (`users` status/`status_reason`/`status_until`/
       `status_updated_at`/`last_ip`/`last_ip_at`/`signup_ip`) and it was verified via
       `pragma_table_info`; the columns are backward-compatible, so the old Worker keeps working.
-- [ ] MANUAL: commit + push — nothing from this section is live yet. A push touching `worker/**`
-      deploys the Worker through CI, and Pages serves `order.html`, `chat.js` and `checkout.js?v=13`
-      only after the same push. Until then the live stack still runs the pre-2026-10-03 build.
+- [x] **Committed and pushed (2026-10-03):** `54ed9f744169062846a2802fee9541bd20c634b0` (`54ed9f7`),
+      29 files. `Deploy aether-api worker` run `37115075023` green → code version
+      `09cf52bf-b98f-42b9-8038-d8012006ca60`, current deployment
+      `1bb010e2-adf3-4099-a9fa-280014730a86` / version `0b713672-5c64-4ec3-b850-91479f053b25`;
+      `Production checks` `37115075070` and `pages-build-deployment` `37115074647` green;
+      `/api/health` 200 with every flag true; the new build proven live by `/api/payment/1` → 401 and
+      the two new admin routes → 403.
+- [x] **Maintenance switched off (2026-10-03):** the zone was running the **HARD** rule, so every
+      public page (including the new `order.html`) redirected to the notice. Ruleset
+      `81830ab5c40740d5a71a5909da775079` is now at version 7 with **both** rules `enabled:false` and
+      their expressions byte-identical; `/`, `/shop.html`, `/account.html`, `/order.html`,
+      `/payment-success.html`, `/public/chat.js` and `/api/health` all answer 200.
 - [ ] MANUAL: NOWPayments' per-pair minimum is vendor-side — the €0.02 card will be refused (with a
       clear message, nothing charged). Use `TEST100` for a free end-to-end order, and remove the test
       card + promo code before launch.

@@ -1239,11 +1239,30 @@ console.log("\n--- payments: the provider minimum, honest failures, and ownershi
 // checkout used to show, and of an order row left sitting at "pending" for a payment that never was.
 const realFetchPay = globalThis.fetch;
 const payCalls = [];
-globalThis.fetch = async (url, init) => {
+// The stub has to be as strict as the real vendor, or the test passes while production fails.
+// Live on 2026-10-03 the pair was asked the wrong way round (eur -> coin), the vendor refused it,
+// the fail-open swallowed the refusal, and the doomed payment came back as a bare "temporary
+// problem". So: the reverse pair is refused here, and the vendor's own below-minimum wording and
+// error code are reproduced verbatim.
+let payMode = "ok";
+globalThis.fetch = async (url) => {
   const u = String(url);
   payCalls.push(u);
-  if (u.includes("/v1/min-amount")) return { ok: true, status: 200, text: async () => JSON.stringify({ min_amount: 0.00003, fiat_equivalent: 2.2 }) };
-  if (u.includes("/v1/payment")) return { ok: true, status: 200, text: async () => JSON.stringify({ payment_id: 777000111, payment_status: "waiting", pay_address: "ltc1qexampleaddress", pay_amount: 0.5, pay_currency: "ltc", price_amount: 30, price_currency: "eur", order_id: "aether_probe" }) };
+  if (u.includes("/v1/min-amount")) {
+    if (!/currency_from=(btc|ltc|eth)/.test(u) || !u.includes("currency_to=eur")) {
+      return { ok: false, status: 400, text: async () => JSON.stringify({ status: false, statusCode: 400, code: "INVALID_CURRENCY", message: "Invalid currency" }) };
+    }
+    if (payMode === "min_unusable") return { ok: true, status: 200, text: async () => JSON.stringify({ min_amount: 0.00003 }) };
+    if (payMode === "min_absurd") return { ok: true, status: 200, text: async () => JSON.stringify({ min_amount: 0.00003, fiat_equivalent: 999999 }) };
+    return { ok: true, status: 200, text: async () => JSON.stringify({ min_amount: 0.00003, fiat_equivalent: 2.2 }) };
+  }
+  if (u.includes("/v1/payment")) {
+    // "min_unusable" is the production combination: the pre-flight answer carried no fiat figure, so
+    // the payment really was attempted and the vendor refused it in its own words.
+    if (payMode === "minimal" || payMode === "min_unusable") return { ok: false, status: 400, text: async () => JSON.stringify({ status: false, statusCode: 400, code: "AMOUNT_MINIMAL_ERROR", message: "Crypto amount 2.7e-7 is less than minimal" }) };
+    if (payMode === "server_error") return { ok: false, status: 500, text: async () => JSON.stringify({ status: false, statusCode: 500, message: "Internal error" }) };
+    return { ok: true, status: 200, text: async () => JSON.stringify({ payment_id: 777000111, payment_status: "waiting", pay_address: "ltc1qexampleaddress", pay_amount: 0.5, pay_currency: "ltc", price_amount: 30, price_currency: "eur", order_id: "aether_probe" }) };
+  }
   return { ok: true, status: 200, text: async () => "{}" };
 };
 env.NOWPAYMENTS_API_KEY = "np-test-key";
@@ -1253,6 +1272,8 @@ const paidOwnerOrder = r.json.orderId;
 check("a payable order still creates a real payment (the minimum check does not block it)",
   r.status === 200 && r.json.payAddress === "ltc1qexampleaddress" && r.json.paymentId === 777000111, r.json);
 check("the minimum amount is asked for before the payment is created", payCalls.some(u => u.includes("/v1/min-amount")), payCalls);
+check("and in the direction the provider answers (coin -> EUR), which is what made the live lookup fail",
+  payCalls.some(u => u.includes("/v1/min-amount") && /currency_from=ltc/.test(u) && u.includes("currency_to=eur") && u.includes("fiat_equivalent=eur")), payCalls.filter(u => u.includes("min-amount")));
 
 r = await call("POST", "/api/invoice", { token: reinstatedToken, body: { type: "test_purchase", pay_currency: "btc" } });
 const belowMinOrder = r.json.orderId;
@@ -1284,6 +1305,37 @@ r = await call("GET", "/api/payment?purchase_id=AETH-2026-NOPE", { token: reinst
 check("a malformed Purchase ID -> 400", r.status === 400, r.json);
 r = await call("GET", "/api/payment/777000111", { token: reinstatedToken, host: "https://api.get-aether.de" });
 check("no provider secret or api key is echoed into the response", !/np-test-key/.test(JSON.stringify(r.json)), true);
+
+// The exact production failure of 2026-10-03: the pre-flight answer was unusable (no fiat figure),
+// so the payment really was created, and the provider refused it in its own words. ETH is used
+// because the earlier checks cached LTC and BTC.
+payMode = "min_unusable";
+r = await call("POST", "/api/invoice", { token: reinstatedToken, body: { amount: 30, pay_currency: "eth", type: "discord_bot", package: "BASIC" } });
+const vendorMinOrder = r.json.orderId;
+check("a provider refusal in its own words (\"less than minimal\") is reported as below the minimum, not as a crash",
+  r.status === 400 && r.json.code === "AMOUNT_BELOW_MINIMUM", { status: r.status, body: r.json });
+check("and that sentence stays honest when no figure was ever learned",
+  /below the provider's minimum for ETH/i.test(String(r.json.error)) && !/minimum for ETH is/i.test(String(r.json.error)) && /Nothing was charged/i.test(String(r.json.error)), r.json.error);
+check("the order behind a vendor refusal is marked failed, not left looking payable",
+  (await call("GET", "/api/orders", { token: reinstatedToken })).json.orders.find(o => o.order_id === vendorMinOrder).status === "failed", vendorMinOrder);
+
+// A real provider outage must not be dressed up as a minimum: the customer gets the plain provider
+// sentence and the code stays PAYMENT_PROVIDER_ERROR.
+payMode = "server_error";
+r = await call("POST", "/api/invoice", { token: reinstatedToken, body: { amount: 30, pay_currency: "ltc", type: "discord_bot", package: "BASIC" } });
+const outageOrder = r.json.orderId;
+check("a genuine provider outage stays a plain provider error, not a fake minimum",
+  r.status === 502 && r.json.code === "PAYMENT_PROVIDER_ERROR" && /could not start this payment/i.test(String(r.json.error)), { status: r.status, body: r.json });
+check("and that order is failed too, so nothing looks like money still on its way",
+  (await call("GET", "/api/orders", { token: reinstatedToken })).json.orders.find(o => o.order_id === outageOrder).status === "failed", outageOrder);
+
+// A minimum in the wrong unit (the coin amount read as euros) must never block an order that is
+// perfectly payable - the sanity ceiling exists for exactly this.
+payMode = "min_absurd";
+r = await call("POST", "/api/invoice", { token: reinstatedToken, body: { amount: 30, pay_currency: "eth", type: "discord_bot", package: "BASIC" } });
+check("an unusable minimum (a figure in the wrong unit) never blocks a payable order",
+  r.status === 200 && r.json.paymentId === 777000111, { status: r.status, body: r.json });
+payMode = "ok";
 
 console.log("\n--- admin chat search and filtering ---");
 const allConvs = await call("GET", "/api/admin/conversations", { token: adminToken });

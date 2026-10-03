@@ -279,15 +279,24 @@ async function providerMinimum(env, payCurrency){
   const hit = minAmountCache[coin];
   if (hit && Date.now() - hit.at < MIN_AMOUNT_CACHE_MS) return hit.min;
   try {
-    const res = await fetch(`https://api.nowpayments.io/v1/min-amount?currency_from=eur&currency_to=${encodeURIComponent(coin)}&fiat_equivalent=eur`, { headers: { "x-api-key": key } });
-    if (!res.ok) return 0;
+    // The pair points the way the provider pays it: the coin is what it sends out, the fiat is what
+    // the minimum is converted into. Asking it the other way round (eur -> coin) is refused, and
+    // because this lookup is allowed to fail open that refusal stayed invisible in production on
+    // 2026-10-03: the payment was created anyway and came back as a generic provider error instead
+    // of "below the minimum". Failures are logged now for the same reason.
+    const res = await fetch(`https://api.nowpayments.io/v1/min-amount?currency_from=${encodeURIComponent(coin)}&currency_to=eur&fiat_equivalent=eur`, { headers: { "x-api-key": key } });
     const text = await res.text();
-    let j; try { j = JSON.parse(text); } catch { return 0; }
-    const min = Number(j && (j.fiat_equivalent != null ? j.fiat_equivalent : j.min_amount));
-    if (!Number.isFinite(min) || min <= 0) return 0;
+    if (!res.ok) { console.error("min-amount lookup failed", res.status, String(text).slice(0, 300)); return 0; }
+    let j; try { j = JSON.parse(text); } catch { console.error("min-amount unreadable", String(text).slice(0, 300)); return 0; }
+    const data = (j && j.data) || j || {};
+    // Only the fiat figure can be compared with a EUR price. min_amount is denominated in the coin,
+    // so treating it as euros would refuse orders that are perfectly payable (0.0001 BTC is not 0.01
+    // EUR). Above a sanity ceiling the answer is a unit problem, not a minimum, so it is not used.
+    const min = Number(data.fiat_equivalent);
+    if (!Number.isFinite(min) || min <= 0 || min > 500) { console.error("min-amount unusable", String(text).slice(0, 300)); return 0; }
     minAmountCache[coin] = { at: Date.now(), min };
     return min;
-  } catch { return 0; }
+  } catch (e) { console.error("min-amount request failed", e && e.message); return 0; }
 }
 async function createNowPaymentsPayment(env, { amount, currency="eur", payCurrency, orderId, description }) {
   const key = env.NOWPAYMENTS_API_KEY;
@@ -321,12 +330,15 @@ async function createNowPaymentsPayment(env, { amount, currency="eur", payCurren
   if(!res.ok){
     console.error("NOWPayments payment error", res.status, text);
     const providerMsg = String((data && (data.message || data.error || data.msg)) || "").trim();
+    const providerCode = String((data && (data.code || data.statusCode)) || "").trim();
     const e = new Error(providerMsg || `NOWPayments error ${res.status}`);
     e.status = res.status;
     e.providerMessage = providerMsg;
-    // The vendor can also reject a small amount with its own wording (the check above only knows
-    // what the vendor last told us its minimum was), so recognise that answer too.
-    if (/minimum|too small|min[_ ]?amount|less than the min/i.test(providerMsg)) e.code = "AMOUNT_BELOW_MINIMUM";
+    // The vendor can also reject a small amount with its own wording (the check above only knows what
+    // the vendor last told us its minimum was), so recognise that answer too. Live wording on
+    // 2026-10-03 was 400 / AMOUNT_MINIMAL_ERROR / "Crypto amount 2.7e-7 is less than minimal", which
+    // the earlier patterns missed exactly because they all spelled out "minimum".
+    if (/minim|too small|min[_ ]?amount|less than the min/i.test(providerMsg) || /MINIMAL|AMOUNT_MIN/i.test(providerCode)) e.code = "AMOUNT_BELOW_MINIMUM";
     throw e;
   }
   return data;
@@ -2573,10 +2585,14 @@ async function handleInvoice(request, env){
     const belowMin = (e && e.code === "AMOUNT_BELOW_MINIMUM") || /below_minimum/.test(rawMsg);
     if (belowMin) {
       const min = Number((e && e.minimum) || 0);
-      const minText = min > 0 ? `\u20AC${min.toFixed(2)}` : "the provider's minimum";
       const coin = String((e && e.coin) || payCurrency || "crypto").toUpperCase();
+      // Two shapes, both honest: with the figure when the pre-flight knew it, and without it when
+      // only the provider's own refusal said so - never "its minimum for BTC is the minimum".
+      const sentence = min > 0
+        ? `The crypto provider cannot process a payment this small: its minimum for ${coin} is \u20AC${min.toFixed(2)}.`
+        : `The crypto provider cannot process a payment this small: the amount is below the provider's minimum for ${coin}.`;
       return json({
-        error: `The crypto provider cannot process a payment this small: its minimum for ${coin} is ${minText}. Nothing was charged and no payment was created, and the order is marked as failed in your account. Choose a coin with a lower minimum, a larger amount, or a promo code that covers it \u2014 orders of \u20AC15 and up are well above the minimum.`,
+        error: `${sentence} Nothing was charged and no payment was created, and the order is marked as failed in your account. Choose a coin with a lower minimum, a larger amount, or a promo code that covers it \u2014 orders of \u20AC15 and up are well above the minimum.`,
         code:"AMOUNT_BELOW_MINIMUM", orderId, purchaseId, minimum: min,
       }, 400, env, request);
     }
