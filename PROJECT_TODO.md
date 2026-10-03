@@ -488,7 +488,7 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
       surrogate-pair escape in the Worker, and a bogus allowlist entry — all four exit 1; the
       baseline exits 0. `_test-worker.mjs`'s non-ASCII signature fixture switched from an emoji to
       CJK text (`\u4e2d\u6587`) so the guard needs no exclusion for test data.
-- [x] **A Discord embed that Discord would have refused, found by measuring the payload (2026-10-03).**
+- [x] **A Discord embed that Discord would have refused, found by measuring the payload (2026-10-03, DEPLOYED).**
       `discordEmbed()` enforced every documented per-part limit (title 256, description 4000,
       field name 256, field value 1024, footer 2048, author 256, 25 fields) but never the **sum**,
       and the sum is the limit that bites: Discord rejects an embed whose title + description +
@@ -510,6 +510,16 @@ Managed through the installed `gh` CLI; secret values go in via stdin (`printf '
       with it; with the fix in place 418/0. All 9 guards green; `worker/src/index.js` sha256
       `1e20c4c48257b56f0b4524a5b7b2ece272fa82a4c47f0755b2cb3b71475c96ea`, 216 201 bytes (LF),
       0 non-ASCII.
+- [x] **Committed and pushed 2026-10-03: `1d75c79`** (`1d75c79f5f6d9d639df12a1991f0bc5f952d38b1`),
+      6 files. `Deploy aether-api worker` run `37136501254` green → worker version
+      `464837e0-912c-48e5-97ea-eda02f170ce0` (the guard logged "scanned 76 tracked text files",
+      "OK" before the deploy step); `Production checks (main)` run `37136501228` and
+      `pages-build-deployment` run `37136500832` green. Live after the deploy: `/api/health`
+      all-true (`email:true`, `emailProvider:"resend"`, `payments:true`, `ipnSignature:true`,
+      `discord:true`, `turnstile:true`, `db:true`), a signed-out real type still answers
+      `401 ACCOUNT_REQUIRED` (pricing still behind auth), `test_purchase_bot` still
+      `400 UNKNOWN_TYPE`, and `/terms` `/terms.html` `/privacy` `/cookies` `/imprint` all `200`.
+      All 15 Worker bindings survived.
 - [ ] MANUAL: the rendered Discord embed and the outgoing mail bodies still have not been seen by
       eye - both code paths are covered by the tests above, but the only way to confirm the actual
       rendering is a real payment (or a post to the operator's channel).
