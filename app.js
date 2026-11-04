@@ -42,7 +42,7 @@
   var repoUrl = repo ? "https://github.com/" + repo : "";
   var releasesUrl = repo ? repoUrl + "/releases" : "";
   var latestApi = repo ? "https://api.github.com/repos/" + repo + "/releases/latest" : "";
-  var fallbackVersion = String(config.versionFallback || "1.1.0").replace(/^v/i, "");
+  var fallbackVersion = String(config.versionFallback || "1.2.0").replace(/^v/i, "");
 
   var release = {
     version: "",

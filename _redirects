@@ -1,0 +1,3 @@
+# Cloudflare Pages serves /name from name.html automatically. Do not add 200
+# rewrites for those paths: Pages redirects the .html asset to the clean URL,
+# which makes a rewrite point straight back at itself.

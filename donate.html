@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Donate — Aether</title>
+  <meta name="description" content="Support Aether with crypto through NOWPayments. Choose an amount, write a short filtered message and preview the supporter card before checkout." />
+  <meta name="theme-color" content="#0A0C11" />
+  <meta name="color-scheme" content="dark" />
+  <link rel="canonical" href="https://get-aether.de/donate.html" />
+  <link rel="icon" href="assets/logo.png" type="image/png" />
+  <link rel="apple-touch-icon" href="assets/logo.png" />
+  <meta property="og:title" content="Support Aether — crypto only, through NOWPayments" />
+  <meta property="og:description" content="Crypto donations with a live message preview. Every paid message is filtered before it reaches the wall." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://get-aether.de/donate.html" />
+  <meta property="og:image" content="https://get-aether.de/assets/screenshots/home.png" />
+  <link rel="stylesheet" href="styles.css?v=23" />
+  <link rel="stylesheet" href="extras.css?v=2" />
+  <script>document.documentElement.classList.add("js", "motion-forced");</script>
+  <script src="config.js?v=24"></script>
+  <script src="maintenance.js?v=23" defer></script>
+  <script src="app.js?v=24" defer></script>
+  <script type="module" src="donate.js?v=2"></script>
+</head>
+<body class="donate-page">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="ambient" aria-hidden="true"></div>
+
+  <header class="topbar" id="topbar">
+    <div class="topbar-inner container">
+      <a class="brand" href="index.html" aria-label="Aether home">
+        <img src="assets/logo.png" alt="" width="24" height="24" />
+        <span class="brand-name">Aether</span>
+        <span class="brand-version" data-version>v1.2.0</span>
+      </a>
+
+      <button class="nav-toggle" id="navToggle" type="button" aria-label="Open navigation"
+              aria-expanded="false" aria-controls="siteNav">
+        <span></span><span></span><span></span>
+      </button>
+
+      <nav class="site-nav" id="siteNav" aria-label="Primary">
+        <a class="nav-tab" href="index.html">
+          <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M2.5 7.4 8 3l5.5 4.4V13H9.8V9.2H6.2V13H2.5z"/></svg>
+          <span>Home</span>
+        </a>
+        <a class="nav-tab" href="index.html#toolbox">
+          <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M2.5 2.5h4v4h-4zm7 0h4v4h-4zm-7 7h4v4h-4zm7 0h4v4h-4z"/></svg>
+          <span>Toolbox</span>
+        </a>
+        <a class="nav-tab" href="fastflags.html">
+          <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h10M3 8h10M3 12h10"/><circle cx="6" cy="4" r="1.4" fill="currentColor" stroke="none"/><circle cx="10" cy="8" r="1.4" fill="currentColor" stroke="none"/><circle cx="7" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg>
+          <span>FastFlags</span>
+        </a>
+        <a class="nav-tab" href="index.html#overlay">
+          <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3"><path d="m8 2.4 5.7 2.8L8 8 2.3 5.2zm-5.7 6L8 11.2l5.7-2.8M2.3 11.2 8 14l5.7-2.8"/></svg>
+          <span>Overlay</span>
+        </a>
+        <a class="nav-tab" href="get-script.html">
+          <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5.2 4.2-3 3.8 3 3.8m5.6-7.6 3 3.8-3 3.8"/></svg>
+          <span>Script</span>
+        </a>
+        <a class="nav-tab is-active" href="donate.html" aria-current="page">
+          <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M8 13.4S2.8 10.4 2.8 6.5A2.9 2.9 0 0 1 8 4.6a2.9 2.9 0 0 1 5.2 1.9C13.2 10.4 8 13.4 8 13.4Z"/></svg>
+          <span>Donate</span>
+        </a>
+        <a class="nav-tab" href="index.html#download">
+          <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8M5 7l3 3 3-3M2.5 13.5h11"/></svg>
+          <span>Download</span>
+        </a>
+      </nav>
+
+      <div class="top-actions">
+        <a class="github-link" href="#" data-github aria-label="Aether on GitHub">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.2a6.8 6.8 0 0 0-2.15 13.25c.34.06.46-.15.46-.33v-1.17c-1.9.4-2.3-.8-2.3-.8-.31-.8-.76-1.01-.76-1.01-.62-.42.05-.41.05-.41.68.05 1.04.7 1.04.7.61 1.04 1.6.74 1.99.56.06-.44.24-.74.43-.91-1.52-.17-3.12-.76-3.12-3.37 0-.74.27-1.35.7-1.83-.07-.17-.3-.87.07-1.81 0 0 .57-.18 1.86.7A6.5 6.5 0 0 1 8 3.9c.58 0 1.16.08 1.7.23 1.3-.88 1.86-.7 1.86-.7.38.94.14 1.64.07 1.81.44.48.7 1.09.7 1.83 0 2.62-1.6 3.2-3.12 3.37.24.21.46.63.46 1.27v1.88c0 .18.12.39.46.32A6.8 6.8 0 0 0 8 1.2Z"/></svg>
+          <span>GitHub</span>
+        </a>
+        <a class="btn btn-primary btn-sm" href="donate.html">
+          <span>Donate</span>
+          <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M8 13.4S2.8 10.4 2.8 6.5A2.9 2.9 0 0 1 8 4.6a2.9 2.9 0 0 1 5.2 1.9C13.2 10.4 8 13.4 8 13.4Z"/></svg>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="container donate-main">
+    <section class="page-hero donate-hero">
+      <p class="kicker"><span>EARLY BUILD</span> Support / Crypto only</p>
+      <h1>Leave a note.<br /><span>Keep it running.</span></h1>
+      <p class="lede">
+        Aether stays local-first and free. If it saves you a little time, you can leave a
+        crypto tip through NOWPayments, pick a filter for your message and see the card
+        before you pay. No account, no card data, no subscription.
+      </p>
+      <div class="badges">
+        <span class="badge badge-early">Early build</span>
+        <span class="badge">Crypto only</span>
+        <span class="badge">NOWPayments checkout</span>
+      </div>
+      <div class="early-strip">
+        <span class="status-dot"></span>
+        <p><strong>Expect rough edges.</strong> Checkout opens on NOWPayments. A message appears on the supporter wall only after the payment is confirmed by the IPN callback.</p>
+      </div>
+    </section>
+
+    <section class="section donation-section" id="donate-form">
+      <div class="donation-grid">
+        <form class="donation-form" id="donationForm" novalidate>
+          <div class="form-section-head">
+            <div>
+              <p class="kicker"><span>01</span> Your tip</p>
+              <h2>Make it yours.</h2>
+            </div>
+            <span class="status-pill is-quiet">Crypto</span>
+          </div>
+
+          <fieldset class="field amount-field">
+            <legend>Amount in USD</legend>
+            <div class="amount-row" id="amountPresets">
+              <button class="amount-chip" type="button" data-amount="3">$3</button>
+              <button class="amount-chip is-active" type="button" data-amount="5">$5</button>
+              <button class="amount-chip" type="button" data-amount="10">$10</button>
+              <button class="amount-chip" type="button" data-amount="25">$25</button>
+              <button class="amount-chip" type="button" data-amount="50">$50</button>
+              <button class="amount-chip" type="button" data-amount="100">$100</button>
+            </div>
+            <label class="custom-amount" for="customAmount">
+              <span>Or a custom amount</span>
+              <span class="amount-input-wrap"><span>$</span><input id="customAmount" name="customAmount" type="number" inputmode="decimal" min="3" max="500" step="0.01" value="5" /></span>
+            </label>
+            <p class="field-hint">Minimum $3, maximum $500, cents welcome. A checkout link is created for the exact amount; NOWPayments converts it to the coin you choose.</p>
+          </fieldset>
+
+          <div class="field-row">
+            <label class="field" for="donorName">
+              <span>Display name</span>
+              <input id="donorName" name="username" type="text" maxlength="24" autocomplete="nickname" placeholder="Your name or handle" />
+              <span class="field-hint">2–24 characters. Shown on the card.</span>
+            </label>
+            <label class="field" for="donorMessage">
+              <span>Message <span id="messageCounter" class="char-count">0 / 140</span></span>
+              <textarea id="donorMessage" name="message" maxlength="140" rows="3" placeholder="A short note for the wall"></textarea>
+              <span class="field-hint">HTML and links are removed; the server filters the final text.</span>
+            </label>
+          </div>
+
+          <fieldset class="field filter-field">
+            <legend>Message filter</legend>
+            <div class="filter-row filter-row-form" id="filterChoices">
+              <button class="filter-chip is-active" type="button" data-filter="plain">Clean</button>
+              <button class="filter-chip" type="button" data-filter="glow">Aether glow</button>
+              <button class="filter-chip" type="button" data-filter="sunset">Sunset</button>
+              <button class="filter-chip" type="button" data-filter="terminal">Terminal</button>
+            </div>
+            <input type="hidden" id="messageFilter" name="filter" value="plain" />
+            <p class="field-hint">The preview is the card style used on the supporter wall.</p>
+          </fieldset>
+
+          <label class="check-row" for="showOnWall">
+            <input id="showOnWall" name="showOnWall" type="checkbox" checked />
+            <span>Show my name and message on the supporter wall after confirmation.</span>
+          </label>
+
+          <label class="honeypot" for="company" aria-hidden="true">
+            Company
+            <input id="company" name="company" type="text" tabindex="-1" autocomplete="off" />
+          </label>
+
+          <div class="turnstile-wrap" id="turnstileWrap" hidden>
+            <div id="turnstile"></div>
+            <p class="field-hint">Protected by Cloudflare Turnstile.</p>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn-primary" id="donateSubmit" type="submit">
+              <span>Continue to crypto checkout</span>
+              <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M9 4l4 4-4 4"/></svg>
+            </button>
+            <span class="field-hint">You will finish on NOWPayments. Aether never sees your wallet or card details.</span>
+          </div>
+          <p class="donation-status" id="donationStatus" role="status" aria-live="polite"></p>
+        </form>
+
+        <aside class="donation-preview-panel" aria-label="Donation message preview">
+          <div class="preview-head">
+            <span>Live preview</span>
+            <span class="status-pill is-quiet">Wall card</span>
+          </div>
+          <article class="donation-card filter-plain" id="donationPreview">
+            <div class="donation-card-top">
+              <span class="donation-card-amount" id="previewAmount">$5</span>
+              <span class="donation-card-filter" id="previewFilter">CLEAN</span>
+            </div>
+            <div class="donation-card-avatar" aria-hidden="true">A</div>
+            <strong class="donation-card-name" id="previewName">Your name</strong>
+            <p class="donation-card-message" id="previewMessage">Keep Aether quiet, fast and free.</p>
+            <div class="donation-card-footer">
+              <span class="rank-pill rank-supporter" id="previewRank">Supporter</span>
+              <span>Verified after payment</span>
+            </div>
+          </article>
+          <p class="preview-note">This is a preview only. Nothing is public until NOWPayments confirms the payment.</p>
+          <div class="preview-policy">
+            <strong>Filter behaviour</strong>
+            <p>Links, HTML and control characters are removed. Messages are capped at 140 characters and held for moderation if they look abusive.</p>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="section rank-section" aria-labelledby="rankHeading">
+      <header class="section-head">
+        <div>
+          <p class="kicker"><span>02</span> Donor ranks</p>
+          <h2 id="rankHeading">Every tip moves the needle.</h2>
+        </div>
+        <p class="section-lede">Your rank is based on your total confirmed USD on the supporter wall. The badge appears after NOWPayments confirms the payment.</p>
+      </header>
+      <div class="rank-grid">
+        <article class="rank-card rank-card-supporter">
+          <span class="rank-pill rank-supporter">Supporter</span>
+          <strong>$3+</strong>
+          <p>Every tip keeps the lights on and the builds coming.</p>
+        </article>
+        <article class="rank-card rank-card-patron">
+          <span class="rank-pill rank-patron">Patron</span>
+          <strong>$10+</strong>
+          <p>A little further. Your name gets a warmer shade on the wall.</p>
+        </article>
+        <article class="rank-card rank-card-benefactor">
+          <span class="rank-pill rank-benefactor">Benefactor</span>
+          <strong>$25+</strong>
+          <p>Serious support for the launcher, the menu and the infrastructure.</p>
+        </article>
+        <article class="rank-card rank-card-guardian">
+          <span class="rank-pill rank-guardian">Guardian</span>
+          <strong>$50+</strong>
+          <p>Keeping releases steady and the donation path boringly reliable.</p>
+        </article>
+        <article class="rank-card rank-card-legend">
+          <span class="rank-pill rank-legend">Legend</span>
+          <strong>$100+</strong>
+          <p>The top shelf. Thank you for carrying the project.</p>
+        </article>
+      </div>
+      <p class="rank-note">Ranks use confirmed donations only and add up when you use the same display name. The amount shown on each card stays the tip amount; the badge reflects the donor's total.</p>
+    </section>
+
+    <section class="section supporter-section" id="supporterWall" hidden>
+      <header class="section-head">
+        <div>
+          <p class="kicker"><span>03</span> Supporter wall</p>
+          <h2>The people keeping the lights on.</h2>
+        </div>
+        <p class="section-lede">Confirmed crypto tips. Names and messages are shown only when the donor opted in.</p>
+      </header>
+      <div class="supporter-grid" id="supporterGrid"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner container">
+      <div class="footer-brand">
+        <img src="assets/logo.png" alt="" width="18" height="18" />
+        <span>Aether</span>
+        <span class="footer-version" data-version>v1.2.0</span>
+      </div>
+      <p>Crypto payments via NOWPayments. Not affiliated with or endorsed by Roblox Corporation.</p>
+      <nav class="footer-links" aria-label="Footer">
+        <a href="index.html">Home</a>
+        <a href="fastflags.html">FastFlags</a>
+        <a href="get-script.html">Script</a>
+        <a href="donate.html">Donate</a>
+        <a href="maintenance.html">Maintenance</a>
+        <a href="#top">Back to top</a>
+      </nav>
+    </div>
+  </footer>
+
+  <noscript>
+    <p class="noscript">Crypto checkout needs JavaScript. You can still inspect the FastFlag catalogue without it.</p>
+  </noscript>
+</body>
+</html>
