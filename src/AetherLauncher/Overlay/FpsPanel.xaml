@@ -1,0 +1,60 @@
+<UserControl x:Class="AetherLauncher.Overlay.FpsPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:AetherLauncher.Controls"
+             FontFamily="{DynamicResource UiFont}">
+    <StackPanel>
+
+        <Border Background="#141C29" BorderBrush="{DynamicResource BorderSoftBrush}"
+                BorderThickness="1" CornerRadius="7" Padding="9,6">
+            <TextBlock Style="{StaticResource Note}" Foreground="{DynamicResource TextDimBrush}" TextWrapping="Wrap"
+                       Text="Roblox only reads allowlisted flags since September 2025, and this cap is not on that list - your client may ignore it completely. Reports also mention rare crashes when joining or teleporting, so staying at or below 240 is safer. The Graphics switches are on the list and do work." />
+        </Border>
+
+        <WrapPanel x:Name="FpsChips" Margin="0,9,0,0">
+            <RadioButton Style="{StaticResource Chip}" GroupName="Fps" Content="Uncapped"
+                         Tag="10000" Checked="FrameRateChip_Checked" />
+            <RadioButton Style="{StaticResource Chip}" GroupName="Fps" Content="60"
+                         Tag="60" Checked="FrameRateChip_Checked" />
+            <RadioButton Style="{StaticResource Chip}" GroupName="Fps" Content="120"
+                         Tag="120" Checked="FrameRateChip_Checked" />
+            <RadioButton Style="{StaticResource Chip}" GroupName="Fps" Content="144"
+                         Tag="144" Checked="FrameRateChip_Checked" />
+            <RadioButton Style="{StaticResource Chip}" GroupName="Fps" Content="240"
+                         Tag="240" Checked="FrameRateChip_Checked" />
+        </WrapPanel>
+
+        <Grid Margin="0,1,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="Custom" Style="{StaticResource FieldLabel}"
+                       VerticalAlignment="Center" Margin="0,0,8,0" />
+            <TextBox Grid.Column="1" x:Name="CustomFpsBox" Style="{StaticResource InputBox}"
+                     MaxLength="5" ToolTip="Any value from 10 to 10000" />
+            <c:RippleButton Grid.Column="2" x:Name="ApplyButton" Content="Set"
+                            Style="{StaticResource ToolButton}" Margin="8,0,0,0" Click="ApplyCustom_Click" />
+        </Grid>
+
+        <Border x:Name="VanillaNote" Visibility="Collapsed" Background="#2A1E14"
+                BorderBrush="#4A3520" BorderThickness="1" CornerRadius="7"
+                Padding="9,6" Margin="0,10,0,0">
+            <TextBlock Style="{StaticResource Note}" Foreground="#E8C08A" TextWrapping="Wrap"
+                       Text="Vanilla mode is on: Aether leaves the client exactly as Roblox installed it, so nothing is written. Turn it off in the launcher's settings to use these switches." />
+        </Border>
+
+        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+            <c:RippleButton x:Name="RejoinButton" Content="Apply &amp; rejoin" Style="{StaticResource PlainButton}"
+                            Click="Rejoin_Click"
+                            ToolTip="Roblox reads the cap when it starts - this leaves the server and rejoins the place right away" />
+            <c:RippleButton x:Name="RestartButton" Content="Restart client" Style="{StaticResource GhostButton}"
+                            Margin="8,0,0,0" Click="Restart_Click"
+                            ToolTip="Close the client and start it again - always works, but you land on the desktop for a moment" />
+        </StackPanel>
+
+        <TextBlock x:Name="StatusLine" Style="{StaticResource Note}" Margin="0,9,0,0"
+                   Foreground="{DynamicResource TextFaintBrush}" TextWrapping="Wrap" Text="Ready." />
+    </StackPanel>
+</UserControl>

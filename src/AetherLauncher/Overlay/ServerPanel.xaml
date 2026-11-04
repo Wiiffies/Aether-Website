@@ -1,0 +1,38 @@
+<UserControl x:Class="AetherLauncher.Overlay.ServerPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:AetherLauncher.Controls"
+             FontFamily="{DynamicResource UiFont}">
+    <StackPanel>
+
+        <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap"
+                   Text="Roblox has no command to move a running client to another server - it needs a new join. This is the fast macro: Aether closes the running client first, then starts the new join immediately on a different public server. Expect the desktop for the few seconds Roblox takes to boot." />
+
+        <c:RippleButton x:Name="HopButton" Style="{StaticResource PrimaryButton}" Padding="14,8"
+                        Margin="0,10,0,0" HorizontalAlignment="Left" Click="Hop_Click"
+                        ToolTip="Leave this server now, then join a different one right away">
+            <StackPanel Orientation="Horizontal">
+                <c:IconImage Source="pack://application:,,,/Assets/ic-play.png" Width="12" Height="12"
+                             Tint="{DynamicResource WhiteBrush}" />
+                <TextBlock x:Name="HopLabel" Text="Leave &amp; rejoin" Margin="6,0,0,0" />
+            </StackPanel>
+        </c:RippleButton>
+
+        <WrapPanel Margin="0,8,0,0">
+            <c:RippleButton x:Name="RestartButton" Content="Restart client" Style="{StaticResource GhostButton}"
+                            Margin="0,0,6,6" Click="Restart_Click"
+                            ToolTip="Close the client and start it again - the only way to apply new flags" />
+            <c:RippleButton x:Name="GamePageButton" Content="Game page" Style="{StaticResource PlainButton}"
+                            Margin="0,0,6,6" Click="GamePage_Click" ToolTip="Open this place on roblox.com" />
+            <c:RippleButton x:Name="CopyLinkButton" Content="Copy link" Style="{StaticResource PlainButton}"
+                            Margin="0,0,6,6" Click="CopyLink_Click" ToolTip="Copy the game link to share" />
+        </WrapPanel>
+
+        <TextBlock x:Name="PlaceLine" Style="{StaticResource Note}" Margin="0,2,0,0"
+                   Foreground="{DynamicResource TextFaintBrush}" TextWrapping="Wrap" Text="No place known yet." />
+
+        <TextBlock x:Name="StatusLine" Style="{StaticResource Note}" Margin="0,8,0,0"
+                   Foreground="{DynamicResource TextFaintBrush}" TextWrapping="Wrap"
+                   Text="Each hop skips the server you are on. Private servers have only one server, so they rejoin it. Restart client remains the separate hard restart for new FastFlags." />
+    </StackPanel>
+</UserControl>

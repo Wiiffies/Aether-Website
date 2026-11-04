@@ -1,0 +1,94 @@
+<UserControl x:Class="AetherLauncher.Overlay.HubPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:AetherLauncher.Controls"
+             FontFamily="{DynamicResource UiFont}">
+    <StackPanel>
+
+        <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap"
+                   Text="Drag any panel anywhere - each one remembers its own place. The menu itself stays until you move it." />
+
+        <TextBlock Text="PANELS" Style="{StaticResource SectionHeader}" Margin="0,12,0,0" />
+        <StackPanel x:Name="PanelRows" Margin="0,6,0,0" />
+
+        <Border Height="1" Background="{DynamicResource BorderSoftBrush}" Margin="0,10,0,0" />
+
+        <TextBlock Text="MENU KEY" Style="{StaticResource SectionHeader}" Margin="0,10,0,0" />
+        <TextBlock Style="{StaticResource Note}" Margin="0,3,0,0" TextWrapping="Wrap"
+                   Text="Opens and closes every panel over Roblox. A single key such as Delete (Entf) works too." />
+
+        <Grid Margin="0,8,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Border Grid.Column="0" Style="{StaticResource Badge}" VerticalAlignment="Center">
+                <TextBlock x:Name="KeyBadge" Style="{StaticResource BadgeText}"
+                           FontFamily="{StaticResource MonoFont}" />
+            </Border>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                <c:RippleButton x:Name="ChangeKeyButton" Content="Change" Style="{StaticResource ToolButton}"
+                                Click="ChangeKey_Click" ToolTip="Press the new combination right after clicking" />
+                <c:RippleButton Content="Reset" Style="{StaticResource ToolButton}" Margin="6,0,0,0"
+                                Click="ResetKey_Click" ToolTip="Back to Delete (Entf)" />
+            </StackPanel>
+        </Grid>
+
+        <WrapPanel Margin="0,7,0,0">
+            <c:RippleButton Content="Delete (Entf)" Style="{StaticResource ToolButton}" Margin="0,0,6,6"
+                            Click="PresetDelete_Click" ToolTip="One key, nothing to hold" />
+            <c:RippleButton Content="Insert" Style="{StaticResource ToolButton}" Margin="0,0,6,6"
+                            Click="PresetInsert_Click" ToolTip="One key, nothing to hold" />
+            <c:RippleButton Content="F8" Style="{StaticResource ToolButton}" Margin="0,0,6,6"
+                            Click="PresetF8_Click" ToolTip="Function keys never type themselves" />
+        </WrapPanel>
+
+        <TextBlock x:Name="KeyLine" Style="{StaticResource Note}" Margin="0,2,0,0"
+                   Foreground="{DynamicResource TextFaintBrush}" TextWrapping="Wrap"
+                   Text="Click Change, then press the new combination." />
+
+        <Border Height="1" Background="{DynamicResource BorderSoftBrush}" Margin="0,10,0,0" />
+
+        <TextBlock Text="WINDOWS" Style="{StaticResource SectionHeader}" Margin="0,10,0,0" />
+        <Grid Margin="0,7,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                <TextBlock Text="Hide when another program is in front" FontSize="11" TextWrapping="Wrap" />
+                <TextBlock Style="{StaticResource Note}" Margin="0,2,0,0" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFaintBrush}"
+                           Text="So the panels never cover your browser, the launcher or Discord - and come back when you return to the game." />
+            </StackPanel>
+            <CheckBox Grid.Column="1" x:Name="NoOverlapSwitch" Style="{StaticResource Switch}"
+                      VerticalAlignment="Top" Checked="NoOverlap_Changed" Unchecked="NoOverlap_Changed" />
+        </Grid>
+
+        <TextBlock Text="OPACITY" Style="{StaticResource SectionHeader}" Margin="0,12,0,0" />
+        <TextBlock Style="{StaticResource Note}" Margin="0,3,0,0" TextWrapping="Wrap"
+                   Text="How much of the game stays visible through the panels. Applies to every plate at once." />
+        <WrapPanel x:Name="OpacityChips" Margin="0,7,0,0">
+            <RadioButton Style="{StaticResource Chip}" GroupName="OverlayOpacity" Content="100%" Tag="100"
+                         Checked="Opacity_Checked" ToolTip="Fully opaque" />
+            <RadioButton Style="{StaticResource Chip}" GroupName="OverlayOpacity" Content="90%" Tag="90"
+                         Checked="Opacity_Checked" />
+            <RadioButton Style="{StaticResource Chip}" GroupName="OverlayOpacity" Content="80%" Tag="80"
+                         Checked="Opacity_Checked" />
+            <RadioButton Style="{StaticResource Chip}" GroupName="OverlayOpacity" Content="70%" Tag="70"
+                         Checked="Opacity_Checked" ToolTip="Still readable, plenty of game visible" />
+        </WrapPanel>
+
+        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+            <c:RippleButton Content="Open Aether" Style="{StaticResource GhostButton}"
+                            Click="OpenLauncher_Click" ToolTip="Bring the launcher to the front" />
+            <c:RippleButton Content="Hide all" Style="{StaticResource PlainButton}" Margin="8,0,0,0"
+                            Click="Hide_Click" ToolTip="Everything away - the menu key brings it back" />
+            <c:RippleButton Content="Reset layout" Style="{StaticResource PlainButton}" Margin="8,0,0,0"
+                            Click="ResetLayout_Click" ToolTip="Put every panel back where it started" />
+        </StackPanel>
+
+        <TextBlock x:Name="StatusLine" Style="{StaticResource Note}" Margin="0,8,0,0"
+                   Foreground="{DynamicResource TextFaintBrush}" TextWrapping="Wrap" Text="Ready." />
+    </StackPanel>
+</UserControl>

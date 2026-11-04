@@ -1,0 +1,74 @@
+<UserControl x:Class="AetherLauncher.Overlay.AntiAfkPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:AetherLauncher.Controls"
+             FontFamily="{DynamicResource UiFont}">
+    <StackPanel>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                <TextBlock Text="Anti-AFK" FontSize="11" />
+                <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap" Margin="0,2,0,0"
+                           Text="Roblox drops a connection after about 20 minutes without input. Each nudge brings the game forward for a second, taps one key, then minimizes it again." />
+            </StackPanel>
+            <CheckBox Grid.Column="1" x:Name="EnabledSwitch" Style="{StaticResource Switch}"
+                      VerticalAlignment="Top" Checked="Enabled_Changed" Unchecked="Enabled_Changed" />
+        </Grid>
+
+        <StackPanel x:Name="Settings" Margin="0,2,0,0">
+            <TextBlock Text="EVERY" Style="{StaticResource SectionHeader}" Margin="0,10,0,0" />
+            <WrapPanel x:Name="IntervalChips" Margin="0,6,0,0">
+                <RadioButton Style="{StaticResource Chip}" GroupName="AfkInterval" Content="1 min"
+                             Tag="60" Checked="Interval_Checked" />
+                <RadioButton Style="{StaticResource Chip}" GroupName="AfkInterval" Content="2 min"
+                             Tag="120" Checked="Interval_Checked" />
+                <RadioButton Style="{StaticResource Chip}" GroupName="AfkInterval" Content="5 min"
+                             Tag="300" Checked="Interval_Checked" />
+                <RadioButton Style="{StaticResource Chip}" GroupName="AfkInterval" Content="10 min"
+                             Tag="600" Checked="Interval_Checked" />
+            </WrapPanel>
+
+            <Grid x:Name="KeyRow" Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Style="{StaticResource Badge}" VerticalAlignment="Center">
+                    <TextBlock x:Name="KeyBadge" Style="{StaticResource BadgeText}"
+                               FontFamily="{StaticResource MonoFont}" />
+                </Border>
+                <c:RippleButton Grid.Column="1" Content="Change" Style="{StaticResource ToolButton}"
+                                HorizontalAlignment="Right" Click="ChangeKey_Click"
+                                ToolTip="Press the key you want tapped" />
+            </Grid>
+
+            <Border Margin="0,10,0,0" Padding="9,0,0,0" BorderThickness="2,0,0,0"
+                    BorderBrush="{DynamicResource AccentBrush}">
+                <TextBlock Style="{StaticResource Note}" Foreground="{DynamicResource TextFaintBrush}"
+                           TextWrapping="Wrap"
+                           Text="This is a real input pulse: the game comes to the front for about a second, then goes back. If Roblox already has the focus, Aether only taps the key and leaves it there." />
+            </Border>
+
+            <TextBlock Style="{StaticResource Note}" Foreground="{DynamicResource TextFaintBrush}"
+                       TextWrapping="Wrap" Margin="0,8,0,0"
+                       Text="Pick a key that does nothing important in your game. F8 is the default because it does not move the character." />
+        </StackPanel>
+
+        <WrapPanel Margin="0,12,0,0">
+            <c:RippleButton x:Name="NudgeButton" Content="Nudge now" Style="{StaticResource PlainButton}"
+                            Margin="0,0,6,6" Click="NudgeNow_Click"
+                            ToolTip="Try it right away - Roblox pops up for about a second, takes the tap, and hides again" />
+            <c:RippleButton x:Name="SelfCheckButton" Content="Self-check input" Style="{StaticResource PlainButton}"
+                            Margin="0,0,6,6" Click="SelfCheck_Click"
+                            ToolTip="Moves the pointer two pixels and back - proves Windows accepts Aether's input" />
+        </WrapPanel>
+
+        <TextBlock x:Name="StatusLine" Style="{StaticResource Note}" Margin="0,6,0,0"
+                   Foreground="{DynamicResource TextFaintBrush}" TextWrapping="Wrap"
+                   Text="Off - nothing is being sent." />
+    </StackPanel>
+</UserControl>

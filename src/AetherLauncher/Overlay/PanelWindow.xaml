@@ -1,0 +1,61 @@
+<Window x:Class="AetherLauncher.Overlay.PanelWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="clr-namespace:AetherLauncher.Controls"
+        Title="Aether Overlay" Width="348" SizeToContent="Height"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowInTaskbar="False" ShowActivated="False" ResizeMode="NoResize"
+        WindowStartupLocation="Manual" FontFamily="{DynamicResource UiFont}"
+        TextOptions.TextFormattingMode="Display" UseLayoutRounding="True">
+
+    <Grid>
+    <!-- Leichter Schein hinter der Platte, nur beim Ziehen sichtbar. Kein Weichzeichner:
+         ein DropShadowEffect würde die transparenten Fenster teuer machen. -->
+    <Border x:Name="Lift" CornerRadius="15" Margin="-4" BorderThickness="1.5"
+            BorderBrush="{DynamicResource AccentBrush}" Opacity="0" IsHitTestVisible="False" />
+
+    <Border x:Name="Card" CornerRadius="12" Background="{DynamicResource OverlayCardBrush}" BorderBrush="{DynamicResource OverlayBorderBrush}"
+            BorderThickness="1" Opacity="0" RenderTransformOrigin="0.5,0.5">
+        <Border.RenderTransform>
+            <TransformGroup>
+                <ScaleTransform x:Name="CardScale" ScaleX="1" ScaleY="1" />
+                <TranslateTransform x:Name="CardShift" />
+            </TransformGroup>
+        </Border.RenderTransform>
+
+        <StackPanel>
+            <!-- Kopfleiste: zugleich Ziehfläche. Die Lage wird beim Loslassen gemerkt. -->
+            <Border x:Name="Header" CornerRadius="11,11,0,0" Background="{DynamicResource OverlayHeaderBrush}" Padding="12,8"
+                    Cursor="SizeAll"
+                    MouseLeftButtonDown="Header_MouseLeftButtonDown"
+                    MouseMove="Header_MouseMove"
+                    MouseLeftButtonUp="Header_MouseLeftButtonUp">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                        <c:RippleButton Content="⌖" Style="{StaticResource IconButton}" Width="22" Height="22"
+                                        Click="ResetPosition_Click" ToolTip="Back over the game" PressScale="0.88" />
+                        <c:RippleButton Content="✕" Style="{StaticResource IconButton}" Width="22" Height="22"
+                                        Margin="4,0,0,0" Click="Close_Click" ToolTip="Hide this panel" PressScale="0.88" />
+                    </StackPanel>
+                    <StackPanel Margin="0,0,8,0">
+                        <StackPanel Orientation="Horizontal">
+                            <Image Source="pack://application:,,,/Assets/logo.png" Width="13" Height="13"
+                                   RenderOptions.BitmapScalingMode="HighQuality" VerticalAlignment="Center" />
+                            <TextBlock x:Name="TitleText" Style="{StaticResource SectionHeader}"
+                                       Margin="6,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock x:Name="HintText" Style="{StaticResource Note}"
+                                   Foreground="{DynamicResource TextFaintBrush}"
+                                   Margin="0,2,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <!-- Der Rumpf rollt, wenn eine Platte zu hoch würde - so bleibt sie immer im Bild. -->
+            <ScrollViewer MaxHeight="560" VerticalScrollBarVisibility="Auto" c:SmoothScroll.Enabled="True">
+                <ContentPresenter x:Name="BodyHost" Margin="12,10,12,12" />
+            </ScrollViewer>
+        </StackPanel>
+    </Border>
+    </Grid>
+</Window>

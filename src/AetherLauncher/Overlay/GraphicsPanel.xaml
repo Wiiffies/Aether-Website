@@ -1,0 +1,92 @@
+<UserControl x:Class="AetherLauncher.Overlay.GraphicsPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:AetherLauncher.Controls"
+             FontFamily="{DynamicResource UiFont}">
+    <StackPanel>
+
+        <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap"
+                   Text="On Roblox' allowlist - the client still reads these." />
+
+        <Grid Margin="0,9,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="82" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="Quality" Style="{StaticResource FieldLabel}"
+                       VerticalAlignment="Center" Margin="0" />
+            <WrapPanel Grid.Column="1" x:Name="QualityChips">
+                <RadioButton Style="{StaticResource Chip}" GroupName="Quality" Content="Lowest"
+                             Tag="1" Checked="QualityChip_Checked" />
+                <RadioButton Style="{StaticResource Chip}" GroupName="Quality" Content="Highest"
+                             Tag="21" Checked="QualityChip_Checked" />
+            </WrapPanel>
+        </Grid>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="82" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="Textures" Style="{StaticResource FieldLabel}"
+                       VerticalAlignment="Center" Margin="0" />
+            <WrapPanel Grid.Column="1" x:Name="TextureChips">
+                <RadioButton Style="{StaticResource Chip}" GroupName="Texture" Content="Fast"
+                             Tag="0" Checked="TextureChip_Checked" ToolTip="Coarse textures - video memory back" />
+                <RadioButton Style="{StaticResource Chip}" GroupName="Texture" Content="Sharp"
+                             Tag="3" Checked="TextureChip_Checked" ToolTip="Full texture quality" />
+            </WrapPanel>
+        </Grid>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="82" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="Anti-aliasing" Style="{StaticResource FieldLabel}"
+                       VerticalAlignment="Center" Margin="0" />
+            <WrapPanel Grid.Column="1" x:Name="MsaaChips">
+                <RadioButton Style="{StaticResource Chip}" GroupName="Msaa" Content="Off"
+                             Tag="1" Checked="MsaaChip_Checked" ToolTip="One MSAA sample" />
+                <RadioButton Style="{StaticResource Chip}" GroupName="Msaa" Content="2×"
+                             Tag="2" Checked="MsaaChip_Checked" />
+                <RadioButton Style="{StaticResource Chip}" GroupName="Msaa" Content="4×"
+                             Tag="4" Checked="MsaaChip_Checked" ToolTip="Smoothest edges, most work" />
+            </WrapPanel>
+        </Grid>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="82" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="Grass" Style="{StaticResource FieldLabel}"
+                       VerticalAlignment="Center" Margin="0" />
+            <WrapPanel Grid.Column="1" x:Name="GrassChips">
+                <RadioButton Style="{StaticResource Chip}" GroupName="Grass" Content="On"
+                             Tag="on" Checked="GrassChip_Checked" />
+                <RadioButton Style="{StaticResource Chip}" GroupName="Grass" Content="Off"
+                             Tag="off" Checked="GrassChip_Checked" ToolTip="No grass at all" />
+            </WrapPanel>
+        </Grid>
+
+        <Border x:Name="VanillaNote" Visibility="Collapsed" Background="#2A1E14"
+                BorderBrush="#4A3520" BorderThickness="1" CornerRadius="7"
+                Padding="9,6" Margin="0,10,0,0">
+            <TextBlock Style="{StaticResource Note}" Foreground="#E8C08A" TextWrapping="Wrap"
+                       Text="Vanilla mode is on: Aether leaves the client exactly as Roblox installed it, so nothing is written. Turn it off in the launcher's settings to use these switches." />
+        </Border>
+
+        <WrapPanel Margin="0,10,0,0">
+            <c:RippleButton x:Name="RejoinButton" Content="Apply &amp; rejoin" Style="{StaticResource PlainButton}"
+                            Click="Rejoin_Click"
+                            ToolTip="Roblox reads these at start - this leaves the server and rejoins the place right away" />
+            <c:RippleButton x:Name="RestartButton" Content="Restart client" Style="{StaticResource GhostButton}"
+                            Margin="8,0,0,0" Click="Restart_Click"
+                            ToolTip="Close and start the client again - the safe way for graphics changes" />
+        </WrapPanel>
+
+        <TextBlock x:Name="StatusLine" Style="{StaticResource Note}" Margin="0,9,0,0"
+                   Foreground="{DynamicResource TextFaintBrush}" TextWrapping="Wrap" Text="Ready." />
+    </StackPanel>
+</UserControl>

@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>AetherLauncher</AssemblyName>
+    <RootNamespace>AetherLauncher</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.1.0</Version>
+    <Product>Aether Launcher</Product>
+    <Description>Open-Source Roblox-Launcher mit Kontomanager, Multi-Instanz-Start und FastFlags-Editor.</Description>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
+    <ApplicationIcon>Assets\aether.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <!-- Release ohne Symbole: keine .pdb mit Klassennamen und Zeilennummern im Download. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Icons und Logo aus dem Aether-Hub-Projekt (Lucide, ISC/MIT - siehe Assets/ICONS-LICENSE.txt) -->
+    <Resource Include="Assets\*.png" />
+    <!-- Zeigerpfeil der Anwendung, erzeugt von tools/make-cursor.ps1 -->
+    <Resource Include="Assets\*.cur" />
+    <None Include="Assets\ICONS-LICENSE.txt" />
+  </ItemGroup>
+
+  <!-- Der WPF-SDK-Satz an impliziten Usings ist schmaler als der des Basiss-SDK. -->
+  <ItemGroup>
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+    <Using Include="System.Diagnostics" />
+    <Using Include="System.Text" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
+  </ItemGroup>
+
+</Project>
