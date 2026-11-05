@@ -1,0 +1,22 @@
+{
+  "name": "aether-website",
+  "private": true,
+  "version": "1.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler pages dev . --port 8788",
+    "deploy": "wrangler pages deploy . --project-name aether-site",
+    "deploy:worker": "wrangler deploy --config wrangler.worker.toml",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@nowpaymentsio/nowpayments-sdk-nodejs": "0.3.0"
+  },
+  "devDependencies": {
+    "wrangler": "4.157.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "workerd@1.20261103.1": true
+  }
+}

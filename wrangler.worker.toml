@@ -1,0 +1,35 @@
+# Cloudflare Worker just for the donation API. The static site stays on GitHub
+# Pages, so this Worker owns only /api/donations* and the NOWPayments IPN path.
+#
+# Create the KV namespace first:
+#   npx wrangler kv namespace create DONATIONS
+# Then put the returned id in the binding below.
+#
+# Deploy:
+#   npx wrangler deploy --config wrangler.worker.toml
+#
+# Secrets (never in this file):
+#   npx wrangler secret put NOWPAYMENTS_API_KEY --config wrangler.worker.toml
+#   npx wrangler secret put NOWPAYMENTS_IPN_SECRET --config wrangler.worker.toml
+#   npx wrangler secret put TURNSTILE_SECRET_KEY --config wrangler.worker.toml
+
+name = "aether-donations"
+account_id = "e83c68e5e26e3e9096542df702331096"
+main = "worker/index.js"
+compatibility_date = "2026-11-04"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+routes = [
+  { pattern = "get-aether.de/api/donations*", zone_name = "get-aether.de" },
+  { pattern = "get-aether.de/api/nowpayments/ipn*", zone_name = "get-aether.de" }
+]
+
+[vars]
+PUBLIC_ORIGIN = "https://get-aether.de"
+# Set this to "true" only after donations.turnstileSiteKey is set in config.js.
+REQUIRE_TURNSTILE = "false"
+
+# [[kv_namespaces]]
+# binding = "DONATIONS"
+# id = "replace-with-the-kv-namespace-id"

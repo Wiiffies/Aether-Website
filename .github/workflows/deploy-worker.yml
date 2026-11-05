@@ -1,0 +1,114 @@
+name: Deploy donation Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "worker/**"
+      - "functions/**"
+      - "moderation.js"
+      - "donation-ranks.js"
+      - "wrangler.worker.toml"
+      - "package.json"
+      - ".github/workflows/deploy-worker.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: donation-worker
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: "e83c68e5e26e3e9096542df702331096"
+      NOWPAYMENTS_API_KEY: ${{ secrets.NOWPAYMENTS_API_KEY }}
+      NOWPAYMENTS_IPN_SECRET: ${{ secrets.NOWPAYMENTS_IPN_SECRET }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Test donation code
+        run: npm test
+
+      - name: Ensure donations KV namespace
+        id: kv
+        run: |
+          set -euo pipefail
+          node --input-type=module - <<'NODE'
+          import fs from "node:fs";
+
+          const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const token = process.env.CLOUDFLARE_API_TOKEN;
+          const base = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces`;
+          const headers = { Authorization: `Bearer ${token}` };
+
+          const listed = await (await fetch(`${base}?per_page=100`, { headers })).json();
+          if (!listed.success) throw new Error(JSON.stringify(listed.errors));
+
+          let namespace = (listed.result || []).find(
+            (item) => item.title === "aether-donations" || item.title === "DONATIONS"
+          );
+
+          if (!namespace) {
+            const created = await (await fetch(base, {
+              method: "POST",
+              headers: { ...headers, "Content-Type": "application/json" },
+              body: JSON.stringify({ title: "aether-donations" })
+            })).json();
+            if (!created.success) throw new Error(JSON.stringify(created.errors));
+            namespace = created.result;
+          }
+
+          console.log(`Using KV namespace ${namespace.id}`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `id=${namespace.id}\n`);
+          NODE
+
+      - name: Add KV binding to deploy config
+        env:
+          KV_ID: ${{ steps.kv.outputs.id }}
+        run: |
+          set -euo pipefail
+          node --input-type=module - <<'NODE'
+          import fs from "node:fs";
+
+          const config = fs.readFileSync("wrangler.worker.toml", "utf8");
+          const binding = `\n[[kv_namespaces]]\nbinding = "DONATIONS"\nid = "${process.env.KV_ID}"\n`;
+          fs.writeFileSync("wrangler.deploy.toml", config + binding);
+          NODE
+
+      - name: Deploy Worker
+        run: npx wrangler deploy --config wrangler.deploy.toml
+
+      - name: Set NOWPayments secrets
+        env:
+          NOWPAYMENTS_API_KEY: ${{ secrets.NOWPAYMENTS_API_KEY }}
+          NOWPAYMENTS_IPN_SECRET: ${{ secrets.NOWPAYMENTS_IPN_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -n "${NOWPAYMENTS_API_KEY}" ]; then
+            printf '%s' "$NOWPAYMENTS_API_KEY" | npx wrangler secret put NOWPAYMENTS_API_KEY --config wrangler.deploy.toml
+          else
+            echo "::warning::NOWPAYMENTS_API_KEY is missing; checkout will return 503."
+          fi
+          if [ -n "${NOWPAYMENTS_IPN_SECRET}" ]; then
+            printf '%s' "$NOWPAYMENTS_IPN_SECRET" | npx wrangler secret put NOWPAYMENTS_IPN_SECRET --config wrangler.deploy.toml
+          else
+            echo "::warning::NOWPAYMENTS_IPN_SECRET is missing; confirmed donations will not appear on the wall."
+          fi
+
+      - name: Show configured Worker secret names
+        run: npx wrangler secret list --config wrangler.deploy.toml
