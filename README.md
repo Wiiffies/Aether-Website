@@ -80,7 +80,7 @@ dotnet build src/AetherLauncher/AetherLauncher.csproj -c Release
 Build a single self-contained executable:
 
 ```bash
-dotnet publish src/AetherLauncher/AetherLauncher.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true
+dotnet publish src/AetherLauncher/AetherLauncher.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
 ```
 
 ## Usage
