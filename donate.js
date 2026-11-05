@@ -1,4 +1,5 @@
 import { rankForAmount } from "./donation-ranks.js?v=1";
+import { censorText } from "./moderation.js?v=1";
 
 (function () {
   "use strict";
@@ -54,7 +55,7 @@ import { rankForAmount } from "./donation-ranks.js?v=1";
   }
 
   function cleanMessage(value, max) {
-    return String(value == null ? "" : value)
+    var text = String(value == null ? "" : value)
       .replace(/<[^>]*>/g, " ")
       .replace(/https?:\/\/\S+/gi, " ")
       .replace(/www\.\S+/gi, " ")
@@ -62,6 +63,7 @@ import { rankForAmount } from "./donation-ranks.js?v=1";
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, max);
+    return censorText(text);
   }
 
   function filterClass(value) {
@@ -99,7 +101,7 @@ import { rankForAmount } from "./donation-ranks.js?v=1";
 
   function updatePreview() {
     var amount = amountValue();
-    var name = cleanLine(elements.name && elements.name.value, 24) || "Your name";
+    var name = censorText(cleanLine(elements.name && elements.name.value, 24)) || "Your name";
     var message = cleanMessage(elements.message && elements.message.value, 140) || "Keep Aether quiet, fast and free.";
     var filter = filterClass(state.filter);
 
@@ -310,9 +312,9 @@ import { rankForAmount } from "./donation-ranks.js?v=1";
       head.appendChild(amount);
       head.appendChild(rankEl);
       var name = document.createElement("strong");
-      name.textContent = donation.username || "Anonymous";
+      name.textContent = censorText(donation.username || "Anonymous");
       var message = document.createElement("p");
-      message.textContent = donation.message || "Thanks for keeping Aether running.";
+      message.textContent = censorText(donation.message || "Thanks for keeping Aether running.");
       card.appendChild(head);
       card.appendChild(name);
       card.appendChild(message);
