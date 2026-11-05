@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without the leading v, e.g. 1.2.0"
+        required: true
+        default: "1.2.0"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build single-file package
+        shell: pwsh
+        run: |
+          $version = if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            "${{ inputs.version }}"
+          } else {
+            $env:GITHUB_REF_NAME.TrimStart("v")
+          }
+
+          ./tools/build-release.ps1 -Version $version
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            "${{ inputs.version }}"
+          } else {
+            $env:GITHUB_REF_NAME.TrimStart("v")
+          }
+          $tag = "v$version"
+
+          $zip = Get-ChildItem dist/*.zip | Select-Object -First 1
+          $sha = Get-ChildItem dist/*.zip.sha256 | Select-Object -First 1
+          if (-not $zip -or -not $sha) { throw "The build produced no ZIP or checksum." }
+
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag $zip.FullName $sha.FullName --title "Aether $tag" --generate-notes
+          } else {
+            gh release upload $tag $zip.FullName $sha.FullName --clobber
+          }

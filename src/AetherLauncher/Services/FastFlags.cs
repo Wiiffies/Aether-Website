@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using AetherLauncher.Infrastructure;
 using AetherLauncher.Models;
 
@@ -299,6 +300,121 @@ public static class FastFlags
             "DFIntConnectionMTUSize", "1200"),
         new("Standard network packets", "Back to MTU 1500, the Windows default.", NetworkGroup,
             "DFIntConnectionMTUSize", "1500"),
+
+        // --- Weitere Bildraten und Qualitätsstufen ---
+        new("Cap the frame rate at 75", "A middle step for 75 Hz screens and older laptops.", FrameRateGroup,
+            "DFIntTaskSchedulerTargetFps", "75"),
+        new("Cap the frame rate at 120", "The usual choice for a 120 Hz screen.", FrameRateGroup,
+            "DFIntTaskSchedulerTargetFps", "120"),
+        new("Cap the frame rate at 200", "For 200 Hz screens - above the 240 warning line only when the GPU can keep up.", FrameRateGroup,
+            "DFIntTaskSchedulerTargetFps", "200"),
+        new("Graphics level 2", "One step above the lowest quality - still very cheap.", GraphicsGroup,
+            QualityFlag, "2") { Allowlisted = true },
+        new("Graphics level 3", "A small step up from the lowest quality.", GraphicsGroup,
+            QualityFlag, "3") { Allowlisted = true },
+        new("Graphics level 4", "Low quality with a little more distance detail.", GraphicsGroup,
+            QualityFlag, "4") { Allowlisted = true },
+        new("Graphics level 7", "Lower-middle quality for older hardware.", GraphicsGroup,
+            QualityFlag, "7") { Allowlisted = true },
+        new("Graphics level 8", "A balanced low setting.", GraphicsGroup,
+            QualityFlag, "8") { Allowlisted = true },
+        new("Graphics level 12", "Slightly above the middle of the quality range.", GraphicsGroup,
+            QualityFlag, "12") { Allowlisted = true },
+        new("Graphics level 16", "High quality without the top few expensive extras.", GraphicsGroup,
+            QualityFlag, "16") { Allowlisted = true },
+        new("Graphics level 18", "Very high quality for a strong GPU.", GraphicsGroup,
+            QualityFlag, "18") { Allowlisted = true },
+        new("Graphics level 20", "One step below the maximum quality.", GraphicsGroup,
+            QualityFlag, "20") { Allowlisted = true },
+        new("Grass draw distance 100", "Only grass right under the camera - the most aggressive grass saving.", GraphicsGroup,
+            "FIntFRMMaxGrassDistance", "100") { Allowlisted = true },
+        new("Grass draw distance 500", "Grass a little farther out than the short setting.", GraphicsGroup,
+            "FIntFRMMaxGrassDistance", "500") { Allowlisted = true },
+        new("Grass draw distance 1000", "Keeps a useful ring of grass without filling the whole view.", GraphicsGroup,
+            "FIntFRMMaxGrassDistance", "1000") { Allowlisted = true },
+
+        // --- Mittlere CSG-Distanzen ---
+        new("Distant meshes: medium detail", "A middle level-of-detail range for maps with far-away unions.", DetailGroup, new[]
+        {
+            new KeyValuePair<string, string>("DFIntCSGLevelOfDetailSwitchingDistance", "500"),
+            new KeyValuePair<string, string>("DFIntCSGLevelOfDetailSwitchingDistanceL12", "1000"),
+            new KeyValuePair<string, string>("DFIntCSGLevelOfDetailSwitchingDistanceL23", "1500"),
+            new KeyValuePair<string, string>("DFIntCSGLevelOfDetailSwitchingDistanceL34", "2000"),
+        }) { Allowlisted = true },
+
+        // --- Mehr Stufen für die bestehenden, geprüften Flags ---
+        new("Cap the frame rate at 48", "For very weak hardware or a stable cinematic pace.", FrameRateGroup,
+            "DFIntTaskSchedulerTargetFps", "48"),
+        new("Cap the frame rate at 72", "A small step above 60 for 72 Hz panels.", FrameRateGroup,
+            "DFIntTaskSchedulerTargetFps", "72"),
+        new("Cap the frame rate at 100", "For 100 Hz screens and laptops that cannot hold 120.", FrameRateGroup,
+            "DFIntTaskSchedulerTargetFps", "100"),
+        new("Cap the frame rate at 160", "For 160 Hz screens - below the 240 warning line.", FrameRateGroup,
+            "DFIntTaskSchedulerTargetFps", "160"),
+        new("Graphics level 6", "Low quality with a little more headroom than level 5.", GraphicsGroup,
+            QualityFlag, "6") { Allowlisted = true },
+        new("Graphics level 9", "Just below the balanced level 10.", GraphicsGroup,
+            QualityFlag, "9") { Allowlisted = true },
+        new("Graphics level 11", "Just above the balanced level 10.", GraphicsGroup,
+            QualityFlag, "11") { Allowlisted = true },
+        new("Graphics level 13", "A comfortable middle-high setting for most GPUs.", GraphicsGroup,
+            QualityFlag, "13") { Allowlisted = true },
+        new("Graphics level 17", "High quality without the last four expensive steps.", GraphicsGroup,
+            QualityFlag, "17") { Allowlisted = true },
+        new("Grass draw distance 200", "A very short ring of grass - almost the grass-off saving.", GraphicsGroup,
+            "FIntFRMMaxGrassDistance", "200") { Allowlisted = true },
+        new("Grass draw distance 750", "Between the short 500 and the broad 1000 setting.", GraphicsGroup,
+            "FIntFRMMaxGrassDistance", "750") { Allowlisted = true },
+        new("Shadows at quarter strength", "Keeps a faint shadow instead of removing it completely.", GraphicsGroup,
+            "FIntRenderShadowIntensity", "0.25"),
+        new("Distant meshes: near detail", "A tighter level-of-detail range than medium - still smoother than dropping detail immediately.", DetailGroup, new[]
+        {
+            new KeyValuePair<string, string>("DFIntCSGLevelOfDetailSwitchingDistance", "250"),
+            new KeyValuePair<string, string>("DFIntCSGLevelOfDetailSwitchingDistanceL12", "500"),
+            new KeyValuePair<string, string>("DFIntCSGLevelOfDetailSwitchingDistanceL23", "750"),
+            new KeyValuePair<string, string>("DFIntCSGLevelOfDetailSwitchingDistanceL34", "1000"),
+        }) { Allowlisted = true },
+
+        // --- Fertige Kombinationen: ein Klick setzt mehrere allowlistete Flags ---
+        new("Low-end preset", "The strongest safe combination: lowest graphics, coarse textures, no MSAA, no grass and early CSG detail.", GraphicsGroup, new[]
+        {
+            new KeyValuePair<string, string>("DFIntDebugFRMQualityLevelOverride", "1"),
+            new KeyValuePair<string, string>("DFFlagTextureQualityOverrideEnabled", "True"),
+            new KeyValuePair<string, string>("DFIntTextureQualityOverride", "0"),
+            new KeyValuePair<string, string>("FIntDebugForceMSAASamples", "1"),
+            new KeyValuePair<string, string>("FIntFRMMaxGrassDistance", "0"),
+            new KeyValuePair<string, string>("FIntFRMMinGrassDistance", "0"),
+            new KeyValuePair<string, string>("DFIntCSGLevelOfDetailSwitchingDistance", "0"),
+        }) { Allowlisted = true },
+        new("Balanced preset", "Quality 10, good textures, 2× MSAA, a short grass ring and moderate CSG detail.", GraphicsGroup, new[]
+        {
+            new KeyValuePair<string, string>("DFIntDebugFRMQualityLevelOverride", "10"),
+            new KeyValuePair<string, string>("DFFlagTextureQualityOverrideEnabled", "True"),
+            new KeyValuePair<string, string>("DFIntTextureQualityOverride", "2"),
+            new KeyValuePair<string, string>("FIntDebugForceMSAASamples", "2"),
+            new KeyValuePair<string, string>("FIntFRMMaxGrassDistance", "300"),
+            new KeyValuePair<string, string>("DFIntCSGLevelOfDetailSwitchingDistance", "1000"),
+        }) { Allowlisted = true },
+        new("Max quality preset", "Quality 21, sharp textures, 4× MSAA and detailed far meshes - the heaviest safe combination here.", GraphicsGroup, new[]
+        {
+            new KeyValuePair<string, string>("DFIntDebugFRMQualityLevelOverride", "21"),
+            new KeyValuePair<string, string>("DFFlagTextureQualityOverrideEnabled", "True"),
+            new KeyValuePair<string, string>("DFIntTextureQualityOverride", "3"),
+            new KeyValuePair<string, string>("FIntDebugForceMSAASamples", "4"),
+            new KeyValuePair<string, string>("DFIntCSGLevelOfDetailSwitchingDistance", "4000"),
+            new KeyValuePair<string, string>("DFIntCSGLevelOfDetailSwitchingDistanceL12", "4000"),
+            new KeyValuePair<string, string>("DFIntCSGLevelOfDetailSwitchingDistanceL23", "4000"),
+            new KeyValuePair<string, string>("DFIntCSGLevelOfDetailSwitchingDistanceL34", "4000"),
+        }) { Allowlisted = true },
+        new("PvP visibility preset", "Low-but-readable graphics with no grass, coarse textures and no MSAA - fewer distractions in a fight.", GraphicsGroup, new[]
+        {
+            new KeyValuePair<string, string>("DFIntDebugFRMQualityLevelOverride", "5"),
+            new KeyValuePair<string, string>("DFFlagTextureQualityOverrideEnabled", "True"),
+            new KeyValuePair<string, string>("DFIntTextureQualityOverride", "0"),
+            new KeyValuePair<string, string>("FIntDebugForceMSAASamples", "1"),
+            new KeyValuePair<string, string>("FIntFRMMaxGrassDistance", "0"),
+            new KeyValuePair<string, string>("FIntFRMMinGrassDistance", "0"),
+        }) { Allowlisted = true },
     };
 
     /// <summary>Inhalt der eigenen FastFlags-Datei als Text für den Editor.</summary>
@@ -363,6 +479,68 @@ public static class FastFlags
         return JsonFile.Save(AppPaths.FastFlagsFile, flags)
             ? null
             : "FastFlags.json could not be written.";
+    }
+
+    /// <summary>
+    /// Prüft alle Vorschläge auf leere oder doppelte Schlüssel und ungültige Namen. Der
+    /// Selbsttest ruft das auf, damit ein neuer Vorschlag nicht still kaputt in der Liste steht.
+    /// </summary>
+    public static IReadOnlyList<string> ValidatePresets()
+    {
+        var problems = new List<string>();
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var preset in Presets)
+        {
+            if (!names.Add(preset.Name)) problems.Add($"Duplicate preset name: {preset.Name}");
+            if (preset.Flags.Count == 0) problems.Add($"{preset.Name}: no flags");
+
+            var keys = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var flag in preset.Flags)
+            {
+                if (string.IsNullOrWhiteSpace(flag.Key) || !Regex.IsMatch(flag.Key, "^[A-Za-z][A-Za-z0-9_]*$"))
+                    problems.Add($"{preset.Name}: invalid flag name '{flag.Key}'");
+                else if (!keys.Add(flag.Key))
+                    problems.Add($"{preset.Name}: flag '{flag.Key}' appears twice");
+            }
+        }
+
+        return problems;
+    }
+
+    /// <summary>Liest die angehefteten Karten. Eine kaputte Datei kostet nur die Favoriten, nicht den Editor.</summary>
+    public static HashSet<string> LoadFavorites()
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        try
+        {
+            if (!File.Exists(AppPaths.FastFlagsFavoritesFile)) return names;
+            foreach (var line in File.ReadAllLines(AppPaths.FastFlagsFavoritesFile))
+            {
+                var name = line.Trim();
+                if (name.Length > 0) names.Add(name);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"The FastFlag favorites could not be read: {ex.Message}");
+        }
+
+        return names;
+    }
+
+    /// <summary>Schreibt die angehefteten Karten; ein Fehler wird nur protokolliert.</summary>
+    public static void SaveFavorites(IEnumerable<string> names)
+    {
+        try
+        {
+            File.WriteAllLines(AppPaths.FastFlagsFavoritesFile,
+                names.Where(name => !string.IsNullOrWhiteSpace(name)).Distinct(StringComparer.Ordinal).OrderBy(name => name));
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"The FastFlag favorites could not be saved: {ex.Message}");
+        }
     }
 
     public static Dictionary<string, string> Load()
@@ -509,7 +687,29 @@ public static class FastFlags
             }
 
             File.WriteAllText(target, JsonSerializer.Serialize(flags, JsonFile.Options));
-            message = $"{flags.Count} FastFlag(s) written to the client.";
+
+            // Nicht nur schreiben, sondern zurücklesen: so fällt eine kaputte oder
+            // unvollständige Datei sofort auf, statt erst beim nächsten Clientstart.
+            var readBack = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(target));
+            if (readBack is null)
+            {
+                message = "FastFlags were written but could not be read back.";
+                return false;
+            }
+
+            var missing = flags
+                .Where(pair => !readBack.TryGetValue(pair.Key, out var value) ||
+                               !string.Equals(value, pair.Value, StringComparison.Ordinal))
+                .Select(pair => pair.Key)
+                .ToList();
+
+            if (missing.Count > 0)
+            {
+                message = $"FastFlags were written, but {missing.Count} value(s) did not read back correctly.";
+                return false;
+            }
+
+            message = $"{flags.Count} FastFlag(s) written and verified in the client.";
             return true;
         }
         catch (Exception ex)

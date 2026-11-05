@@ -236,8 +236,22 @@ public sealed class RecentItem : ObservableObject
 public sealed class PresetItem : ObservableObject
 {
     private bool _isMarked;
+    private bool _isFavorite;
+    private readonly Brush _accent;
+    private readonly Brush _accentSoft;
+    private readonly string _glyph;
 
-    public PresetItem(FastFlagPreset preset) => Preset = preset;
+    public PresetItem(FastFlagPreset preset)
+    {
+        Preset = preset;
+        var look = LookFor(preset.Group);
+        _accent = MakeBrush(look.Accent, 255);
+        _accentSoft = MakeBrush(look.Accent, 42);
+        _glyph = look.Glyph;
+
+        ToggleCommand = new RelayCommand(() => IsMarked = !IsMarked);
+        FavoriteCommand = new RelayCommand(() => IsFavorite = !IsFavorite);
+    }
 
     public FastFlagPreset Preset { get; }
     public string Name => Preset.Name;
@@ -260,10 +274,102 @@ public sealed class PresetItem : ObservableObject
         ? "This flag is on Roblox' allowlist - the client still reads it."
         : "Roblox only honours allowlisted flags since September 2025, so the client normally ignores this one. Aether writes it anyway, in case you run a pinned older client.";
 
+    public string BadgeText => Preset.Allowlisted ? "ALLOWLISTED" : "LEGACY";
+
+    public string FlagsLabel => Preset.Flags.Count == 1 ? "1 flag" : $"{Preset.Flags.Count} flags";
+
+    public string Glyph => _glyph;
+
+    /// <summary>Lesbare Kategorie für den Kartenkopf - die riesige Abkürzung war zu laut.</summary>
+    public string GroupLabel => Group switch
+    {
+        FastFlags.FrameRateGroup => "Frame rate",
+        FastFlags.GraphicsGroup => "Graphics",
+        FastFlags.SkyGroup => "Lighting",
+        FastFlags.RenderGroup => "Effects",
+        FastFlags.DetailGroup => "Textures",
+        FastFlags.InterfaceGroup => "Interface",
+        FastFlags.NetworkGroup => "Network",
+        _ => Group,
+    };
+
+    public Brush AccentBrush => _accent;
+
+    public Brush AccentSoftBrush => _accentSoft;
+
+    public string CardTip => $"{Description}\n\n{HonorTip}\n\n{Keys}";
+
+    public ICommand ToggleCommand { get; }
+
+    public ICommand FavoriteCommand { get; }
+
+    public string StateLabel => _isMarked ? "ACTIVE" : "ENABLE";
+
+    public string StateTip => _isMarked ? "Click to remove these flags" : "Click to write these flags";
+
+    public string FavoriteGlyph => _isFavorite ? "★" : "☆";
+
+    public string FavoriteTip => _isFavorite ? "Remove from favorites" : "Keep in favorites";
+
     public bool IsMarked
     {
         get => _isMarked;
-        set => Set(ref _isMarked, value);
+        set
+        {
+            if (!Set(ref _isMarked, value)) return;
+            Raise(nameof(StateLabel));
+            Raise(nameof(StateTip));
+        }
+    }
+
+    public bool IsFavorite
+    {
+        get => _isFavorite;
+        set
+        {
+            if (!Set(ref _isFavorite, value)) return;
+            Raise(nameof(FavoriteGlyph));
+            Raise(nameof(FavoriteTip));
+        }
+    }
+
+    private static (string Accent, string Glyph) LookFor(string group) => group switch
+    {
+        FastFlags.FrameRateGroup => ("#4EA1FF", "FPS"),
+        FastFlags.GraphicsGroup => ("#43D6A0", "GFX"),
+        FastFlags.SkyGroup => ("#FFB84D", "SKY"),
+        FastFlags.RenderGroup => ("#B07CFF", "FX"),
+        FastFlags.DetailGroup => ("#FF7A90", "TEX"),
+        FastFlags.InterfaceGroup => ("#66D9E8", "UI"),
+        FastFlags.NetworkGroup => ("#F5D76E", "NET"),
+        _ => ("#7C8CFF", "FF"),
+    };
+
+    private static SolidColorBrush MakeBrush(string hex, byte alpha)
+    {
+        var color = ColorConverter.ConvertFromString(hex) is Color parsed ? parsed : Colors.SlateGray;
+        color.A = alpha;
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
+}
+
+/// <summary>Ein Filter-Chip über der FastFlag-Kartenansicht.</summary>
+public sealed class FastFlagCategoryItem : ObservableObject
+{
+    private bool _isSelected;
+
+    public FastFlagCategoryItem(string key, string label, int count) => (Key, Label, Count) = (key, label, count);
+
+    public string Key { get; }
+    public string Label { get; }
+    public int Count { get; }
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set => Set(ref _isSelected, value);
     }
 }
 

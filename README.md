@@ -30,17 +30,17 @@ Launchers und durchgehend weichen Übergängen.
 | **Favoriten (anheften)** | Der große Stern neben einer Zeile heftet ein Spiel oben an: Angeheftete stehen vor allem anderen, egal wie alt der letzte Start ist. Bleibt in `places.json` stehen. |
 | **Spiele sortieren** | Eine Zeile mit der Maus packen und nach oben oder unten ziehen - die Reihenfolge wird in `places.json` festgehalten. Angeheftete Spiele wandern beim Anheften nach oben, bleiben aber sonst genau da, wo man sie hinzieht. |
 | **Zuletzt gespielt** | Die Liste zeigt die Spiele selbst, in derselben Zeilengröße wie **Your games**: jeder Start über Aether (`recent.json`) **und** die Sitzungen, die Roblox selbst gestartet hat - die liest Aether beim Start aus den Logdateien des Clients (`place`-ID und Zeitstempel, sonst nichts). Den echten Spielnamen und das Bild holt Aether für solche Sitzungen von der Roblox-API nach und schreibt beides in `recent.json` - die Zeile heißt also nicht dauerhaft "Place 128…". **Rescan** auf der Kontenseite liest sie sofort noch einmal ein - auch Spiele, die erst während einer laufenden Aether-Sitzung ohne Aether gestartet wurden, stehen dann in der Liste. Mit `+` wandert ein Eintrag in die eigene Sammlung, mit `✕` heraus. |
-| **FastFlags** | JSON-Editor mit **66 Vorschlägen in sieben Gruppen** (Bildrate, Grafik, Himmel & Licht, Effekte & Renderer, Texturen & Detail, Oberfläche, Netzwerk) und **91 einzelnen Flags**; die Flags landen vor jedem Start in den `ClientSettings` des Clients. Vorhandene Dateien werden gesichert. Wo eine Quelle eine Nebenwirkung nennt, steht sie in der Beschreibung - etwa die Warnung vor seltenen Abstürzen beim Beitreten mit hohen Bildraten. Die Gruppen lassen sich zuklappen, jeder Kopf nennt Anzahl und wie viele davon noch wirken. |
-| **Allowlist-Kennzeichnung** | Jeder Vorschlag trägt eine Markierung: **still active**, wenn das Flag auf Roblox' Allowlist steht, sonst **usually ignored**. Seit September 2025 liest der Client nur noch allowlistete Flags - so sieht man vorher, was wirken kann statt sich zu wundern. |
+| **FastFlags** | **Kartenansicht mit 99 Vorschlägen in sieben Gruppen** (Bildrate, Grafik, Himmel & Licht, Effekte & Renderer, Texturen & Detail, Oberfläche, Netzwerk) und **153 einzelnen Flags**; die Flags landen vor jedem Start in den `ClientSettings` des Clients. Suche, Filter-Chips und Favoriten halten die Liste kurz; ein Klick auf eine Karte setzt ihre Flags, ein zweiter nimmt sie wieder heraus. Über **Visual / JSON** wechselt dieselbe Seite in den JSON-Editor. Vorhandene Dateien werden gesichert; beim Schreiben liest Aether die Datei zurück und prüft jeden Wert. |
+| **Allowlist-Kennzeichnung** | Jede Karte trägt eine Markierung: **ALLOWLISTED**, wenn das Flag auf Roblox' Allowlist steht, sonst **LEGACY**. 49 der 99 Karten stehen derzeit auf der Liste. Seit September 2025 liest der Client nur noch allowlistete Flags - so sieht man vorher, was wirken kann statt sich zu wundern. |
 | **Start ohne Spiel** | Kein Spiel gewählt? Dann öffnet **Play** die Roblox-App selbst (Startseite) - wahlweise mit dem gewählten Konto. Für den direkten Weg dorthin gibt es den Knopf **Roblox app**. |
 | **Versionen herunterladen** | Jede verfolgte oder historische Roblox-Version von WEAO bzw. der offiziellen DeployHistory auswählen und den original Installer vom Roblox-CDN laden, mit Fortschritt und Installieren-Knopf. |
-| **FastFlags sofort** | Ein angeklickter Vorschlag schreibt sich unmittelbar in den JSON-Editor (und nimmt sich beim Abwählen wieder heraus). Dazu Formatieren, Kopieren, Import/Export, Leeren, Suche und eine Live-Zeile mit Flag-Anzahl und JSON-Zustand. |
+| **FastFlags sofort** | Eine angeklickte Karte schreibt sich unmittelbar in den JSON-Editor (und nimmt sich beim Abwählen wieder heraus). Die Kartenansicht ist der Start; der **Visual / JSON**-Umschalter öffnet den Editor mit Formatieren, Kopieren, Import/Export und Leeren. Suche und Kategorie-Chips filtern beide Ansichten, Favoriten bleiben in `fastflags-favorites.txt`. |
 | **Ingame-Zeiger** | Der Mauszeiger im Spiel lässt sich durch ein eigenes PNG ersetzen - auf Wunsch mit dem mitgelieferten Aether-Pfeil. Originale bleiben als `.aetherbak`. |
 | **Eigene Schriften** | Jede installierte Schrift oder eine eigene `.ttf`/`.otf` für die Oberfläche. Die Datei wird nur für diesen Prozess angemeldet. |
 | **Aether-Zeiger** | Der Pfeil aus `tools/make-cursor.ps1` ersetzt den Windows-Zeiger im Launcher. |
 | **Farbwelten** | Zwölf Paletten - **Midnight**, **Amethyst**, **Emerald**, **Ember**, **Rose**, **Glacier**, **Sandstone**, **Onyx**, **Aurora**, **Crimson**, **Moss** und **Dusk** - schalten die ganze Oberfläche live um, ohne Neustart. Der Wechsel blendet Flächen, Linien, Akzente und Verläufe über 420 ms weich hinüber; die Auswahl steht unter Einstellungen → Theme und bleibt gespeichert. Die Ingame-Platten folgen mit. |
 | **Schnellansicht** | **Entf** legt eine Karte über die laufende Seite: starten, Vanilla-Modus, Flags, Ingame-Zeiger, Start als jedes gespeicherte Konto - und Notizen, die von selbst gespeichert werden. Ab Werk an; das Kürzel lässt sich in den Einstellungen **und** im Menü des Overlays ändern und dort auch zurücksetzen. In Eingabefeldern bleibt eine blanke Taste dem Text - dort reißt Entf keine Karte auf. |
-| **Ingame-Overlay** | Dieselbe Taste über dem **Roblox-Fenster**: sechs einzelne Platten - Menü (Schalter je Platte, Menütaste, Deckkraft, Zurückweichen vor anderen Programmen, **Reset layout**), **Frame rate**, **Graphics**, **Notes**, **Server** (Leave & rejoin, Neustart, Spielseite, Link kopieren) und **Anti-AFK** (Intervall, Taste, Countdown, Selbsttest, kurzes Pop-up zum Tippen). Jede Platte wird einzeln gezogen: Sie folgt dem Zeiger gedämpft, hebt sich leicht an, rastet an Bildschirmkanten ein und merkt sich ihre Lage. Die Startaufteilung ist dreispaltig und überlappungsfrei. Alle Platten sind Toolwindows - sie tauchen nicht in Alt+Tab, Win+Tab oder der Taskleiste auf. Ein eigener, kleiner Prozess; in den Client wird nichts eingeschleust. |
+| **Ingame-Overlay** | Dieselbe Taste über dem **Roblox-Fenster**: sechs einzelne Platten - Menü (Schalter je Platte, Menütaste, Deckkraft, Zurückweichen vor anderen Programmen, **Reset layout**), **Frame rate**, **Graphics**, **Notes**, **Server** (Leave & rejoin, Neustart, Spielseite, Link kopieren) und **Anti-AFK** (Intervall, Taste, Countdown, Selbsttest, kurzes Pop-up zum Tippen). Jede Platte wird einzeln gezogen: Sie folgt dem Zeiger gedämpft, hebt sich leicht an, rastet an Bildschirmkanten ein und merkt sich ihre Lage. Die Startaufteilung ist dreispaltig und überlappungsfrei. Alle Platten sind Toolwindows - sie tauchen nicht in Alt+Tab, Win+Tab oder der Taskleiste auf. Ein eigener, kleiner Prozess; in den Client wird nichts eingeschleust. **Fällt das Roblox-Fenster weg, nimmt der Host die Platten sofort weg. Ohne Roblox-Prozess beendet er sich nach drei Sekunden, mit laufendem Prozess ohne Fenster nach zwanzig; während eines Serverwechsels wartet er länger.** So bleibt kein eingefrorenes Overlay ohne Spiel stehen. |
 | **Animationen** | Reiterstrich, Karten, Zeilen, Schalter und Knöpfe bewegen sich weich; Knöpfe antworten mit einer Aufhellung und einem Druck-Ring statt zu springen, Seiten gleiten herein, neue Zeilen wachsen auf, ein neu gewähltes Spiel blendet in der Hauptkarte hinüber, die Schnellansicht federt auf, das Overlay öffnet in Stufen und die Platten gleiten beim Ziehen mit einem kurzen Nachlauf in ihre Endlage. **Playful mode** legt federnde Einblendungen und einen Glanz über die Hauptkarte darüber. |
 | **Protokollhandler (optional)** | Aether kann den `roblox-player`-Handler übernehmen. Dann laufen auch "Play"-Klicks der Website durch den Launcher. Der vorherige Handler wird gesichert. |
 | **Client-Pflege** | Installierte Version, ausgerollte Version im Kanal und Update-Knopf direkt im Kontobereich. |
@@ -237,16 +237,19 @@ Starts wartet der Launcher, damit sich die Clients nicht überholen.
 
 ### FastFlags
 
-Auf **Engine** stehen 20 Vorschläge in vier Gruppen bereit (FRAME RATE, GRAPHICS, INTERFACE,
-NETWORK). Unter jedem Vorschlag stehen die Flag-Namen, die er setzt - einige setzen mehrere,
-etwa "Grass off" oder "Roblox telemetry off".
+Auf **Engine** stehen **99 Karten in sieben Gruppen** bereit (FPS, Graphics, Lighting,
+Effects, Textures, Interface, Network). Unter jeder Karte stehen die Flag-Namen, die sie setzt -
+einige setzen mehrere, etwa "Low-end preset" oder "Roblox telemetry off". Die Ansicht startet
+als Kartenraster wie eine Script-Bibliothek: Suche, Kategorie-Chips und **★ Favorites** filtern
+die Karten; der Stern oben rechts auf jeder Karte heftet sie an. **Visual / JSON** schaltet
+dieselbe Seite zwischen Karten und JSON-Editor um.
 
-**Ein Klick genügt:** Sobald ein Vorschlag angehakt wird, stehen seine Flags sofort im
-JSON links und sind gespeichert; Abwählen nimmt sie wieder heraus. Wer einen Wert von Hand
-ändert, behält ihn - beim Abwählen verschwindet nur, was noch genau dem Vorschlag entspricht.
-Ein Vorschlag, der schon vollständig im JSON steht, ist beim Öffnen angehakt.
+**Ein Klick genügt:** Sobald eine Karte aktiviert wird, stehen ihre Flags sofort im JSON und
+sind gespeichert; ein zweiter Klick nimmt sie wieder heraus. Wer einen Wert von Hand ändert,
+behält ihn - beim Abwählen verschwindet nur, was noch genau dem Vorschlag entspricht. Eine
+Karte, deren Flags schon vollständig im JSON stehen, ist beim Öffnen aktiv.
 
-Rund um den Editor:
+Rund um den Editor (JSON-Ansicht):
 
 | Knopf | Wirkung |
 | --- | --- |
@@ -255,13 +258,17 @@ Rund um den Editor:
 | **Import…** | lädt eine vorhandene `ClientAppSettings.json` in den Editor |
 | **Export…** | schreibt den Editorinhalt in eine Datei |
 | **Clear** | leert den Editor |
-| Suchfeld | filtert die Vorschläge nach Name, Beschreibung oder Flag-Namen |
+| Suchfeld | filtert Karten und Editor nach Name, Beschreibung oder Flag-Namen |
+| **Visual / JSON** | wechselt zwischen Kartenraster und JSON-Editor; die Karten schreiben in dasselbe JSON |
+| Kategorie-Chips | **All**, **★ Favorites** und die sieben Gruppen - auch mit Suche kombinierbar |
 
 Unter dem Editor steht laufend, wie viele Flags drinstehen und wie viele Vorschläge aktiv
 sind - oder warum das JSON gerade nicht gelesen werden kann (dann bleibt kein Vorschlag hängen).
 
 Beim nächsten Start schreibt der Launcher die Flags nach
-`…\Versions\version-<hash>\ClientSettings\ClientAppSettings.json`.
+`…\Versions\version-<hash>\ClientSettings\ClientAppSettings.json`. **Write to the client now**
+liest die Datei anschließend zurück und meldet, wenn ein Wert nicht angekommen ist; der
+Selbsttest prüft alle 99 Vorschläge und 60 verschiedene Flag-Namen auf diesem Weg.
 
 > [!NOTE]
 > Roblox beachtet seit September 2025 nur noch Flags auf einer Allowlist. Andere Flags werden
@@ -560,6 +567,7 @@ Programm/
 | Spieleliste | `%LOCALAPPDATA%\AetherLauncher\places.json` |
 | Einstellungen | `%LOCALAPPDATA%\AetherLauncher\settings.json` |
 | FastFlags | `%LOCALAPPDATA%\AetherLauncher\FastFlags.json` |
+| Angeheftete FastFlag-Karten | `%LOCALAPPDATA%\AetherLauncher\fastflags-favorites.txt` |
 | Eigene Schriften | `%LOCALAPPDATA%\AetherLauncher\fonts` |
 | Zeigerbild (mitgeliefert) | `%LOCALAPPDATA%\AetherLauncher\cursor.png` |
 | Log | `%LOCALAPPDATA%\AetherLauncher\launcher.log` |
@@ -593,7 +601,7 @@ $EXE --screenshot ./screenshots
 $EXE --download past
 
 # Download-Ausgabe: Single-File, ohne Symbole, mit SHA-256 (optional signiert)
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-release.ps1 -Version 1.1.0
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-release.ps1 -Version 1.2.0
 ```
 
 Der Oberflächen-Test klickt auch wirklich: sein Mauszeiger fährt auf **Format** und **Save** und
@@ -639,7 +647,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/make-cursor.ps1 -Sourc
 ### Release bauen und prüfen
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-release.ps1 -Version 1.1.0
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-release.ps1 -Version 1.2.0
 # optional mit eigenem Code-Signing-Zertifikat:
 # ... -CertificatePath .\aether.pfx
 ```

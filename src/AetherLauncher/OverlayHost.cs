@@ -67,6 +67,8 @@ internal sealed class OverlayHost
     private int _ticks;
     private GameWindow? _game;
     private DateTimeOffset? _missingSince;
+    private bool _hiddenForMissingGame;
+    private bool _resumeAfterGameReturns;
 
     private KeyCapture? _capture;
     private DateTimeOffset _nextNudge;
@@ -293,6 +295,44 @@ internal sealed class OverlayHost
 
         if (_game is null || _ticks % 6 == 0) _game = GameOverlay.FindWindow();
 
+        if (_game is not { } game)
+        {
+            // Die Vorschau (Screenshots, UI-Selbsttest) zeigt die Platten ohne Roblox.
+            if (_preview) return;
+
+            // Kein Client mehr: sofort die Platten wegnehmen. Sonst bleibt ein Topmost-Fenster
+            // ohne Spiel im Vordergrund stehen und lässt sich nicht mehr sinnvoll bedienen.
+            if (!_hiddenForMissingGame)
+            {
+                _hiddenForMissingGame = true;
+                _resumeAfterGameReturns = _open;
+                HideAll(animate: false);
+                Log.Warn("The Roblox window disappeared - the overlay hid itself.");
+            }
+
+            // Ohne Prozess ist das Overlay nach drei Sekunden weg. Ein Client, der nur sein
+            // Fenster verliert (Ladebildschirm), bekommt etwas mehr Luft; ein Serverwechsel
+            // darf ebenfalls kurz dauern.
+            _missingSince ??= DateTimeOffset.UtcNow;
+            var clientRunning = GameOverlay.IsClientRunning();
+            var grace = _busy ? 60 : clientRunning ? 20 : 3;
+            if ((DateTimeOffset.UtcNow - _missingSince.Value).TotalSeconds > grace) Quit();
+            return;
+        }
+
+        _missingSince = null;
+
+        if (_hiddenForMissingGame)
+        {
+            _hiddenForMissingGame = false;
+            if (_resumeAfterGameReturns)
+            {
+                _resumeAfterGameReturns = false;
+                _autoShown = true;
+                ShowAll(animate: false);
+            }
+        }
+
         // Beim Umbelegen gehört jeder Tastendruck dem Kürzel - sonst würde die neue Taste
         // gleich wieder das Overlay umschalten.
         if (_capture is not null)
@@ -300,18 +340,6 @@ internal sealed class OverlayHost
             TickCapture();
             return;
         }
-
-        if (_game is not { } game)
-        {
-            // Kein Client mehr (Spiel beendet) - der Host räumt sich nach kurzer Frist ab.
-            // Während eines Serverwechsels gilt die Frist länger: da ist der Client absichtlich weg.
-            _missingSince ??= DateTimeOffset.UtcNow;
-            var grace = _busy ? 120 : 20;
-            if ((DateTimeOffset.UtcNow - _missingSince.Value).TotalSeconds > grace) Quit();
-            return;
-        }
-
-        _missingSince = null;
 
         TickAutoShow();
         TickNoOverlap();

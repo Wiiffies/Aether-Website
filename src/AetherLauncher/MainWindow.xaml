@@ -652,6 +652,78 @@
 
             <!-- ===== Engine (FastFlags) ===== -->
             <Grid x:Name="PageEngine" Margin="14" Visibility="Collapsed">
+                <Grid.Resources>
+                    <!-- Karte im FastFlag-Browser: dieselbe Fläche und Kante wie die übrigen Karten,
+                         nur mit einem farbigen Kopf und einem deutlichen Aktivzustand. -->
+                    <Style x:Key="FlagCard" TargetType="{x:Type Button}">
+                        <Setter Property="Width" Value="232" />
+                        <Setter Property="Height" Value="198" />
+                        <Setter Property="Margin" Value="0,0,8,8" />
+                        <Setter Property="Padding" Value="0" />
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="BorderThickness" Value="0" />
+                        <Setter Property="Cursor" Value="Hand" />
+                        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="{x:Type Button}">
+                                    <Grid>
+                                        <Border x:Name="Surface" Background="{DynamicResource CardBrush}"
+                                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                                CornerRadius="10" SnapsToDevicePixels="True" />
+                                        <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+                                        <Border x:Name="Hover" Background="{DynamicResource HoverWashSoftBrush}"
+                                                CornerRadius="10" Opacity="0" IsHitTestVisible="False" />
+                                    </Grid>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Hover" Property="Opacity" Value="1" />
+                                            <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource BorderBlueBrush}" />
+                                        </Trigger>
+                                        <DataTrigger Binding="{Binding IsMarked}" Value="True">
+                                            <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                            <Setter TargetName="Surface" Property="BorderThickness" Value="2" />
+                                        </DataTrigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+
+                    <!-- Der Stern sitzt in der Karte, darf aber nicht die Karte selbst umschalten. -->
+                    <Style x:Key="FlagStar" TargetType="{x:Type Button}">
+                        <Setter Property="Width" Value="28" />
+                        <Setter Property="Height" Value="28" />
+                        <Setter Property="Padding" Value="0" />
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="BorderThickness" Value="0" />
+                        <Setter Property="Cursor" Value="Hand" />
+                        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="{x:Type Button}">
+                                    <Grid Background="Transparent">
+                                        <Border x:Name="Hover" Background="{DynamicResource HoverBrush}" CornerRadius="7" Opacity="0" />
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Grid>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Hover" Property="Opacity" Value="1" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsFavorite}" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsFavorite}" Value="False">
+                                <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Grid.Resources>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="320" />
@@ -661,7 +733,8 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <Grid Grid.Row="0" Grid.Column="0" Margin="0,0,12,0">
+                <Grid Grid.Row="0" Grid.Column="0" Margin="0,0,12,0"
+                      Visibility="{Binding FlagsJsonVisibility}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
@@ -682,10 +755,20 @@
                                             Command="{Binding ClearFlagsCommand}" ToolTip="Empty the editor" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="FASTFLAGS JSON" Style="{StaticResource SectionHeader}" />
+                            <TextBlock Text="FASTFLAGS" Style="{StaticResource SectionHeader}" />
                             <Border Style="{StaticResource Badge}" Margin="8,0,0,0" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding FlagsCountLabel}" Style="{StaticResource BadgeText}"
                                            FontFamily="{StaticResource MonoFont}" />
+                            </Border>
+                            <Border Style="{StaticResource SegmentBar}" Margin="12,0,0,0" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton Style="{StaticResource Segment}" Content="Visual" GroupName="FlagsView"
+                                                 IsChecked="{Binding FlagsVisualMode, Mode=OneWay}"
+                                                 Command="{Binding ShowVisualFlagsCommand}" />
+                                    <RadioButton Style="{StaticResource Segment}" Content="JSON" GroupName="FlagsView"
+                                                 IsChecked="{Binding FlagsJsonMode, Mode=OneWay}"
+                                                 Command="{Binding ShowJsonFlagsCommand}" />
+                                </StackPanel>
                             </Border>
                         </StackPanel>
                     </DockPanel>
@@ -708,7 +791,8 @@
                     </TextBlock>
                 </Grid>
 
-                <c:CardPanel Grid.Row="0" Grid.Column="1" Style="{StaticResource Card}" Padding="12">
+                <c:CardPanel Grid.Row="0" Grid.Column="1" Style="{StaticResource Card}" Padding="12"
+                             Visibility="{Binding FlagsJsonVisibility}">
                     <DockPanel>
                         <StackPanel DockPanel.Dock="Top" Margin="4,0,4,8">
                             <TextBlock Text="PRESETS" Style="{StaticResource SectionHeader}" />
@@ -817,6 +901,184 @@
                     </DockPanel>
                 </c:CardPanel>
 
+                <!-- ===== FastFlags als Karten ===== -->
+                <Grid Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Panel.ZIndex="20"
+                      Background="{DynamicResource BgBrush}" Visibility="{Binding FlagsVisualVisibility}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Margin="4,0,4,8">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <DockPanel>
+                            <Border DockPanel.Dock="Right" Style="{StaticResource SegmentBar}" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton Style="{StaticResource Segment}" Content="Visual" GroupName="FlagsView"
+                                                 IsChecked="{Binding FlagsVisualMode, Mode=OneWay}"
+                                                 Command="{Binding ShowVisualFlagsCommand}" />
+                                    <RadioButton Style="{StaticResource Segment}" Content="JSON" GroupName="FlagsView"
+                                                 IsChecked="{Binding FlagsJsonMode, Mode=OneWay}"
+                                                 Command="{Binding ShowJsonFlagsCommand}" />
+                                </StackPanel>
+                            </Border>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="FASTFLAGS" Style="{StaticResource SectionHeader}" />
+                                <Border Style="{StaticResource Badge}" Margin="8,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding FlagsCountLabel}" Style="{StaticResource BadgeText}"
+                                               FontFamily="{StaticResource MonoFont}" />
+                                </Border>
+                            </StackPanel>
+                        </DockPanel>
+
+                        <Grid Grid.Row="1" Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid Grid.Column="0">
+                                <TextBox Style="{StaticResource InputBox}" Padding="10,7"
+                                         Text="{Binding PresetSearch, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="Filter by card name, description or flag key" />
+                                <TextBlock Text="Search flags, descriptions or keys…"
+                                           Foreground="{DynamicResource TextFaintBrush}" FontSize="11"
+                                           Margin="11,0,0,0" VerticalAlignment="Center"
+                                           IsHitTestVisible="False"
+                                           Visibility="{Binding PresetSearchPlaceholderVisibility}" />
+                            </Grid>
+                            <c:RippleButton Grid.Column="1" Content="Clear" Style="{StaticResource PlainButton}"
+                                            Margin="6,0,0,0" Command="{Binding ClearPresetSearchCommand}"
+                                            ToolTip="Clear the search" />
+                        </Grid>
+
+                        <ItemsControl Grid.Row="2" ItemsSource="{Binding FastFlagCategories}" Margin="0,8,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <RadioButton Style="{StaticResource Segment}" GroupName="FlagFilter"
+                                                 Content="{Binding Label}" Margin="0,0,6,6"
+                                                 IsChecked="{Binding IsSelected, Mode=OneWay}"
+                                                 Command="{Binding DataContext.SelectFlagFilterCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                 CommandParameter="{Binding Key}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  c:SmoothScroll.Enabled="True" Margin="0,2,0,0">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Muted}" Margin="4,10,4,0"
+                                       Visibility="{Binding VisualEmptyVisibility}"
+                                       Text="Nothing matches that filter." />
+
+                            <ItemsControl ItemsSource="{Binding VisiblePresets}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Style="{StaticResource FlagCard}" Command="{Binding ToggleCommand}"
+                                                ToolTip="{Binding CardTip}">
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="*" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+
+                                                <Border Grid.Row="0" Height="44" Background="{Binding AccentSoftBrush}"
+                                                        CornerRadius="9,9,0,0">
+                                                    <Grid>
+                                                        <Border Height="3" VerticalAlignment="Top" Background="{Binding AccentBrush}"
+                                                                CornerRadius="9,9,0,0" />
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                                                    Margin="12,0,0,0">
+                                                            <Border Width="3" Height="14" CornerRadius="1.5"
+                                                                    Background="{Binding AccentBrush}" />
+                                                            <TextBlock Text="{Binding GroupLabel}" FontSize="9.5" FontWeight="SemiBold"
+                                                                       Foreground="{Binding AccentBrush}" Margin="7,0,0,0"
+                                                                       VerticalAlignment="Center" />
+                                                        </StackPanel>
+                                                        <Button Style="{StaticResource FlagStar}" Content="{Binding FavoriteGlyph}"
+                                                                Command="{Binding FavoriteCommand}" ToolTip="{Binding FavoriteTip}"
+                                                                HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                                Margin="0,0,6,0" Focusable="False" IsTabStop="False" />
+                                                    </Grid>
+                                                </Border>
+
+                                                <StackPanel Grid.Row="1" Margin="12,10,12,0">
+                                                    <TextBlock Text="{Binding Name}" FontSize="12.5" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource TextHiBrush}"
+                                                               TextWrapping="Wrap" MaxHeight="34" />
+                                                    <TextBlock Text="{Binding Description}" Style="{StaticResource Note}"
+                                                               FontSize="10.5" LineHeight="14"
+                                                               Margin="0,4,0,0" MaxHeight="42"
+                                                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding Keys}" FontFamily="{StaticResource MonoFont}"
+                                                               FontSize="8.5" Foreground="{DynamicResource TextFaintBrush}"
+                                                               Margin="0,5,0,0" TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+
+                                                <Grid Grid.Row="2" Margin="12,0,12,10">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <Border Style="{StaticResource HonorBadge}" ToolTip="{Binding HonorTip}">
+                                                            <TextBlock Text="{Binding HonorText}" Style="{StaticResource HonorText}" />
+                                                        </Border>
+                                                        <TextBlock Text="{Binding FlagsLabel}" Style="{StaticResource Note}"
+                                                                   Margin="6,0,0,0" VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="1" Text="{Binding StateLabel}"
+                                                               FontSize="9" FontWeight="Bold"
+                                                               VerticalAlignment="Center"
+                                                               ToolTip="{Binding StateTip}">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsMarked}" Value="True">
+                                                                        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </Grid>
+                                            </Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Grid Margin="4,3,4,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding VisualFlagsCountLine}" Style="{StaticResource Note}" />
+                                <TextBlock Grid.Column="1" Text="{Binding FastFlagHealthLine}" Style="{StaticResource Note}"
+                                           HorizontalAlignment="Right" />
+                            </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+
                 <DockPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="4,12,4,0">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                         <c:RippleButton Content="Save" Style="{StaticResource PrimaryButton}"
@@ -825,7 +1087,7 @@
                                         Command="{Binding ApplyFastFlagsCommand}" />
                     </StackPanel>
                     <TextBlock Style="{StaticResource Note}" VerticalAlignment="Center" Margin="0,0,12,0"
-                               Text="Presets are saved as they are ticked. Roblox only honours flags on its allowlist (since September 2025); anything else is ignored. An existing ClientAppSettings.json is backed up once as .aetherbak - and in vanilla mode nothing is written at all." />
+                               Text="Cards write straight into the JSON. Only allowlisted flags are read by current Roblox; legacy cards are still written for pinned older clients. An existing ClientAppSettings.json is backed up once as .aetherbak - and in vanilla mode nothing is written at all." />
                 </DockPanel>
             </Grid>
 

@@ -89,7 +89,8 @@ internal static class ScreenshotMode
             game.Refresh();
             viewModel.Places.Add(game);
             viewModel.SelectedPlace = game;
-            viewModel.Presets[0].IsMarked = true;
+            // Keine Vorschau-Flags anheften: der Screenshot-Modus darf die gespeicherten
+            // FastFlags des Benutzers nicht verändern.
             viewModel.Status = "Screenshot mode: sample account and sample game.";
             viewModel.AddGameOpen = false;
 
@@ -123,6 +124,11 @@ internal static class ScreenshotMode
         // Die Schnellansicht über der zuletzt gezeigten Seite aufnehmen.
         if (window.DataContext is MainViewModel layoutModel)
         {
+            // Der Screenshot soll das Feature zeigen, auch wenn es in den echten
+            // Einstellungen gerade ausgeschaltet ist. Danach wird der alte Wert wiederhergestellt.
+            var overlayWasEnabled = layoutModel.OverlayEnabled;
+            if (!overlayWasEnabled) layoutModel.OverlayEnabled = true;
+
             layoutModel.OpenLayoutCommand.Execute(null);
             await WaitAsync(800);
 
@@ -132,6 +138,7 @@ internal static class ScreenshotMode
 
             layoutModel.CloseLayoutCommand.Execute(null);
             await WaitAsync(400);
+            if (!overlayWasEnabled) layoutModel.OverlayEnabled = false;
         }
 
         // Die Ingame-Platten: jede ist ein eigenes Fenster - fürs Bild werden sie so

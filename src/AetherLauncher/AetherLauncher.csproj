@@ -10,7 +10,7 @@
     <AssemblyName>AetherLauncher</AssemblyName>
     <RootNamespace>AetherLauncher</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Product>Aether Launcher</Product>
     <Description>Open-Source Roblox-Launcher mit Kontomanager, Multi-Instanz-Start und FastFlags-Editor.</Description>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>

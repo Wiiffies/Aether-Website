@@ -169,6 +169,7 @@ internal static class UiSelfTest
 
         // Beispielzeilen einhängen, damit auch die Zeilenvorlagen (Konten, Spiele) Bindings auflösen.
         var viewModel = window.DataContext as MainViewModel;
+        var restoreOverlayOff = viewModel is { OverlayEnabled: false };
         if (viewModel is not null)
         {
             viewModel.Accounts.Add(new AccountItem(new AccountRecord
@@ -180,6 +181,11 @@ internal static class UiSelfTest
 
             viewModel.Places.Add(new PlaceItem(new PlaceRecord { PlaceId = 1818, Name = "Testspiel" }));
             viewModel.Presets.FirstOrDefault()!.IsMarked = true;
+
+            // Der Test läuft mit den echten Einstellungen des Benutzers. Ist die Schnellansicht
+            // dort absichtlich aus, wird sie nur für die Dauer des Tests eingeschaltet und
+            // danach wieder zurückgestellt - sonst wären die beiden Tastaturprüfungen sinnlos.
+            if (restoreOverlayOff) viewModel.OverlayEnabled = true;
             Pump(250);
         }
 
@@ -209,6 +215,32 @@ internal static class UiSelfTest
             Pump(300);
 
             if (viewModel is null) throw new InvalidOperationException("Das Fenster hat kein ViewModel.");
+
+            // Die Kartenansicht ist der Start: Karten und Filter müssen gefüllt sein, nicht nur
+            // die (unsichtbare) JSON-Spalte dahinter.
+            var visualCards = viewModel.VisiblePresets.Count;
+            var visualCategories = viewModel.FastFlagCategories.Count;
+            var visualStart = viewModel.FlagsVisualMode;
+
+            report.AppendLine(visualStart && visualCards > 0 && visualCategories > 1
+                ? $"  [OK  ] FastFlag-Kartenansicht mit {visualCards} Karten und {visualCategories} Filtern."
+                : $"  [FAIL] Kartenansicht: sichtbar={visualStart}, Karten={visualCards}, Filter={visualCategories}.");
+
+            if (!visualStart || visualCards == 0 || visualCategories <= 1) hoverFailed++;
+
+            // Und der Umschalter muss beide Ansichten wirklich umschalten.
+            viewModel.ShowJsonFlagsCommand.Execute(null);
+            Pump(180);
+            var jsonShown = viewModel.FlagsJsonVisibility == Visibility.Visible;
+            viewModel.ShowVisualFlagsCommand.Execute(null);
+            Pump(180);
+            var visualShown = viewModel.FlagsVisualVisibility == Visibility.Visible;
+
+            report.AppendLine(jsonShown && visualShown
+                ? "  [OK  ] Visual/JSON-Umschalter wechselt beide Ansichten."
+                : $"  [FAIL] Umschalter: JSON={jsonShown}, Visual={visualShown}.");
+
+            if (!jsonShown || !visualShown) hoverFailed++;
 
             var preset = viewModel.Presets.FirstOrDefault(p => !p.IsMarked && p.Flags.Count > 0)
                          ?? throw new InvalidOperationException("Kein freier Vorschlag zum Prüfen gefunden.");
@@ -248,6 +280,11 @@ internal static class UiSelfTest
 
             window.SelectPage(2);
             Pump(320);
+
+            // Die JSON-Werkzeugleiste liegt hinter dem Visual-Umschalter; für den echten
+            // Klick-Test erst auf JSON stellen.
+            viewModel?.ShowJsonFlagsCommand.Execute(null);
+            Pump(240);
 
             var format = FindButtonByText(window, "Format");
             var save = FindButtonByText(window, "Save");
@@ -325,7 +362,7 @@ internal static class UiSelfTest
             if (overlay is null) throw new InvalidOperationException("LayoutOverlay fehlt im Fenster.");
 
             viewModel.OpenLayoutCommand.Execute(null);
-            Pump(380);
+            Pump(700);
             var opened = overlay.Visibility == Visibility.Visible && overlay.Opacity > 0.8;
 
             viewModel.CloseLayoutCommand.Execute(null);
@@ -494,6 +531,10 @@ internal static class UiSelfTest
             window.Topmost = true;
             window.Activate();
             SetForegroundWindow(handle);
+            // Ein Eingabefeld aus dem vorherigen Test darf eine blanke Taste nicht schlucken.
+            // Ein normaler Reiter ist der realistische Fokus für den Tastendruck.
+            Keyboard.ClearFocus();
+            window.NavHome.Focus();
             Pump(240);
 
             if (GetForegroundWindow() != handle)
@@ -625,6 +666,12 @@ internal static class UiSelfTest
         {
             report.AppendLine($"  [FAIL] Maximieren ließ sich nicht prüfen: {ex.Message}");
             fitsWorkArea = false;
+        }
+
+        if (restoreOverlayOff && viewModel is not null)
+        {
+            viewModel.OverlayEnabled = false;
+            Pump(120);
         }
 
         window.Close();

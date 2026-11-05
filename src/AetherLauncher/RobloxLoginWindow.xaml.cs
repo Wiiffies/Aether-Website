@@ -89,6 +89,7 @@ public partial class RobloxLoginWindow : Window
             core.Settings.IsGeneralAutofillEnabled = false;
 
             core.NewWindowRequested += OnNewWindowRequested;
+            core.NavigationStarting += OnNavigationStarting;
             core.NavigationCompleted += (_, args) =>
             {
                 LoadingLayer.Visibility = Visibility.Collapsed;
@@ -122,11 +123,41 @@ public partial class RobloxLoginWindow : Window
     {
         e.Handled = true;
 
-        if (Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri) &&
-            (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp))
+        if (Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri) && IsTrustedLoginUri(uri))
         {
             Browser.CoreWebView2?.Navigate(uri.AbsoluteUri);
         }
+        else
+        {
+            Log.Warn("Roblox sign-in blocked a pop-up outside roblox.com.");
+            StatusLine.Text = "That link leaves Roblox's sign-in page and was blocked.";
+        }
+    }
+
+    /// <summary>
+    /// Hält die eingebettete Anmeldung auf Roblox' eigenen Seiten. Sonst könnte eine
+    /// untergeschobene Seite die Optik der Anmeldung nachbauen und den Schlüssel abgreifen.
+    /// Subressourcen (CDN, Bilder) sind davon nicht betroffen, nur die oberste Navigation.
+    /// </summary>
+    private void OnNavigationStarting(object? sender, CoreWebView2NavigationStartingEventArgs e)
+    {
+        if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri) || !IsTrustedLoginUri(uri))
+        {
+            e.Cancel = true;
+            Log.Warn("Roblox sign-in blocked a navigation outside roblox.com.");
+            StatusLine.Text = "That link leaves Roblox's sign-in page and was blocked.";
+        }
+    }
+
+    private static bool IsTrustedLoginUri(Uri uri)
+    {
+        if (uri.Scheme != Uri.UriSchemeHttps) return false;
+
+        var host = uri.Host;
+        return host.Equals("roblox.com", StringComparison.OrdinalIgnoreCase) ||
+               host.EndsWith(".roblox.com", StringComparison.OrdinalIgnoreCase) ||
+               host.Equals("rbxcdn.com", StringComparison.OrdinalIgnoreCase) ||
+               host.EndsWith(".rbxcdn.com", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task CheckForCookieAsync()

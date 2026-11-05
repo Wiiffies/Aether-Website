@@ -41,6 +41,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _cursorSummary = "";
     private string _presetSearch = "";
     private string _presetCountLine = "";
+    private string _fastFlagFilter = "all";
+    private string _visualFlagsCountLine = "";
+    private bool _flagsVisualMode = true;
     private string _flagsCountLabel = "0 flags";
     private string _flagsStatus = "";
     private bool _flagsHasError;
@@ -93,8 +96,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         PresetGroups = new ObservableCollection<PresetGroupItem>(
             Presets.GroupBy(p => p.Group).Select(g => new PresetGroupItem(g.Key, g.ToList())));
 
-        // Jeder Vorschlag schreibt sich beim Anklicken sofort in das JSON auf der linken Seite.
-        foreach (var preset in Presets) preset.PropertyChanged += OnPresetChanged;
+        // Favoriten kommen aus einer eigenen kleinen Datei; erst danach abonnieren, damit
+        // das Laden nicht sofort wieder gespeichert wird.
+        var favoriteNames = FastFlags.LoadFavorites();
+        foreach (var preset in Presets)
+        {
+            preset.IsFavorite = favoriteNames.Contains(preset.Name);
+            preset.PropertyChanged += OnPresetChanged;
+        }
 
         Builds = new ObservableCollection<BuildItem>();
         RecallDownloadedInstaller();
@@ -122,6 +131,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         FastFlagsJson = FastFlags.LoadJsonText();
         RefreshFlagState();
+        ApplyPresetFilter();
         SelectedAccount = Accounts.FirstOrDefault();
         SelectedPlace = Places.FirstOrDefault();
 
@@ -298,6 +308,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ImportFlagsCommand = new RelayCommand(ImportFlags);
         ExportFlagsCommand = new RelayCommand(ExportFlags);
         ClearFlagsCommand = new RelayCommand(ClearFlags);
+        ShowVisualFlagsCommand = new RelayCommand(() => FlagsVisualMode = true);
+        ShowJsonFlagsCommand = new RelayCommand(() => FlagsVisualMode = false);
+        SelectFlagFilterCommand = new RelayCommand(parameter => SelectFlagFilter(parameter as string ?? "all"));
+        ClearPresetSearchCommand = new RelayCommand(() => PresetSearch = "");
 
         LoadBuildsCommand = new AsyncRelayCommand(LoadBuildsAsync, () => !Busy);
         DownloadBuildCommand = new AsyncRelayCommand(parameter =>
@@ -337,6 +351,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public ObservableCollection<RecentItem> Recents { get; }
     public ObservableCollection<PresetItem> Presets { get; }
     public ObservableCollection<PresetGroupItem> PresetGroups { get; }
+    public ObservableCollection<PresetItem> VisiblePresets { get; } = new();
+    public ObservableCollection<FastFlagCategoryItem> FastFlagCategories { get; } = new();
     public ObservableCollection<VersionItem> InstalledVersions { get; }
     public ObservableCollection<FontItem> FontFamilies { get; }
     public ObservableCollection<BuildItem> Builds { get; }
@@ -381,6 +397,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public ICommand ImportFlagsCommand { get; }
     public ICommand ExportFlagsCommand { get; }
     public ICommand ClearFlagsCommand { get; }
+    public ICommand ShowVisualFlagsCommand { get; }
+    public ICommand ShowJsonFlagsCommand { get; }
+    public ICommand SelectFlagFilterCommand { get; }
+    public ICommand ClearPresetSearchCommand { get; }
     public ICommand LoadBuildsCommand { get; }
     public ICommand DownloadBuildCommand { get; }
     public ICommand InstallBuildCommand { get; }
@@ -704,6 +724,47 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             if (Set(ref _presetSearch, value)) ApplyPresetFilter();
         }
     }
+
+    /// <summary>"all", "favorites" oder der Name einer Gruppe (z. B. "GRAPHICS").</summary>
+    public string FastFlagFilter => _fastFlagFilter;
+
+    /// <summary>Die Kartenansicht ist der Start; JSON bleibt über den Umschalter erreichbar.</summary>
+    public bool FlagsVisualMode
+    {
+        get => _flagsVisualMode;
+        set
+        {
+            if (!Set(ref _flagsVisualMode, value)) return;
+            Raise(nameof(FlagsJsonMode));
+            Raise(nameof(FlagsVisualVisibility));
+            Raise(nameof(FlagsJsonVisibility));
+        }
+    }
+
+    public bool FlagsJsonMode => !_flagsVisualMode;
+
+    public Visibility FlagsVisualVisibility => _flagsVisualMode ? Visibility.Visible : Visibility.Collapsed;
+
+    public Visibility FlagsJsonVisibility => _flagsVisualMode ? Visibility.Collapsed : Visibility.Visible;
+
+    /// <summary>Zeile unter der Kartenansicht: sichtbare und bereits aktive Karten.</summary>
+    public string VisualFlagsCountLine
+    {
+        get => _visualFlagsCountLine;
+        private set => Set(ref _visualFlagsCountLine, value);
+    }
+
+    /// <summary>Wie viele Karten auf der aktuellen Allowlist stehen - ehrlich, nicht geschätzt.</summary>
+    public string FastFlagHealthLine =>
+        $"{Presets.Count} cards · {Presets.Count(p => p.Allowlisted)} still read by current Roblox";
+
+    /// <summary>"Nothing matches" in der Kartenansicht.</summary>
+    public Visibility VisualEmptyVisibility =>
+        VisiblePresets.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>Der Hinweistext im Suchfeld, solange es leer ist.</summary>
+    public Visibility PresetSearchPlaceholderVisibility =>
+        string.IsNullOrWhiteSpace(_presetSearch) ? Visibility.Visible : Visibility.Collapsed;
 
     /// <summary>Zeile unter dem Filter: wie viele Vorschläge gerade sichtbar sind.</summary>
     public string PresetCountLine
@@ -1471,8 +1532,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private void OnPresetChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (_syncingPresets) return;
-        if (e.PropertyName is not (nameof(PresetItem.IsMarked) or null)) return;
         if (sender is not PresetItem preset) return;
+
+        if (e.PropertyName is nameof(PresetItem.IsFavorite))
+        {
+            FastFlags.SaveFavorites(Presets.Where(p => p.IsFavorite).Select(p => p.Name));
+            ApplyPresetFilter();
+            return;
+        }
+
+        if (e.PropertyName is not (nameof(PresetItem.IsMarked) or null)) return;
 
         ApplyPresetChoice(preset);
     }
@@ -1548,26 +1617,87 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private void ApplyPresetFilter()
     {
         var needle = _presetSearch.Trim();
-        PresetGroups.Clear();
+        var matched = Presets
+            .Where(p => needle.Length == 0 || Matches(p, needle))
+            .ToList();
 
-        foreach (var group in Presets.GroupBy(p => p.Group))
+        var selected = _fastFlagFilter switch
         {
-            // Was der Client noch liest, steht oben - der Rest bleibt darunter stehen.
-            var items = group
-                .Where(p => needle.Length == 0 || Matches(p, needle))
-                .OrderByDescending(p => p.Allowlisted)
-                .ToList();
+            "favorites" => matched.Where(p => p.IsFavorite).ToList(),
+            "all" => matched,
+            _ => matched.Where(p => string.Equals(p.Group, _fastFlagFilter, StringComparison.Ordinal)).ToList(),
+        };
 
-            if (items.Count > 0) PresetGroups.Add(new PresetGroupItem(group.Key, items));
-        }
+        // Noch gelesene Karten zuerst - sonst beginnt die Übersicht mit lauter
+        // "usually ignored"-Karten. Danach in der Reihenfolge der sichtbaren Filter:
+        // FPS, Graphics, Lighting, Effects, Textures, Interface, Network.
+        var visible = selected
+            .OrderByDescending(p => p.Allowlisted)
+            .ThenBy(p => GroupOrder(p.Group))
+            .ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
-        var shown = PresetGroups.Sum(group => group.Items.Count);
+        VisiblePresets.Clear();
+        foreach (var preset in visible) VisiblePresets.Add(preset);
+
+        PresetGroups.Clear();
+        foreach (var group in visible.GroupBy(p => p.Group))
+            PresetGroups.Add(new PresetGroupItem(group.Key, group));
+
+        FastFlagCategories.Clear();
+        FastFlagCategories.Add(new FastFlagCategoryItem("all", $"All · {matched.Count}", matched.Count));
+        FastFlagCategories.Add(new FastFlagCategoryItem("favorites", $"★ Favorites · {matched.Count(p => p.IsFavorite)}",
+            matched.Count(p => p.IsFavorite)));
+
+        foreach (var group in Presets.Select(p => p.Group).Distinct())
+            FastFlagCategories.Add(new FastFlagCategoryItem(group, $"{CategoryLabel(group)} · {matched.Count(p => p.Group == group)}",
+                matched.Count(p => p.Group == group)));
+
+        foreach (var category in FastFlagCategories)
+            category.IsSelected = string.Equals(category.Key, _fastFlagFilter, StringComparison.Ordinal);
+
+        var shown = VisiblePresets.Count;
         PresetCountLine = needle.Length == 0
-            ? $"{Presets.Count} presets in {PresetGroups.Count} groups"
+            ? $"{shown} presets shown in {PresetGroups.Count} groups"
             : $"{shown} of {Presets.Count} presets match \"{needle}\"";
 
+        VisualFlagsCountLine = $"{shown} card{(shown == 1 ? "" : "s")} shown · {visible.Count(p => p.IsMarked)} active";
+
         Raise(nameof(PresetEmptyVisibility));
+        Raise(nameof(VisualEmptyVisibility));
+        Raise(nameof(PresetSearchPlaceholderVisibility));
     }
+
+    private void SelectFlagFilter(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key)) key = "all";
+        _fastFlagFilter = key;
+        ApplyPresetFilter();
+    }
+
+    private static string CategoryLabel(string group) => group switch
+    {
+        FastFlags.FrameRateGroup => "FPS",
+        FastFlags.GraphicsGroup => "Graphics",
+        FastFlags.SkyGroup => "Lighting",
+        FastFlags.RenderGroup => "Effects",
+        FastFlags.DetailGroup => "Textures",
+        FastFlags.InterfaceGroup => "Interface",
+        FastFlags.NetworkGroup => "Network",
+        _ => group,
+    };
+
+    private static int GroupOrder(string group) => group switch
+    {
+        FastFlags.FrameRateGroup => 0,
+        FastFlags.GraphicsGroup => 1,
+        FastFlags.SkyGroup => 2,
+        FastFlags.RenderGroup => 3,
+        FastFlags.DetailGroup => 4,
+        FastFlags.InterfaceGroup => 5,
+        FastFlags.NetworkGroup => 6,
+        _ => 7,
+    };
 
     private static bool Matches(PresetItem preset, string needle)
         => preset.Name.Contains(needle, StringComparison.CurrentCultureIgnoreCase) ||

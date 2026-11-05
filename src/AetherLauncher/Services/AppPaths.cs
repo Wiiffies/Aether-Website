@@ -16,6 +16,9 @@ public static class AppPaths
     public static string OverlayPlacementFile => Path.Combine(DataDir, "overlay.json");
     public static string SettingsFile => Path.Combine(DataDir, "settings.json");
     public static string FastFlagsFile => Path.Combine(DataDir, "FastFlags.json");
+
+    /// <summary>Vom Benutzer angeheftete FastFlag-Karten (eine Zeile pro Vorschlagsname).</summary>
+    public static string FastFlagsFavoritesFile => Path.Combine(DataDir, "fastflags-favorites.txt");
     public static string PendingLaunchFile => Path.Combine(DataDir, "pending-launch.txt");
 
     /// <summary>AES-Schlüssel für die Cookie-Ablage; selbst DPAPI-verschlüsselt.</summary>

@@ -1,4 +1,9 @@
-bin/
-obj/
+
+# Local release output
 *.user
 .vs/
+bin/
+dist/
+obj/
+src/AetherLauncher/bin/
+src/AetherLauncher/obj/

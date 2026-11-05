@@ -271,6 +271,34 @@ public static class SelfTest
                 return ("OK", $"JSON geprüft, {message}, Fremddatei gesichert.");
             }, results);
 
+            Test("FastFlags (alle Vorschläge)", () =>
+            {
+                var problems = FastFlags.ValidatePresets();
+                if (problems.Count > 0) return ("FAIL", string.Join("; ", problems));
+
+                var versionDir = Path.Combine(tempRoot, "version-presets");
+                var flags = new Dictionary<string, string>(StringComparer.Ordinal);
+                foreach (var preset in FastFlags.Presets) FastFlags.MergePreset(flags, preset);
+
+                if (!FastFlags.ApplyTo(versionDir, flags, out var message)) return ("FAIL", message);
+
+                var file = Path.Combine(versionDir, "ClientSettings", "ClientAppSettings.json");
+                using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(file));
+                var readBack = doc.RootElement.EnumerateObject().ToDictionary(
+                    property => property.Name,
+                    property => property.Value.GetString() ?? "",
+                    StringComparer.Ordinal);
+
+                var missing = flags.Where(pair => !readBack.TryGetValue(pair.Key, out var value) ||
+                                                  !string.Equals(value, pair.Value, StringComparison.Ordinal))
+                    .Select(pair => pair.Key)
+                    .ToList();
+
+                return missing.Count == 0
+                    ? ("OK", $"{FastFlags.Presets.Count} Vorschläge, {flags.Count} Flags geschrieben und vollständig zurückgelesen.")
+                    : ("FAIL", $"Nicht korrekt zurückgelesen: {string.Join(", ", missing)}");
+            }, results);
+
             Test("Multi-Instanz (Singleton halten)", () =>
             {
                 if (MultiInstance.IsClientRunning())

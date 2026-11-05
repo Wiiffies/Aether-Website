@@ -174,6 +174,27 @@ public static class GameOverlay
         return ids;
     }
 
+    /// <summary>Läuft gerade irgendein Roblox-Client? Auch ohne sichtbares Fenster.</summary>
+    public static bool IsClientRunning()
+    {
+        try
+        {
+            var processes = Process.GetProcessesByName("RobloxPlayerBeta");
+            try
+            {
+                return processes.Length > 0;
+            }
+            finally
+            {
+                foreach (var process in processes) process.Dispose();
+            }
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     /// <summary>Hat dieser Client schon ein Fenster? (Der Startbildschirm zählt mit.)</summary>
     public static bool HasWindow(int processId) => WindowOf(processId) != IntPtr.Zero;
 
