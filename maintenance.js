@@ -77,7 +77,7 @@
         String(hours).padStart(2, "0") + ":" +
         String(minutes).padStart(2, "0") + ":" +
         String(secs).padStart(2, "0");
-      if (eta) eta.textContent = endsAt.toLocaleString();
+      if (eta) eta.textContent = endsAt.toLocaleString("en-US");
     }
 
     tick();

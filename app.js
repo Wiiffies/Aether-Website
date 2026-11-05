@@ -70,7 +70,7 @@
     if (!iso) return "—";
     var date = new Date(iso);
     if (isNaN(date.getTime())) return "—";
-    return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
   }
 
   var toastTimer = 0;
@@ -207,7 +207,7 @@
     text("[data-release-version]", release.version || "—");
     text("[data-release-date]", release.date ? formatDate(release.date) : "—");
     text("[data-release-size]", release.size ? humanBytes(release.size) : "—");
-    text("[data-release-downloads]", release.downloads ? release.downloads.toLocaleString() : "—");
+    text("[data-release-downloads]", release.downloads ? release.downloads.toLocaleString("en-US") : "—");
 
     var target = release.assetUrl || release.pageUrl || config.fallbackDownloadUrl || releasesUrl || "";
     $$("[data-download]").forEach(function (link) {

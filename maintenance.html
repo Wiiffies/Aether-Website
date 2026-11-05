@@ -394,7 +394,7 @@ h1 span {
               String(seconds % 60).padStart(2, "0");
             if (counter) counter.textContent = text;
           }, 1000);
-          if (eta) eta.textContent = new Date(target).toLocaleString();
+          if (eta) eta.textContent = new Date(target).toLocaleString("en-US");
         }
       }
 
