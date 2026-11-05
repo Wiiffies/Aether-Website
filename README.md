@@ -5,6 +5,7 @@ Aether is a source-available Windows launcher for Roblox and the website behind 
 - **Website:** [get-aether.de](https://get-aether.de)
 - **Launcher source:** [`programm` branch](https://github.com/Wiiffies/Aether-Website/tree/programm)
 - **Releases:** [GitHub releases](https://github.com/Wiiffies/Aether-Website/releases)
+- **Download:** [get-aether.de/download.html](https://get-aether.de/download.html)
 - **FastFlags catalogue:** [get-aether.de/fastflags.html](https://get-aether.de/fastflags.html)
 
 ## License

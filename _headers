@@ -21,6 +21,12 @@
 /index.html
   Cache-Control: public, max-age=0, must-revalidate
 
+/download
+  Cache-Control: public, max-age=0, must-revalidate
+
+/download.html
+  Cache-Control: public, max-age=0, must-revalidate
+
 /get-script
   Cache-Control: public, max-age=0, must-revalidate
 

@@ -51,6 +51,7 @@
     size: 0,
     assetName: "",
     assetUrl: "",
+    checksumUrl: "",
     pageUrl: ""
   };
 
@@ -61,15 +62,15 @@
   }
 
   function humanBytes(bytes) {
-    if (!bytes || bytes < 1024) return bytes ? bytes + " B" : "—";
+    if (!bytes || bytes < 1024) return bytes ? bytes + " B" : "Unknown";
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + " KB";
     return (bytes / (1024 * 1024)).toFixed(1) + " MB";
   }
 
   function formatDate(iso) {
-    if (!iso) return "—";
+    if (!iso) return "Unknown";
     var date = new Date(iso);
-    if (isNaN(date.getTime())) return "—";
+    if (isNaN(date.getTime())) return "Unknown";
     return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
   }
 
@@ -154,7 +155,7 @@
 
     $$("[data-source]").forEach(function (link) {
       if (repoUrl) {
-        link.href = repoUrl + "/tree/main/Programm";
+        link.href = repoUrl + "/tree/programm";
         link.target = "_blank";
         link.rel = "noopener";
         link.removeAttribute("data-needs-config");
@@ -214,10 +215,15 @@
     var version = release.version || fallbackVersion;
     text("[data-version]", "v" + version);
     text("[data-build-version]", version);
-    text("[data-release-version]", release.version || "—");
-    text("[data-release-date]", release.date ? formatDate(release.date) : "—");
-    text("[data-release-size]", release.size ? humanBytes(release.size) : "—");
-    text("[data-release-downloads]", release.downloads ? release.downloads.toLocaleString("en-US") : "—");
+    text("[data-release-version]", release.version || fallbackVersion);
+    if (release.date) text("[data-release-date]", formatDate(release.date));
+    if (release.size) text("[data-release-size]", humanBytes(release.size));
+    if (release.downloads) text("[data-release-downloads]", release.downloads.toLocaleString("en-US"));
+    if (release.assetName) text("[data-asset-name]", release.assetName);
+
+    $$("[data-checksum]").forEach(function (link) {
+      if (release.checksumUrl) link.href = release.checksumUrl;
+    });
 
     var target = release.assetUrl || release.pageUrl || config.fallbackDownloadUrl || releasesUrl || "";
     $$("[data-download]").forEach(function (link) {
@@ -240,13 +246,13 @@
       if (release.assetUrl) {
         meta.textContent = "Latest release from GitHub. No account required.";
       } else if (repo) {
-        meta.textContent = "No packaged release yet — open the releases page or build from source.";
+        meta.textContent = "No packaged release yet. Open the releases page or build from source.";
       } else {
         meta.textContent = "Release lookup is not configured yet. Build from source below.";
       }
     }
 
-    if (release.assetUrl) {
+    if (release.assetUrl || config.fallbackDownloadUrl) {
       setReleaseState("ready", "Latest");
     } else if (repo) {
       setReleaseState("quiet", "Source");
@@ -257,6 +263,9 @@
 
   function adopt(data) {
     var asset = pickAsset(data.assets);
+    var checksum = (data.assets || []).find(function (item) {
+      return /\.sha256$/i.test(item.name || "");
+    });
     release = {
       version: String(data.tag_name || "").replace(/^v/i, ""),
       date: data.published_at || "",
@@ -266,6 +275,7 @@
       size: asset ? asset.size || 0 : 0,
       assetName: asset ? asset.name || "" : "",
       assetUrl: asset ? asset.browser_download_url || "" : "",
+      checksumUrl: checksum ? checksum.browser_download_url || "" : "",
       pageUrl: data.html_url || releasesUrl
     };
     renderRelease();

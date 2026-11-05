@@ -1,7 +1,4 @@
-// Generated from Programm/src/AetherLauncher/Services/FastFlags.cs.
-// Do not edit by hand; run tmp/export-flags after changing the launcher catalogue.
 window.AETHER_FLAGS = {
-  "generatedAt": "2026-11-04T22:40:45.1133062\u002B00:00",
   "totals": {
     "presets": 99,
     "flags": 153,

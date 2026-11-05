@@ -104,7 +104,7 @@ import { rankForAmount } from "./donation-ranks.js?v=1";
   function updatePreview() {
     var amount = amountValue();
     var name = cleanLine(elements.name && elements.name.value, 24) || "Your name";
-    var message = cleanMessage(elements.message && elements.message.value, 140) || "Keep Aether quiet, fast and free.";
+    var message = cleanMessage(elements.message && elements.message.value, 140) || "Support Aether.";
     var filter = filterClass(state.filter);
 
     if (elements.preview) elements.preview.className = "donation-card filter-" + filter;
@@ -138,7 +138,7 @@ import { rankForAmount } from "./donation-ranks.js?v=1";
         .then(function (body) {
           if (!body || requestId !== previewSequence) return;
           if (elements.previewName) elements.previewName.textContent = body.username || "Your name";
-          if (elements.previewMessage) elements.previewMessage.textContent = body.message || "Keep Aether quiet, fast and free.";
+          if (elements.previewMessage) elements.previewMessage.textContent = body.message || "Support Aether.";
         })
         .catch(function () { /* keep the local preview if moderation is unavailable */ });
     }, 350);
