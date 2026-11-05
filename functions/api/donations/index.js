@@ -40,6 +40,9 @@ async function checkRateLimit(env, ip) {
 }
 
 async function verifyTurnstile(env, token, ip) {
+  // Turnstile is opt-in so the checkout still works when only the Worker
+  // secrets are configured. Enable it with REQUIRE_TURNSTILE=true after the
+  // public site key is set in config.js.
   if (env.REQUIRE_TURNSTILE !== "true") return true;
   if (!env.TURNSTILE_SECRET_KEY) return false;
   if (!token) return false;
@@ -156,7 +159,9 @@ export async function onRequestPost({ request, env }) {
       ipnCallbackUrl: callback,
       successUrl,
       cancelUrl,
-      timeoutMs: 15000
+      timeoutMs: 15000,
+      // workerd's fetch rejects a URL object; the SDK builds one internally.
+      fetch: (input, init) => fetch(input instanceof URL ? input.toString() : input, init)
     });
 
     const checkout = await sdk.createCheckout({
