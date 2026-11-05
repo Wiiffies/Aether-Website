@@ -1243,7 +1243,7 @@
                                                     ToolTip="Press the new keys right after clicking" />
                                     <c:RippleButton Content="Reset" Style="{StaticResource ToolButton}" Margin="8,0,0,0"
                                                     Command="{Binding ResetShortcutCommand}"
-                                                    ToolTip="Back to Delete (Entf)" />
+                                                    ToolTip="Back to Delete" />
                                 </StackPanel>
                             </Grid>
 
