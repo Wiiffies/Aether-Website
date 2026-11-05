@@ -93,10 +93,11 @@ jobs:
       - name: Deploy Worker
         run: npx wrangler deploy --config wrangler.deploy.toml
 
-      - name: Set NOWPayments secrets
+      - name: Set Worker secrets
         env:
           NOWPAYMENTS_API_KEY: ${{ secrets.NOWPAYMENTS_API_KEY }}
           NOWPAYMENTS_IPN_SECRET: ${{ secrets.NOWPAYMENTS_IPN_SECRET }}
+          CHAT_FILTER_TERMS: ${{ secrets.CHAT_FILTER_TERMS }}
         run: |
           set -euo pipefail
           if [ -n "${NOWPAYMENTS_API_KEY}" ]; then
@@ -108,6 +109,11 @@ jobs:
             printf '%s' "$NOWPAYMENTS_IPN_SECRET" | npx wrangler secret put NOWPAYMENTS_IPN_SECRET --config wrangler.deploy.toml
           else
             echo "::warning::NOWPAYMENTS_IPN_SECRET is missing; confirmed donations will not appear on the wall."
+          fi
+          if [ -n "${CHAT_FILTER_TERMS}" ]; then
+            printf '%s' "$CHAT_FILTER_TERMS" | npx wrangler secret put CHAT_FILTER_TERMS --config wrangler.deploy.toml
+          else
+            echo "::warning::CHAT_FILTER_TERMS is missing; only the built-in n-word rules are active."
           fi
 
       - name: Show configured Worker secret names

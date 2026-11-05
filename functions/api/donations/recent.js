@@ -1,5 +1,5 @@
 import { rankForAmount } from "../../../donation-ranks.js";
-import { cleanAndCensor } from "../../../moderation.js";
+import { cleanAndCensor, configureModeration } from "../../../worker/moderation.js";
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -46,6 +46,7 @@ export function enrichDonations(donations) {
 }
 
 export async function onRequestGet({ env }) {
+  configureModeration(env.CHAT_FILTER_TERMS);
   if (!env.DONATIONS) return json({ donations: [] });
 
   try {

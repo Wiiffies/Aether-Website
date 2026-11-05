@@ -21,7 +21,7 @@
   <script src="config.js?v=26"></script>
   <script src="maintenance.js?v=24" defer></script>
   <script src="app.js?v=26" defer></script>
-  <script type="module" src="donate.js?v=4"></script>
+  <script type="module" src="donate.js?v=5"></script>
 </head>
 <body class="donate-page">
   <a class="skip-link" href="#main">Skip to content</a>
@@ -91,7 +91,7 @@
       <p class="lede">
         Aether stays local-first and free. If it saves you a little time, you can leave a
         crypto tip through NOWPayments, pick a card style for your message and see the card
-        before you pay. Messages are automatically filtered; slurs and common evasions are censored.
+        before you pay. Names and messages are checked on our server; the matching rules are not sent to your browser.
       </p>
       <div class="badges">
         <span class="badge badge-early">Early build</span>
@@ -141,7 +141,7 @@
             <label class="field" for="donorMessage">
               <span>Message <span id="messageCounter" class="char-count">0 / 140</span></span>
               <textarea id="donorMessage" name="message" maxlength="140" rows="3" placeholder="A short note for the wall"></textarea>
-              <span class="field-hint">HTML and links are removed; the server filters the final text.</span>
+              <span class="field-hint">HTML and links are removed; the server checks the final text.</span>
             </label>
           </div>
 
@@ -154,7 +154,7 @@
               <button class="filter-chip" type="button" data-filter="terminal">Terminal</button>
             </div>
             <input type="hidden" id="messageFilter" name="filter" value="plain" />
-            <p class="field-hint">This only changes the card style. Messages and names are automatically censored for slurs and common evasions before they are stored.</p>
+            <p class="field-hint">This only changes the card style. Names and messages are checked on the server before checkout and again before anything is stored on the wall.</p>
           </fieldset>
 
           <label class="check-row" for="showOnWall">
@@ -202,8 +202,8 @@
           </article>
           <p class="preview-note">This is a preview only. Nothing is public until NOWPayments confirms the payment.</p>
           <div class="preview-policy">
-            <strong>Filter behaviour</strong>
-            <p>Links, HTML and control characters are removed. Messages are capped at 140 characters, and slurs—including common leetspeak, spacing and homoglyph tricks—are replaced with asterisks.</p>
+            <strong>Moderation</strong>
+            <p>Links, HTML and control characters are removed. Messages are capped at 140 characters, and the server replaces matched terms with asterisks. The matching list is not shipped to the browser.</p>
           </div>
         </aside>
       </div>

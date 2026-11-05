@@ -1,4 +1,5 @@
 import { onRequestPost as createDonation } from "../functions/api/donations/index.js";
+import { onRequestPost as previewDonation } from "../functions/api/donations/preview.js";
 import { onRequestGet as recentDonations } from "../functions/api/donations/recent.js";
 import { onRequestPost as receiveIpn, onRequestGet as rejectIpnGet } from "../functions/api/nowpayments/ipn.js";
 
@@ -19,8 +20,22 @@ export default {
     const path = url.pathname.replace(/\/+$/, "") || "/";
     const context = { request, env, ctx };
 
+    // These directories are Worker source, not public assets. Return 404 even
+    // if GitHub Pages would otherwise serve the files.
+    if (
+      path === "/moderation.js" ||
+      path.startsWith("/worker/") ||
+      path.startsWith("/functions/")
+    ) {
+      return notFound();
+    }
+
     if (request.method === "POST" && path === "/api/donations") {
       return createDonation(context);
+    }
+
+    if (request.method === "POST" && path === "/api/donations/preview") {
+      return previewDonation(context);
     }
 
     if (request.method === "GET" && path === "/api/donations/recent") {

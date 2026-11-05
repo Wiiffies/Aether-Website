@@ -1,5 +1,5 @@
 import { verifyWebhookSignature } from "@nowpaymentsio/nowpayments-sdk-nodejs";
-import { cleanAndCensor } from "../../../moderation.js";
+import { cleanAndCensor, configureModeration } from "../../../worker/moderation.js";
 
 const MAX_BODY_BYTES = 64 * 1024;
 const PAID_STATUSES = new Set(["confirmed", "finished"]);
@@ -16,6 +16,7 @@ function json(body, status = 200) {
 }
 
 export async function onRequestPost({ request, env }) {
+  configureModeration(env.CHAT_FILTER_TERMS);
   if (!env.NOWPAYMENTS_IPN_SECRET) return json({ error: "IPN is not configured." }, 503);
 
   const signature = request.headers.get("x-nowpayments-sig") || "";

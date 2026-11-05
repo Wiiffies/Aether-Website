@@ -1,5 +1,4 @@
 import { rankForAmount } from "./donation-ranks.js?v=1";
-import { censorText } from "./moderation.js?v=1";
 
 (function () {
   "use strict";
@@ -7,6 +6,9 @@ import { censorText } from "./moderation.js?v=1";
   var config = window.AETHER_CONFIG || {};
   var donationConfig = config.donations || {};
   var endpoint = String(donationConfig.endpoint || "/api/donations");
+  var previewEndpoint = String(donationConfig.previewEndpoint || endpoint.replace(/\/donations\/?$/, "/donations/preview"));
+  var previewTimer = 0;
+  var previewSequence = 0;
   var turnstileSiteKey = String(donationConfig.turnstileSiteKey || "").trim();
   var minAmount = Number(donationConfig.minAmount || 3);
   var maxAmount = Number(donationConfig.maxAmount || 500);
@@ -63,7 +65,7 @@ import { censorText } from "./moderation.js?v=1";
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, max);
-    return censorText(text);
+    return text;
   }
 
   function filterClass(value) {
@@ -101,7 +103,7 @@ import { censorText } from "./moderation.js?v=1";
 
   function updatePreview() {
     var amount = amountValue();
-    var name = censorText(cleanLine(elements.name && elements.name.value, 24)) || "Your name";
+    var name = cleanLine(elements.name && elements.name.value, 24) || "Your name";
     var message = cleanMessage(elements.message && elements.message.value, 140) || "Keep Aether quiet, fast and free.";
     var filter = filterClass(state.filter);
 
@@ -114,6 +116,32 @@ import { censorText } from "./moderation.js?v=1";
     if (elements.messageCounter) {
       elements.messageCounter.textContent = (elements.message && elements.message.value || "").length + " / 140";
     }
+  }
+
+  function schedulePreview() {
+    if (!previewEndpoint) return;
+    var name = cleanLine(elements.name && elements.name.value, 24);
+    var message = cleanMessage(elements.message && elements.message.value, 140);
+    if (!name && !message) return;
+
+    var requestId = ++previewSequence;
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(function () {
+      fetch(previewEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({ username: name, message: message })
+      })
+        .then(function (response) {
+          return response.ok ? response.json() : null;
+        })
+        .then(function (body) {
+          if (!body || requestId !== previewSequence) return;
+          if (elements.previewName) elements.previewName.textContent = body.username || "Your name";
+          if (elements.previewMessage) elements.previewMessage.textContent = body.message || "Keep Aether quiet, fast and free.";
+        })
+        .catch(function () { /* keep the local preview if moderation is unavailable */ });
+    }, 350);
   }
 
   function setStatus(message, kind) {
@@ -237,7 +265,10 @@ import { censorText } from "./moderation.js?v=1";
 
   [elements.name, elements.message].forEach(function (input) {
     if (!input) return;
-    input.addEventListener("input", updatePreview);
+    input.addEventListener("input", function () {
+      updatePreview();
+      schedulePreview();
+    });
   });
 
   elements.filterChips.forEach(function (chip) {
@@ -312,9 +343,9 @@ import { censorText } from "./moderation.js?v=1";
       head.appendChild(amount);
       head.appendChild(rankEl);
       var name = document.createElement("strong");
-      name.textContent = censorText(donation.username || "Anonymous");
+      name.textContent = donation.username || "Anonymous";
       var message = document.createElement("p");
-      message.textContent = censorText(donation.message || "Thanks for keeping Aether running.");
+      message.textContent = donation.message || "Thanks for keeping Aether running.";
       card.appendChild(head);
       card.appendChild(name);
       card.appendChild(message);

@@ -1,5 +1,10 @@
 import { NowPaymentsSDK } from "@nowpaymentsio/nowpayments-sdk-nodejs";
-import { cleanText, cleanAndCensor, censorText } from "../../../moderation.js";
+import {
+  cleanText,
+  cleanAndCensor,
+  censorText,
+  configureModeration
+} from "../../../worker/moderation.js";
 
 const VALID_FILTERS = new Set(["plain", "glow", "sunset", "terminal"]);
 const MAX_BODY_BYTES = 16 * 1024;
@@ -116,6 +121,7 @@ export async function onRequestPost({ request, env }) {
 
   if (body && body.company) return json({ error: "The form could not be submitted." }, 400);
 
+  configureModeration(env.CHAT_FILTER_TERMS);
   const validated = validateBody(body);
   if (validated.error) return json({ error: validated.error }, 400);
 

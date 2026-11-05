@@ -12,6 +12,7 @@
 #   npx wrangler secret put NOWPAYMENTS_API_KEY --config wrangler.worker.toml
 #   npx wrangler secret put NOWPAYMENTS_IPN_SECRET --config wrangler.worker.toml
 #   npx wrangler secret put TURNSTILE_SECRET_KEY --config wrangler.worker.toml
+#   npx wrangler secret put CHAT_FILTER_TERMS --config wrangler.worker.toml
 
 name = "aether-donations"
 account_id = "e83c68e5e26e3e9096542df702331096"
@@ -22,7 +23,10 @@ workers_dev = true
 
 routes = [
   { pattern = "get-aether.de/api/donations*", zone_name = "get-aether.de" },
-  { pattern = "get-aether.de/api/nowpayments/ipn*", zone_name = "get-aether.de" }
+  { pattern = "get-aether.de/api/nowpayments/ipn*", zone_name = "get-aether.de" },
+  { pattern = "get-aether.de/moderation.js", zone_name = "get-aether.de" },
+  { pattern = "get-aether.de/worker/*", zone_name = "get-aether.de" },
+  { pattern = "get-aether.de/functions/*", zone_name = "get-aether.de" }
 ]
 
 [vars]
