@@ -268,13 +268,13 @@ public sealed class PresetItem : ObservableObject
     
     public bool Allowlisted => Preset.Allowlisted;
 
-    public string HonorText => Preset.Allowlisted ? "still active" : "usually ignored";
+    public string HonorText => Preset.Allowlisted ? "supported" : "legacy";
 
     public string HonorTip => Preset.Allowlisted
-        ? "This flag is on Roblox' allowlist - the client still reads it."
-        : "Roblox only honours allowlisted flags since September 2025, so the client normally ignores this one. Aether writes it anyway, in case you run a pinned older client.";
+        ? "Every key in this card is on Roblox's current allowlist."
+        : "This card contains a key Roblox currently ignores. It is only useful with an older pinned client.";
 
-    public string BadgeText => Preset.Allowlisted ? "ALLOWLISTED" : "LEGACY";
+    public string BadgeText => Preset.Allowlisted ? "SUPPORTED" : "LEGACY";
 
     public string FlagsLabel => Preset.Flags.Count == 1 ? "1 flag" : $"{Preset.Flags.Count} flags";
 
@@ -396,7 +396,7 @@ public sealed class PresetGroupItem : ObservableObject
 
     
     public string Summary =>
-        $"{Items.Count} preset{(Items.Count == 1 ? "" : "s")} · {Items.Count(item => item.Allowlisted)} still active";
+        $"{Items.Count} preset{(Items.Count == 1 ? "" : "s")} · {Items.Count(item => item.Allowlisted)} supported";
 
     public bool IsOpen
     {

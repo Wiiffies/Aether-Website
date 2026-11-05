@@ -8,7 +8,7 @@
         <Border Background="#141C29" BorderBrush="{DynamicResource BorderSoftBrush}"
                 BorderThickness="1" CornerRadius="7" Padding="9,6">
             <TextBlock Style="{StaticResource Note}" Foreground="{DynamicResource TextDimBrush}" TextWrapping="Wrap"
-                       Text="Roblox only reads allowlisted flags since September 2025, and this cap is not on that list - your client may ignore it completely. Reports also mention rare crashes when joining or teleporting, so staying at or below 240 is safer. The Graphics switches are on the list and do work." />
+                       Text="Roblox currently reads only allowlisted flags, and this cap is not one of them. Current clients ignore DFIntTaskSchedulerTargetFps; it is kept for pinned older clients. The Graphics switches below are allowlisted and do work." />
         </Border>
 
         <WrapPanel x:Name="FpsChips" Margin="0,9,0,0">

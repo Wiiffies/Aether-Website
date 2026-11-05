@@ -27,8 +27,8 @@ The interface follows the Aether Hub design language: the same palette, cards, t
 | **Favorites** | Pin a game to the top of the list. Pinned games stay in `places.json`. |
 | **Drag to sort** | Drag a row up or down; the order is stored in `places.json`. |
 | **Recently played** | Shows games started through Aether and sessions started by Roblox itself, read from the client logs. Names and icons are filled in through the Roblox API. **Rescan** imports sessions started outside Aether. |
-| **FastFlags** | A card view with **99 presets in seven groups** (FPS, Graphics, Lighting, Effects, Textures, Interface, Network) and **153 individual flags**. Search, category chips, and favorites keep the list short. One click applies a preset; a second click removes it. **Visual / JSON** switches the same page to the JSON editor. Existing files are backed up, and every written value is read back and verified. |
-| **Allowlist status** | Every card is marked **ALLOWLISTED** when the flag is on Roblox's current allowlist, otherwise **LEGACY**. 49 of the 99 presets are currently allowlisted. Since September 2025 the client only reads allowlisted flags, so the card tells you what can still work. |
+| **FastFlags** | A card view with **37 presets in five groups** (Graphics, Sky & lighting, Effects & renderer, Textures & detail, Interface). Every card uses only the **18 keys** Roblox currently reads. Search, category chips, and favorites keep the list short. One click applies a preset; a second click removes it. **Visual / JSON** switches the same page to the JSON editor. Existing files are backed up, and every written value is read back and verified. |
+| **Allowlist status** | A card is marked **SUPPORTED** only when every key in it is on Roblox's current allowlist; otherwise it is **LEGACY**. The built-in catalogue contains only supported cards. Since September 2025 the client ignores every other key, so the badge is derived from the actual key set instead of set by hand. |
 | **Start without a game** | With no selected game, **Play** becomes **Open Roblox** and opens the Roblox app with the selected account or the current session. The **Roblox app** button is always available. |
 | **Version downloads** | Load the current and historical Roblox versions from WEAO and the official DeployHistory, download the original installer from the Roblox CDN, and install it with progress in the footer. |
 | **Immediate FastFlags** | A selected card writes its flags into the JSON editor immediately and removes them when deselected. The JSON view includes Format, Copy, Import, Export, and Clear. |
@@ -170,7 +170,7 @@ Keep **Settings → Multiple Roblox instances** enabled. In **Multi-Start**, ena
 
 ### FastFlags
 
-The **Engine** page contains **99 cards in seven groups** (FPS, Graphics, Lighting, Effects, Textures, Interface, Network). Each card lists the flags it writes; some set several. Search, category chips, and **★ Favorites** filter the cards. **Visual / JSON** switches between the card grid and the JSON editor.
+The **Engine** page contains **37 cards in five groups** (Graphics, Sky & lighting, Effects & renderer, Textures & detail, Interface). Every card uses only Roblox's current allowlist. Each card lists the flags it writes; some set several. Search, category chips, and **★ Favorites** filter the cards. **Visual / JSON** switches between the card grid and the JSON editor.
 
 One click writes the preset's flags into the JSON and saves them; a second click removes them. A value changed by hand is preserved; deselecting only removes values that still match the preset. A card is active when its flags are already fully present.
 
@@ -185,11 +185,11 @@ JSON editor controls:
 | **Clear** | Clear the editor. |
 | Search | Filter cards and the editor by name, description, or flag name. |
 | **Visual / JSON** | Switch between the card grid and the JSON editor; both use the same JSON. |
-| Category chips | **All**, **★ Favorites**, and the seven groups, combinable with search. |
+| Category chips | **All**, **★ Favorites**, and the five groups, combinable with search. |
 
 The editor footer reports how many flags are present and how many presets are active, or why the JSON cannot currently be read.
 
-On the next launch, Aether writes the flags to `…\Versions\version-<hash>\ClientSettings\ClientAppSettings.json`. **Write to the client now** reads the file back and reports values that did not arrive. The self-test verifies all 99 presets and 60 distinct flag names this way.
+On the next launch, Aether writes the flags to `…\Versions\version-<hash>\ClientSettings\ClientAppSettings.json`. **Write to the client now** reads the file back and reports values that did not arrive. The self-test verifies all 37 cards and the exact 18-key allowlist this way.
 
 > Roblox only reads flags on its allowlist. Other flags are silently ignored: they do not harm the client, but they do not work either. An existing `ClientAppSettings.json` is backed up once as `.aetherbak`; Vanilla mode writes nothing.
 
@@ -216,9 +216,9 @@ When Aether starts a client, a small overlay process starts alongside it. The pa
 
 | Panel | Action |
 | --- | --- |
-| **Menu** | Switches for every panel, the menu key, other-program retreat, opacity (100/90/80/70%), **Open Aether**, **Hide all**, and **Reset layout**. The menu itself always stays reachable. |
-| **Frame rate** | `Uncapped` (10000), 60, 120, 144, 240, or a custom value from 10 to 10000. Writes `DFIntTaskSchedulerTargetFps`. This flag is **not** on Roblox's allowlist and may be ignored. |
-| **Graphics** | Graphics level `Lowest` (1) / `Highest` (21), textures `Fast` (0) / `Sharp` (3), anti-aliasing `Off` / `2×` / `4×`, grass `On` / `Off`. All are allowlisted. Grass `Off` removes the flags instead of writing zero. |
+| **Menu** | A summary of how many panels are enabled, switches for every panel, the menu key, other-program retreat, opacity (100/90/80/70%), **Open Aether**, **Show all**, **Hide all**, and **Reset layout**. Each row says what the panel does. The menu itself always stays reachable. |
+| **Frame rate** | `Uncapped` (10000), 60, 120, 144, 240, or a custom value from 10 to 10000. Writes `DFIntTaskSchedulerTargetFps`. This flag is **not** on Roblox's allowlist; current clients ignore it, and the panel labels it legacy for pinned older versions. |
+| **Graphics** | Graphics level `Lowest` (1) / `Highest` (21), textures `Fast` (0) / `Sharp` (3), anti-aliasing `Off` / `2×` / `4×`, grass `On` / `Off`. All are allowlisted. Grass `Off` writes 0; `On` removes the override. |
 | **Notes** | The same `notes.txt` as the quick layout, with auto-save and a timestamp. |
 | **Server** | **Leave & rejoin** leaves the current server and immediately joins another. **Restart client** is the hard restart for new flags. **Game page** opens the place in the browser. **Copy link** copies the game link. |
 | **Anti-AFK** | Brings the game window forward for about a second, sends the configured key, and restores the previous window. It verifies that Roblox is in front before sending input. `F8` is the default because it does not move the character. Failed attempts retry after 20 seconds; every attempt is logged. **Nudge now** tests one attempt; **Self-check input** verifies the input path without Roblox. |
@@ -230,7 +230,7 @@ When Aether starts a client, a small overlay process starts alongside it. The pa
 
 Roblox has no interface for moving a running client to another server. Every change is a new join. Aether reads the place from Roblox's own log, queries the public server list, skips the current server, and asks Roblox for another one. It closes the running client first and then starts the new join; the new client inherits the old window size and position. The desktop is briefly visible. If the start fails, the status line reports it; the old client has already been closed.
 
-**Why the frame rate sometimes does not change:** Roblox only reads allowlisted flags. `DFIntTaskSchedulerTargetFps` is not on that list, so the client may discard it. Aether still writes it for pinned older versions, but the overlay says so honestly. The Graphics switches are allowlisted and work.
+**Why the frame rate does not change:** Roblox only reads allowlisted flags. `DFIntTaskSchedulerTargetFps` is not on that list, so current clients discard it. Aether still writes it for pinned older versions, and the overlay labels it legacy instead of presenting it as working. The Graphics switches are allowlisted and work.
 
 The overlay does not read game memory or inject into the client. It draws its own windows over the game and uses supported client settings, a normal client launch, and the launcher. Anti-AFK is the one visible exception and is off by default; it focuses the game window briefly to send a key, then restores the previous window.
 

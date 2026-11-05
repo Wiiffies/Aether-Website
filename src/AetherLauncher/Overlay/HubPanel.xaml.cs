@@ -12,6 +12,7 @@ public partial class HubPanel : UserControl
 {
     private OverlayHost? _host;
     private bool _loading;
+    private readonly Dictionary<string, TextBlock> _panelStates = new(StringComparer.OrdinalIgnoreCase);
 
     public HubPanel() => InitializeComponent();
 
@@ -35,6 +36,7 @@ public partial class HubPanel : UserControl
 
         host.ShortcutChanged += RefreshKey;
         host.SettingsChanged += RefreshPanelRows;
+        RefreshPanelRows();
     }
 
     private void BuildPanelRows()
@@ -42,22 +44,22 @@ public partial class HubPanel : UserControl
         if (_host is null) return;
 
         PanelRows.Children.Clear();
+        _panelStates.Clear();
 
         foreach (var choice in _host.PanelChoices)
         {
-            var row = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 6) };
+            var row = new Grid { Margin = new Thickness(0, 0, 0, 8), Tag = choice.Id };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var id = choice.Id;
 
             var toggle = new CheckBox
             {
                 Style = (Style)FindResource("Switch"),
-                HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Center,
                 IsChecked = _host.IsPanelVisible(id),
                 Tag = id,
             };
 
-            DockPanel.SetDock(toggle, Dock.Right);
             toggle.Checked += (_, _) =>
             {
                 if (_loading) return;
@@ -69,16 +71,41 @@ public partial class HubPanel : UserControl
                 _host.SetPanelVisible(id, false);
             };
 
-            var label = new TextBlock
+            var copy = new StackPanel { Margin = new Thickness(0, 0, 10, 0) };
+            copy.Children.Add(new TextBlock
             {
                 Text = choice.Title,
                 FontSize = 11,
-                VerticalAlignment = VerticalAlignment.Center,
                 Foreground = (Brush)FindResource("TextMidBrush"),
-            };
+            });
+            copy.Children.Add(new TextBlock
+            {
+                Text = choice.Hint,
+                Style = (Style)FindResource("Note"),
+                Margin = new Thickness(0, 2, 0, 0),
+                Foreground = (Brush)FindResource("TextFaintBrush"),
+                TextWrapping = TextWrapping.Wrap,
+            });
 
-            row.Children.Add(toggle);
-            row.Children.Add(label);
+            var state = new TextBlock
+            {
+                Text = "OPEN",
+                FontSize = 8.5,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 3, 0, 0),
+                Foreground = (Brush)FindResource("TextFaintBrush"),
+            };
+            _panelStates[id] = state;
+
+            var right = new StackPanel { HorizontalAlignment = HorizontalAlignment.Right };
+            right.Children.Add(toggle);
+            right.Children.Add(state);
+
+            Grid.SetColumn(copy, 0);
+            Grid.SetColumn(right, 1);
+            row.Children.Add(copy);
+            row.Children.Add(right);
+
             PanelRows.Children.Add(row);
         }
     }
@@ -115,16 +142,35 @@ public partial class HubPanel : UserControl
         _loading = true;
         try
         {
-            foreach (var toggle in PanelRows.Children.OfType<DockPanel>()
-                         .SelectMany(row => row.Children.OfType<CheckBox>()))
+            foreach (var row in PanelRows.Children.OfType<Grid>())
             {
-                if (toggle.Tag is string id) toggle.IsChecked = _host.IsPanelVisible(id);
+                if (row.Tag is not string id) continue;
+
+                var toggle = row.Children.OfType<StackPanel>()
+                    .SelectMany(panel => panel.Children.OfType<CheckBox>())
+                    .FirstOrDefault();
+                if (toggle is not null) toggle.IsChecked = _host.IsPanelVisible(id);
+
+                if (_panelStates.TryGetValue(id, out var state))
+                {
+                    var open = _host.IsPanelVisible(id);
+                    state.Text = open ? "OPEN" : "HIDDEN";
+                    state.Foreground = (Brush)FindResource(open ? "TextMidBrush" : "TextFaintBrush");
+                }
             }
         }
         finally
         {
             _loading = false;
         }
+
+        RefreshSummary();
+    }
+
+    private void RefreshSummary()
+    {
+        if (_host is null) return;
+        SummaryLine.Text = $"{_host.EnabledPanelCount} of {_host.PanelChoices.Count} panels enabled · {_host.ShortcutText}";
     }
 
     private void RefreshKey()
@@ -202,4 +248,13 @@ public partial class HubPanel : UserControl
     }
 
     private void Hide_Click(object sender, RoutedEventArgs e) => _host?.HideAll();
+
+    private void ShowAll_Click(object sender, RoutedEventArgs e)
+    {
+        if (_host is null) return;
+
+        _host.ShowAll();
+        RefreshPanelRows();
+        PanelUi.Say(StatusLine, "Every enabled panel is back over the game.");
+    }
 }

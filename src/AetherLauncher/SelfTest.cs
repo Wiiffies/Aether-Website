@@ -700,20 +700,58 @@ public static class SelfTest
                 return ("OK", $"{FastFlags.Presets.Count} suggestions in {groups} groups, {flags} flags, {seen.Count} various names.");
             }, results);
 
-            Test("Allowlist marking of suggestions", () =>
+            Test("Roblox allowlist (18 keys)", () =>
             {
-                var active = FastFlags.Presets.Count(p => p.Allowlisted);
-                if (active < 8)
-                    return ("FAIL", $"Only {active} suggestions are marked as still effective.");
+                var expected = new HashSet<string>(StringComparer.Ordinal)
+                {
+                    "DFIntCSGLevelOfDetailSwitchingDistance",
+                    "DFIntCSGLevelOfDetailSwitchingDistanceL12",
+                    "DFIntCSGLevelOfDetailSwitchingDistanceL23",
+                    "DFIntCSGLevelOfDetailSwitchingDistanceL34",
+                    "FFlagHandleAltEnterFullscreenManually",
+                    "DFFlagTextureQualityOverrideEnabled",
+                    "DFIntTextureQualityOverride",
+                    "FIntDebugForceMSAASamples",
+                    "DFFlagDisableDPIScale",
+                    "FFlagDebugGraphicsPreferD3D11",
+                    "FFlagDebugSkyGray",
+                    "DFFlagDebugPauseVoxelizer",
+                    "DFIntDebugFRMQualityLevelOverride",
+                    "FIntFRMMaxGrassDistance",
+                    "FIntFRMMinGrassDistance",
+                    "FFlagDebugGraphicsPreferVulkan",
+                    "FFlagDebugGraphicsPreferOpenGL",
+                    "FIntGrassMovementReducedMotionFactor",
+                };
 
-                
-                
-                var caps = FastFlags.Presets.Where(p => p.Flags.Any(f => f.Key == FastFlags.FrameRateFlag)).ToList();
-                if (caps.Count == 0) return ("FAIL", "No frame rate suggestion found.");
-                if (caps.Any(p => p.Allowlisted))
-                    return ("FAIL", "The frame rate limit is incorrectly considered allowlisted.");
+                var missing = expected.Where(key => !FastFlagAllowlist.Contains(key)).ToList();
+                var extra = FastFlagAllowlist.Keys.Where(key => !expected.Contains(key)).ToList();
 
-                return ("OK", $"{active} of {FastFlags.Presets.Count} suggestions are still running; the frame rate limit is correctly marked as ignored.");
+                if (FastFlagAllowlist.Keys.Count != expected.Count || missing.Count > 0 || extra.Count > 0)
+                    return ("FAIL", $"Allowlist has {FastFlagAllowlist.Keys.Count} keys; missing: {string.Join(", ", missing)}; extra: {string.Join(", ", extra)}.");
+
+                var unsupported = FastFlags.Presets
+                    .SelectMany(preset => preset.Flags)
+                    .Select(flag => flag.Key)
+                    .Where(key => !FastFlagAllowlist.Contains(key))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList();
+
+                if (unsupported.Count > 0)
+                    return ("FAIL", $"Cards include keys Roblox ignores: {string.Join(", ", unsupported.Take(3))}.");
+
+                var notSupported = FastFlags.Presets.Where(preset => !preset.Allowlisted).ToList();
+                if (notSupported.Count > 0)
+                    return ("FAIL", $"{notSupported.Count} card(s) are not fully allowlisted.");
+
+                if (FastFlags.Presets.Count == 0)
+                    return ("FAIL", "The catalogue is empty.");
+
+                if (FastFlagAllowlist.Contains(FastFlags.FrameRateFlag))
+                    return ("FAIL", "The frame rate cap must not be advertised as allowlisted.");
+
+                var groups = FastFlags.Presets.Select(preset => preset.Group).Distinct().Count();
+                return ("OK", $"{FastFlags.Presets.Count} cards in {groups} groups use only the {expected.Count} allowlisted keys; the frame-rate cap is outside the catalogue.");
             }, results);
 
             Test("Switch rows in the overlay (textures, anti-aliasing, grass)", () =>

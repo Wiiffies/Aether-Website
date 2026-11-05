@@ -8,6 +8,10 @@
         <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap"
                    Text="Drag any panel anywhere - each one remembers its own place. The menu itself stays until you move it." />
 
+        <TextBlock x:Name="SummaryLine" Style="{StaticResource Note}" Margin="0,7,0,0"
+                   Foreground="{DynamicResource TextFaintBrush}" TextWrapping="Wrap"
+                   Text="Panels are independent." />
+
         <TextBlock Text="PANELS" Style="{StaticResource SectionHeader}" Margin="0,12,0,0" />
         <StackPanel x:Name="PanelRows" Margin="0,6,0,0" />
 
@@ -79,14 +83,16 @@
                          Checked="Opacity_Checked" ToolTip="Still readable, plenty of game visible" />
         </WrapPanel>
 
-        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-            <c:RippleButton Content="Open Aether" Style="{StaticResource GhostButton}"
+        <WrapPanel Margin="0,12,0,0">
+            <c:RippleButton Content="Open Aether" Style="{StaticResource GhostButton}" Margin="0,0,8,6"
                             Click="OpenLauncher_Click" ToolTip="Bring the launcher to the front" />
-            <c:RippleButton Content="Hide all" Style="{StaticResource PlainButton}" Margin="8,0,0,0"
+            <c:RippleButton Content="Show all" Style="{StaticResource PlainButton}" Margin="0,0,8,6"
+                            Click="ShowAll_Click" ToolTip="Bring every enabled panel back over the game" />
+            <c:RippleButton Content="Hide all" Style="{StaticResource PlainButton}" Margin="0,0,8,6"
                             Click="Hide_Click" ToolTip="Everything away - the menu key brings it back" />
-            <c:RippleButton Content="Reset layout" Style="{StaticResource PlainButton}" Margin="8,0,0,0"
+            <c:RippleButton Content="Reset layout" Style="{StaticResource PlainButton}" Margin="0,0,0,6"
                             Click="ResetLayout_Click" ToolTip="Put every panel back where it started" />
-        </StackPanel>
+        </WrapPanel>
 
         <TextBlock x:Name="StatusLine" Style="{StaticResource Note}" Margin="0,8,0,0"
                    Foreground="{DynamicResource TextFaintBrush}" TextWrapping="Wrap" Text="Ready." />

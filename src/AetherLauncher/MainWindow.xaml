@@ -1081,7 +1081,7 @@
                                         Command="{Binding ApplyFastFlagsCommand}" />
                     </StackPanel>
                     <TextBlock Style="{StaticResource Note}" VerticalAlignment="Center" Margin="0,0,12,0"
-                               Text="Cards write straight into the JSON. Only allowlisted flags are read by current Roblox; legacy cards are still written for pinned older clients. An existing ClientAppSettings.json is backed up once as .aetherbak - and in vanilla mode nothing is written at all." />
+                               Text="Cards write straight into the JSON. The cards below use only the 18 keys Roblox currently reads. The JSON editor still accepts legacy keys for pinned older clients. An existing ClientAppSettings.json is backed up once as .aetherbak, and in vanilla mode nothing is written at all." />
                 </DockPanel>
             </Grid>
 

@@ -21,7 +21,7 @@ internal enum KeyCaptureKind
 }
 
 
-internal readonly record struct PanelChoice(string Id, string Title);
+internal readonly record struct PanelChoice(string Id, string Title, string Hint);
 
 
 
@@ -124,8 +124,8 @@ internal sealed class OverlayHost
         
         
         AddPanel(PanelIds.Menu, "AETHER OVERLAY", "Roblox keeps running - this only draws over it.", _hub, 0, 680);
-        AddPanel(PanelIds.Fps, "FRAME RATE", "Uncapped, fixed or your own value.", _fps, 1, 300);
-        AddPanel(PanelIds.Graphics, "GRAPHICS", "On Roblox' allowlist - the client still reads these.", _graphics, 1, 360);
+        AddPanel(PanelIds.Fps, "FRAME RATE", "Legacy cap. Current Roblox ignores this key.", _fps, 1, 300);
+        AddPanel(PanelIds.Graphics, "GRAPHICS", "Every key here is on Roblox' current allowlist.", _graphics, 1, 360);
         AddPanel(PanelIds.Notes, "NOTES", "Left open over the game, saved as you type.", _notes, 1, 300);
         AddPanel(PanelIds.Server, "SERVER", "Fresh server for the same place - no trip to the desktop.", _server, 2, 300);
         AddPanel(PanelIds.AntiAfk, "ANTI-AFK", "Pops the game up for a tap, then hides it again.", _antiAfk, 2, 380);
@@ -152,6 +152,8 @@ internal sealed class OverlayHost
     public bool Quitting { get; private set; }
 
     public string ShortcutText => _settings.OverlayShortcut;
+
+    public int EnabledPanelCount => PanelChoices.Count(choice => IsPanelVisible(choice.Id));
 
     public bool HideOverOtherApps => _state.HideOverOtherApps;
 
@@ -191,11 +193,11 @@ internal sealed class OverlayHost
     
     public IReadOnlyList<PanelChoice> PanelChoices { get; } = new[]
     {
-        new PanelChoice(PanelIds.Fps, "Frame rate"),
-        new PanelChoice(PanelIds.Graphics, "Graphics"),
-        new PanelChoice(PanelIds.Notes, "Notes"),
-        new PanelChoice(PanelIds.Server, "Server"),
-        new PanelChoice(PanelIds.AntiAfk, "Anti-AFK"),
+        new PanelChoice(PanelIds.Fps, "Frame rate", "Legacy cap. Current Roblox ignores this flag."),
+        new PanelChoice(PanelIds.Graphics, "Graphics", "Quality, textures, MSAA, grass and CSG. All allowlisted."),
+        new PanelChoice(PanelIds.Notes, "Notes", "Saved as you type."),
+        new PanelChoice(PanelIds.Server, "Server", "Rejoin or restart the same place."),
+        new PanelChoice(PanelIds.AntiAfk, "Anti-AFK", "Optional key nudge with a focus check."),
     };
 
     public event Action? ShortcutChanged;
@@ -598,6 +600,7 @@ internal sealed class OverlayHost
             Spot(id).Visible = false;
             SaveState();
             panel.HideSoftly(animate: true);
+            SettingsChanged?.Invoke();
             return;
         }
 
@@ -616,6 +619,7 @@ internal sealed class OverlayHost
 
         panel.ShowAt(spot.Left, spot.Top, animate: true, delay: 0);
         Anim.Pulse(panel, 1.02, 240);
+        SettingsChanged?.Invoke();
     }
 
     

@@ -756,7 +756,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     
     public string FastFlagHealthLine =>
-        $"{Presets.Count} cards · {Presets.Count(p => p.Allowlisted)} still read by current Roblox";
+        $"{Presets.Count} cards · {FastFlagAllowlist.Keys.Count} live allowlist keys";
 
     
     public Visibility VisualEmptyVisibility =>

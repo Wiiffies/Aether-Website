@@ -6,7 +6,7 @@
     <StackPanel>
 
         <TextBlock Style="{StaticResource Note}" TextWrapping="Wrap"
-                   Text="On Roblox' allowlist - the client still reads these." />
+                   Text="Every control here writes only keys on Roblox's current allowlist." />
 
         <Grid Margin="0,9,0,0">
             <Grid.ColumnDefinitions>
