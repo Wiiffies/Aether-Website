@@ -7,10 +7,10 @@ using AetherLauncher.Infrastructure;
 
 namespace AetherLauncher.Services;
 
-/// <summary>
-/// Zugriffe auf die Roblox-Web-APIs: Cookie prüfen, Auth-Ticket holen, Avatare und Spieldaten laden.
-/// Es wird ausschließlich das offizielle Web-API benutzt - kein Client-Patching, kein Reverse Engineering.
-/// </summary>
+
+
+
+
 public static class RobloxApi
 {
     private const string UsersAuthenticatedUrl = "https://users.roblox.com/v1/users/authenticated";
@@ -27,7 +27,7 @@ public static class RobloxApi
     {
         var handler = new HttpClientHandler
         {
-            UseCookies = false, // Cookies werden bewusst pro Anfrage gesetzt.
+            UseCookies = false, 
             AutomaticDecompression = DecompressionMethods.All,
         };
 
@@ -37,14 +37,14 @@ public static class RobloxApi
         return client;
     }
 
-    /// <summary>Prüft ein Cookie und liefert Benutzer-ID, Benutzername und Anzeigename.</summary>
+    
     public static async Task<AccountInfo?> ValidateCookieAsync(string cookie, CancellationToken ct = default)
     {
         var info = await GetJsonAsync<AccountInfoDto>(UsersAuthenticatedUrl, cookie, ct).ConfigureAwait(false);
         if (info is { Id: > 0 })
             return new AccountInfo(info.Id, info.Name ?? "", string.IsNullOrWhiteSpace(info.DisplayName) ? info.Name ?? "" : info.DisplayName);
 
-        // Älterer Endpunkt als Ausweichlösung.
+        
         var legacy = await GetJsonAsync<AccountJsonDto>(AccountJsonUrl, cookie, ct).ConfigureAwait(false);
         if (legacy is { UserId: > 0 })
             return new AccountInfo(legacy.UserId, legacy.Name ?? "", legacy.Name ?? "");
@@ -52,11 +52,11 @@ public static class RobloxApi
         return null;
     }
 
-    /// <summary>
-    /// Holt ein kurzlebiges Auth-Ticket für den Start als dieses Konto.
-    /// Ablauf: POST ohne Token -> 403 mit x-csrf-token -> POST mit Token -> Antwort-Header
-    /// "rbx-authentication-ticket". Das Ticket wandert als gameinfo in die roblox-player URI.
-    /// </summary>
+    
+    
+    
+    
+    
     public static async Task<string?> GetAuthTicketAsync(string cookie, CancellationToken ct = default)
     {
         for (var attempt = 0; attempt < 3; attempt++)
@@ -71,7 +71,7 @@ public static class RobloxApi
             if (!string.IsNullOrEmpty(_csrfToken))
                 request.Headers.TryAddWithoutValidation("X-CSRF-TOKEN", _csrfToken);
 
-            // Roblox lehnt seit einer Änderung Anfragen ohne Content-Type mit HTTP 415 ab.
+            
             if (attempt > 0)
                 request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
 
@@ -103,20 +103,20 @@ public static class RobloxApi
         return null;
     }
 
-    /// <summary>Ein öffentlicher Server eines Platzes - die ID ist die Job-ID für den Join.</summary>
+    
     public sealed record PublicServer(string JobId, int Playing, int MaxPlayers);
 
-    /// <summary>
-    /// Öffentliche Server eines Platzes. Wird für den Serverwechsel gebraucht, damit der
-    /// neue Client gezielt auf einen anderen Server geht statt auf irgendeinen - und damit
-    /// man vorher sieht, wie voll er ist. Schlägt der Abruf fehl, bleibt es beim normalen
-    /// Start; der Wechsel funktioniert dann trotzdem.
-    /// </summary>
+    
+    
+    
+    
+    
+    
     public static async Task<IReadOnlyList<PublicServer>> GetPublicServersAsync(long placeId, CancellationToken ct = default)
     {
         if (placeId <= 0) return Array.Empty<PublicServer>();
 
-        // excludeFullGames ist Pflicht: ohne den Parameter antwortet der Endpunkt mit 400.
+        
         var dto = await GetJsonAsync<ServersDto>(
             $"https://games.roblox.com/v1/games/{placeId}/servers/Public?limit=100&excludeFullGames=true",
             null, ct).ConfigureAwait(false);
@@ -129,14 +129,14 @@ public static class RobloxApi
                 .ToList();
     }
 
-    /// <summary>Lädt das runde Profilbild eines Kontos.</summary>
+    
     public static async Task<byte[]?> DownloadAvatarAsync(long userId, CancellationToken ct = default)
     {
         var url = $"https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={userId}&size=150x150&format=Png&isCircular=true";
         return await DownloadThumbnailAsync(url, ct).ConfigureAwait(false);
     }
 
-    /// <summary>Ermittelt zur Place-ID die Universe-ID und den Spielnamen.</summary>
+    
     public static async Task<(long UniverseId, string Name)?> ResolveGameAsync(long placeId, CancellationToken ct = default)
     {
         var universe = await GetJsonAsync<UniverseDto>($"https://apis.roblox.com/universes/v1/places/{placeId}/universe", null, ct)
@@ -150,17 +150,17 @@ public static class RobloxApi
         return (universe.UniverseId, string.IsNullOrWhiteSpace(name) ? $"Place {placeId}" : name!);
     }
 
-    /// <summary>Lädt das Spiel-Icon zu einer Universe-ID.</summary>
+    
     public static async Task<byte[]?> DownloadGameIconAsync(long universeId, CancellationToken ct = default)
     {
         var url = $"https://thumbnails.roblox.com/v1/games/icons?universeIds={universeId}&returnPolicy=PlaceHolder&size=150x150&format=Png&isCircular=false";
         return await DownloadThumbnailAsync(url, ct).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Lädt ein Vorschaubild. Roblox rendert Bilder beim ersten Abruf oft erst noch
-    /// ("Pending"), deshalb wird ein paar Mal nachgefragt, bevor aufgegeben wird.
-    /// </summary>
+    
+    
+    
+    
     private static async Task<byte[]?> DownloadThumbnailAsync(string url, CancellationToken ct)
     {
         const int attempts = 4;
@@ -221,8 +221,8 @@ public static class RobloxApi
             using var response = await Http.SendAsync(request, ct).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                // Nicht stumm scheitern: sonst steht in der Liste dauerhaft "Place 123…"
-                // und im Log steht nichts, wonach man suchen könnte.
+                
+                
                 Log.Warn($"Request to {new Uri(url).Host} answered {(int)response.StatusCode}.");
                 return null;
             }

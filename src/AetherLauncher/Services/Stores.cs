@@ -3,10 +3,10 @@ using AetherLauncher.Models;
 
 namespace AetherLauncher.Services;
 
-/// <summary>
-/// Speichert die Konten in %LOCALAPPDATA%\AetherLauncher\accounts.json.
-/// Der Cookie selbst liegt darin ausschließlich DPAPI-verschlüsselt.
-/// </summary>
+
+
+
+
 public sealed class AccountStore
 {
     private readonly string _path;
@@ -19,9 +19,9 @@ public sealed class AccountStore
     {
         Accounts = JsonFile.Load(_path, () => new List<AccountRecord>());
 
-        // Alte, rein DPAPI-verschlüsselte Schlüssel einmalig auf AES-GCM + vault.key heben.
-        // Scheitert ein Wert (anderer Windows-Benutzer), bleibt er unverändert und wird beim
-        // Start als "key expired" gemeldet - statt still ein Konto zu verlieren.
+        
+        
+        
         var migrated = false;
         foreach (var account in Accounts)
         {
@@ -39,7 +39,7 @@ public sealed class AccountStore
 
     public bool Save() => JsonFile.Save(_path, Accounts);
 
-    /// <summary>Legt ein Konto an bzw. aktualisiert es, wenn die Benutzer-ID schon existiert.</summary>
+    
     public AccountRecord Upsert(string cookie, RobloxApi.AccountInfo info)
     {
         var existing = Accounts.FirstOrDefault(a => a.UserId == info.UserId);
@@ -73,7 +73,7 @@ public sealed class AccountStore
         return removed;
     }
 
-    /// <summary>Liefert das entschlüsselte Cookie oder null.</summary>
+    
     public string? GetCookie(AccountRecord record)
     {
         var cookie = Dpapi.Unprotect(record.CookieProtected);
@@ -81,7 +81,7 @@ public sealed class AccountStore
     }
 }
 
-/// <summary>Speichert die Spiel-Startplätze in %LOCALAPPDATA%\AetherLauncher\places.json.</summary>
+
 public sealed class PlaceStore
 {
     private readonly string _path;
@@ -120,7 +120,7 @@ public sealed class PlaceStore
         return removed;
     }
 
-    /// <summary>Merkt sich, ob ein Spiel oben stehen soll (Favorit).</summary>
+    
     public bool SetPinned(PlaceRecord record, bool pinned)
     {
         record.IsPinned = pinned;
@@ -128,7 +128,7 @@ public sealed class PlaceStore
         return Save();
     }
 
-    /// <summary>Schreibt die Reihenfolge der Liste fest - so, wie sie gezogen wurde.</summary>
+    
     public bool SetOrder(IEnumerable<PlaceRecord> records)
     {
         var index = 0;
@@ -137,13 +137,13 @@ public sealed class PlaceStore
     }
 }
 
-/// <summary>
-/// Die zuletzt gestarteten Plätze in %LOCALAPPDATA%\AetherLauncher\recent.json - auch die,
-/// die nie gespeichert wurden. Die Startseite zeigt daraus die Liste "Recently played".
-/// </summary>
+
+
+
+
 public sealed class RecentStore
 {
-    /// <summary>So viele Einträge bleiben erhalten; ältere fallen hinten heraus.</summary>
+    
     public const int Capacity = 24;
 
     private readonly string _path;
@@ -158,10 +158,10 @@ public sealed class RecentStore
 
     public RecentRecord? Find(long placeId) => Entries.FirstOrDefault(e => e.PlaceId == placeId);
 
-    /// <summary>
-    /// Trägt einen Start ein: derselbe Platz rutscht nach oben, statt doppelt zu erscheinen,
-    /// und die Zahl der Sitzungen läuft mit.
-    /// </summary>
+    
+    
+    
+    
     public RecentRecord Record(long placeId, string? accessCode, string? name, long? universeId, string? accountName)
     {
         var existing = Find(placeId);
@@ -186,7 +186,7 @@ public sealed class RecentStore
         return record;
     }
 
-    /// <summary>Nimmt einen Eintrag aus der Liste.</summary>
+    
     public bool Forget(long placeId)
     {
         var removed = Entries.RemoveAll(e => e.PlaceId == placeId) > 0;
@@ -194,10 +194,10 @@ public sealed class RecentStore
         return removed;
     }
 
-    /// <summary>
-    /// Trägt eine Sitzung nach, die nicht Aether gestartet hat (aus den Logdateien des
-    /// Clients). Eine bekannte Platz-ID bleibt, wie sie ist - der eigene Start zählt mehr.
-    /// </summary>
+    
+    
+    
+    
     public bool Import(long placeId, long? universeId, DateTimeOffset playedAt)
     {
         if (placeId <= 0 || Find(placeId) is not null) return false;
@@ -217,12 +217,12 @@ public sealed class RecentStore
         return true;
     }
 
-    /// <summary>
-    /// Trägt Name und Universe-ID eines Eintrags nach. Gesucht wird über die Platz-ID und
-    /// nicht über die Objekt-Referenz: die Liste wird zwischendurch neu aus der Datei gelesen
-    /// (etwa nach einem Start), dabei entstehen neue Objekte - ein Name, den ein älterer
-    /// Eintrag im Speicher bekommen hat, wäre sonst nie in der Datei.
-    /// </summary>
+    
+    
+    
+    
+    
+    
     public bool Update(long placeId, string? name, long universeId)
     {
         var entry = Find(placeId);
@@ -255,7 +255,7 @@ public sealed class RecentStore
     }
 }
 
-/// <summary>Lädt und speichert die Launcher-Einstellungen.</summary>
+
 public sealed class SettingsStore
 {
     private readonly string _path;
@@ -268,8 +268,8 @@ public sealed class SettingsStore
     {
         var settings = JsonFile.Load(_path, () => new LauncherSettings());
 
-        // Revision 2: Das Ingame-Menü soll beim Start zu bleiben. Einmalig umstellen,
-        // damit auch vorhandene settings.json nicht weiter automatisch aufpoppt.
+        
+        
         if (settings.SettingsRevision < CurrentRevision)
         {
             settings.GameOverlayAutoShow = false;

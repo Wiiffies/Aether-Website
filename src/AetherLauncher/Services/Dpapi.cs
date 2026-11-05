@@ -5,29 +5,29 @@ using System.Text;
 
 namespace AetherLauncher.Services;
 
-/// <summary>
-/// Verschlüsselte Ablage für die .ROBLOSECURITY-Schlüssel.
-///
-/// <para>
-/// Zwei Lagen: Der Inhalt wird mit <b>AES-256-GCM</b> verschlüsselt (Vertraulichkeit und
-/// Integrität - ein verändertes Byte macht den Schlüssel unbrauchbar). Der AES-Schlüssel
-/// selbst liegt in <c>vault.key</c> und ist mit <b>Windows DPAPI</b> an den angemeldeten
-/// Windows-Benutzer gebunden. Kopiert man <c>accounts.json</c> auf einen anderen Rechner
-/// oder in ein anderes Windows-Konto, ist er wertlos.
-/// </para>
-///
-/// <para>
-/// Alte Werte aus der reinen DPAPI-Version bleiben lesbar und werden beim nächsten Laden
-/// automatisch auf das neue Format gehoben.
-/// </para>
-///
-/// <para>
-/// Das ist starker Schutz für die <b>gespeicherten</b> Schlüssel, aber keine Magie: Wer den
-/// Prozess unter demselben Windows-Benutzer debuggen kann, kann auch die entschlüsselten
-/// Werte sehen. Gegen Reverse Engineering des Codes hilft Verschlüsselung allein nicht -
-/// dafür sind Obfuskation, Signierung und ein geschützter Build da (siehe README).
-/// </para>
-/// </summary>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 public static class Dpapi
 {
     private const uint CryptprotectUiForbidden = 0x1;
@@ -36,12 +36,12 @@ public static class Dpapi
     private const int NonceSize = 12;
     private const int TagSize = 16;
 
-    /// <summary>
-    /// Zusätzliche DPAPI-Entropie für den Vault-Schlüssel. Ohne diesen Wert kann ein
-    /// fremdes Programm <c>vault.key</c> auch unter demselben Windows-Benutzer nicht
-    /// mit einem einfachen DPAPI-Aufruf entschlüsseln - es müsste die Konstante aus dem
-    /// Build kennen. Kein Ersatz für die DPAPI-Bindung, aber eine weitere Hürde.
-    /// </summary>
+    
+    
+    
+    
+    
+    
     private static readonly byte[] VaultEntropy = Encoding.UTF8.GetBytes("AetherLauncher/vault-key/v1");
 
     private static readonly object KeyLock = new();
@@ -59,14 +59,14 @@ public static class Dpapi
         }
         catch (Exception ex)
         {
-            // Lieber ein alter, aber funktionierender Schutz als ein Konto, das sich nicht
-            // speichern lässt. Der nächste Start versucht die Migration erneut.
+            
+            
             Log.Warn($"AES-GCM is unavailable, falling back to DPAPI for this value: {ex.Message}");
             return Convert.ToBase64String(Transform(plain, protect: true));
         }
         finally
         {
-            // Klartext nicht im Speicher liegen lassen; der verschlüsselte Wert ist fertig.
+            
             CryptographicOperations.ZeroMemory(plain);
         }
     }
@@ -107,11 +107,11 @@ public static class Dpapi
         }
     }
 
-    /// <summary>Liegt der Wert noch im alten DPAPI-Format vor?</summary>
+    
     public static bool NeedsUpgrade(string value) =>
         !string.IsNullOrEmpty(value) && !value.StartsWith(Prefix, StringComparison.Ordinal);
 
-    /// <summary>Nur für den Selbsttest: erzeugt einen Wert im alten Format.</summary>
+    
     internal static string ProtectLegacy(string plainText) =>
         Convert.ToBase64String(Transform(Encoding.UTF8.GetBytes(plainText), protect: true));
 
@@ -150,11 +150,11 @@ public static class Dpapi
         return plain;
     }
 
-    /// <summary>
-    /// Der AES-Schlüssel: zufällig erzeugt, einmal pro Windows-Benutzer, DPAPI-geschützt in
-    /// <c>vault.key</c>. Fehlt oder bricht die Datei, wird ein neuer Schlüssel erzeugt -
-    /// alte Cookies müssen dann neu angemeldet werden.
-    /// </summary>
+    
+    
+    
+    
+    
     private static byte[] Key()
     {
         if (_key is not null) return _key;
@@ -181,8 +181,8 @@ public static class Dpapi
                     }
                     catch (Exception)
                     {
-                        // Datei aus der Version ohne eigene Entropie (oder ein anderer
-                        // Windows-Benutzer): alte Bindung versuchen und danach aufwerten.
+                        
+                        
                         key = Transform(blob, protect: false);
                         legacy = true;
                     }
@@ -216,7 +216,7 @@ public static class Dpapi
         }
     }
 
-    /// <summary>Schreibt den Vault-Schlüssel atomar und mit eigener DPAPI-Entropie.</summary>
+    
     private static void WriteKeyFile(string path, byte[] key)
     {
         try
@@ -226,8 +226,8 @@ public static class Dpapi
 
             var protectedValue = Convert.ToBase64String(Transform(key, protect: true, VaultEntropy));
 
-            // Vor dem Ersetzen prüfen, dass der neue Blob wirklich denselben Schlüssel
-            // liefert - ein halb geschriebener Vault würde sonst alle Konten sperren.
+            
+            
             var check = Transform(Convert.FromBase64String(protectedValue), protect: false, VaultEntropy);
             try
             {
@@ -239,17 +239,17 @@ public static class Dpapi
                 CryptographicOperations.ZeroMemory(check);
             }
 
-            // Keine Sicherung der alten Datei liegen lassen: eine alte Kopie ohne die
-            // eigene Entropie wäre ein bequemer Umweg am Schutz vorbei. Erst schreiben,
-            // wenn der neue Blob geprüft ist - dann atomar ersetzen.
+            
+            
+            
             var temp = path + ".tmp";
             File.WriteAllText(temp, protectedValue);
             File.Move(temp, path, overwrite: true);
         }
         catch (Exception ex)
         {
-            // Der Schlüssel bleibt für diese Sitzung gültig; ohne Datei können alte
-            // Werte beim nächsten Start allerdings nicht mehr gelesen werden.
+            
+            
             Log.Error($"vault.key could not be written: {ex.Message}");
         }
     }
@@ -272,10 +272,10 @@ public static class Dpapi
     [DllImport("kernel32.dll")]
     private static extern IntPtr LocalFree(IntPtr handle);
 
-    /// <summary>
-    /// DPAPI-Aufruf. <paramref name="entropy"/> bindet den Wert zusätzlich an diese
-    /// Anwendung; ohne Angabe bleibt die alte, entropielose Variante lesbar.
-    /// </summary>
+    
+    
+    
+    
     private static byte[] Transform(byte[] input, bool protect, byte[]? entropy = null)
     {
         var inputBlob = new DataBlob();

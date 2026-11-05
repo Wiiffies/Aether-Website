@@ -1,9 +1,9 @@
 namespace AetherLauncher.Services;
 
-/// <summary>
-/// Die Notizen der Schnellansicht: eine einfache Textdatei im Datenordner. Sie wird beim
-/// Tippen gespeichert, damit nichts verloren geht, wenn das Fenster schnell zugeht.
-/// </summary>
+
+
+
+
 public static class Notes
 {
     public static string Load(string? path = null)

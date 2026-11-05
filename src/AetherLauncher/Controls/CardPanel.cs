@@ -5,12 +5,12 @@ using System.Windows.Media;
 
 namespace AetherLauncher.Controls;
 
-/// <summary>
-/// Eine Karte wie im Aether-Hub: gefüllte Fläche, feine Kante, Glasglanz an der Oberkante.
-/// Beim Überfahren legt sich eine zusätzliche Fläche weich darüber (Deckkraft statt
-/// Farbwechsel) - dadurch läuft die Bewegung flüssig und die geteilten Pinsel des Themes
-/// bleiben unangetastet.
-/// </summary>
+
+
+
+
+
+
 public class CardPanel : ContentControl
 {
     public static readonly DependencyProperty FillProperty = DependencyProperty.Register(
@@ -66,7 +66,7 @@ public class CardPanel : ContentControl
     private ScaleTransform? _hoverScale;
     private TranslateTransform? _hoverLift;
 
-    /// <summary>Karten heben sich beim Überfahren einen Hauch an, statt nur die Fläche zu wechseln.</summary>
+    
     protected override void OnMouseEnter(MouseEventArgs e)
     {
         base.OnMouseEnter(e);
@@ -84,10 +84,10 @@ public class CardPanel : ContentControl
         if (_hoverLift is not null) Anim.Move(_hoverLift, 0, 0, 230);
     }
 
-    /// <summary>
-    /// Legt eine eigene, veränderbare Transformationsgruppe an. Eine aus einer geteilten
-    /// Vorlage übernommene Gruppe wäre eingefroren und ließe sich nicht animieren.
-    /// </summary>
+    
+    
+    
+    
     private void EnsureHoverMotion()
     {
         if (_hoverScale is not null && _hoverLift is not null) return;

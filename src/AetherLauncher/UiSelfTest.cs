@@ -16,19 +16,19 @@ using AetherLauncher.ViewModels;
 
 namespace AetherLauncher;
 
-/// <summary>
-/// Oberflächen-Selbsttest: WPF meldet fehlerhafte Bindings nur im Debug-Output, die Anzeige
-/// bleibt still kaputt. Dieser Test bindet eine Sammlung von Trace-Listenern ein, öffnet das
-/// echte Fenster, schaltet alle Seiten durch und prüft, ob dabei Binding-Fehler auftreten.
-/// Aufruf: AetherLauncher.exe --selftest-ui
-/// </summary>
+
+
+
+
+
+
 internal static class UiSelfTest
 {
-    /// <summary>
-    /// Nur der Rad-Test: beweist, dass die Einstellungsseite beim Mausrad wirklich rollt,
-    /// schnell aufeinanderfolgende Stöße sammelt und nicht an den Anfang springt.
-    /// Aufruf: AetherLauncher.exe --selftest-scroll
-    /// </summary>
+    
+    
+    
+    
+    
     public static int RunScroll()
     {
         var report = new StringBuilder();
@@ -40,7 +40,7 @@ internal static class UiSelfTest
         }
         catch (Exception ex)
         {
-            report.AppendLine($"  [FAIL] Das Fenster ließ sich nicht erzeugen: {ex.Message}");
+            report.AppendLine($"[FAIL] The window could not be created: {ex.Message}");
             return Finish(report, failed: 1);
         }
 
@@ -58,7 +58,7 @@ internal static class UiSelfTest
 
             if (height < 200)
             {
-                report.AppendLine($"  [FAIL] Die Einstellungsseite ist nicht scrollbar (ScrollableHeight {height:0}).");
+                report.AppendLine($"[FAIL] The settings page is not scrollable (ScrollableHeight {height:0}).");
                 failed = 1;
             }
             else
@@ -78,8 +78,8 @@ internal static class UiSelfTest
                 var moved = after > before + 8;
 
                 report.AppendLine(noJump && moved
-                    ? $"  [OK  ] Mausrad rollt weich ({before:0} → {early:0} → {after:0})."
-                    : $"  [FAIL] Mausrad: Start {before:0}, nach 40 ms {early:0}, Ende {after:0} - Sprung oder kein Weg.");
+                    ? $"[OK ] Mouse wheel scrolls smoothly ({before:0} → {early:0} → {after:0})."
+                    : $"[FAIL] Mouse wheel: start {before:0}, after 40 ms {early:0}, end {after:0} - jump or no movement.");
 
                 if (!noJump || !moved) failed = 1;
 
@@ -94,8 +94,8 @@ internal static class UiSelfTest
                 var rapid = viewer.VerticalOffset;
 
                 report.AppendLine(rapid > rapidStart + 10
-                    ? $"  [OK  ] Drei schnelle Radstöße sammeln sich ({rapidStart:0} → {rapid:0})."
-                    : $"  [FAIL] Drei schnelle Radstöße bewegen kaum: {rapidStart:0} → {rapid:0}.");
+                    ? $"[OK ] Three rapid wheel scrolls accumulate ({rapidStart:0} → {rapid:0})."
+                    : $"[FAIL] Three quick wheel scrolls barely move: {rapidStart:0} → {rapid:0}.");
 
                 if (rapid <= rapidStart + 10) failed = 1;
 
@@ -104,15 +104,15 @@ internal static class UiSelfTest
                 var back = viewer.VerticalOffset;
 
                 report.AppendLine(back < rapid - 4
-                    ? $"  [OK  ] Zurückrollen funktioniert ({rapid:0} → {back:0})."
-                    : $"  [FAIL] Zurückrollen bleibt stehen: {rapid:0} → {back:0}.");
+                    ? $"[OK ] Rolling back works ({rapid:0} → {back:0})."
+                    : $"[FAIL] Rolling back stops: {rapid:0} → {back:0}.");
 
                 if (back >= rapid - 4) failed = 1;
             }
         }
         catch (Exception ex)
         {
-            report.AppendLine($"  [FAIL] Rad-Test: {ex.GetType().Name} {ex.Message}");
+            report.AppendLine($"  [FAIL] Wheel test: {ex.GetType().Name} {ex.Message}");
             failed = 1;
         }
         finally
@@ -133,11 +133,11 @@ internal static class UiSelfTest
         });
     }
 
-    /// <summary>
-    /// Der Test kann zusätzlich den echten Mauszeiger über die Bauteile fahren. Nur so werden
-    /// die Übergänge (Storyboards in den Vorlagen) wirklich ausgeführt: ein kaputter Pfad in
-    /// einem Trigger fällt sonst erst beim Benutzer auf.
-    /// </summary>
+    
+    
+    
+    
+    
     public static int Run(bool hover = false)
     {
         var report = new StringBuilder();
@@ -150,7 +150,7 @@ internal static class UiSelfTest
         PresentationTraceSources.DataBindingSource.Switch.Level = SourceLevels.Warning;
 
         report.AppendLine();
-        report.AppendLine("Aether Launcher - Oberflächen-Selbsttest");
+        report.AppendLine("Aether Launcher - UI self-test");
         report.AppendLine(new string('-', 78));
 
         MainWindow window;
@@ -160,14 +160,14 @@ internal static class UiSelfTest
         }
         catch (Exception ex)
         {
-            report.AppendLine($"  [FAIL] Das Fenster ließ sich nicht erzeugen: {ex.Message}");
+            report.AppendLine($"[FAIL] The window could not be created: {ex.Message}");
             return Finish(report, failed: 1);
         }
 
         window.Show();
         Pump(600);
 
-        // Beispielzeilen einhängen, damit auch die Zeilenvorlagen (Konten, Spiele) Bindings auflösen.
+        
         var viewModel = window.DataContext as MainViewModel;
         var restoreOverlayOff = viewModel is { OverlayEnabled: false };
         if (viewModel is not null)
@@ -176,15 +176,15 @@ internal static class UiSelfTest
             {
                 UserId = 1,
                 Username = "testuser",
-                DisplayName = "Testkonto",
+                DisplayName = "Test account",
             }));
 
-            viewModel.Places.Add(new PlaceItem(new PlaceRecord { PlaceId = 1818, Name = "Testspiel" }));
+            viewModel.Places.Add(new PlaceItem(new PlaceRecord { PlaceId = 1818, Name = "Test place" }));
             viewModel.Presets.FirstOrDefault()!.IsMarked = true;
 
-            // Der Test läuft mit den echten Einstellungen des Benutzers. Ist die Schnellansicht
-            // dort absichtlich aus, wird sie nur für die Dauer des Tests eingeschaltet und
-            // danach wieder zurückgestellt - sonst wären die beiden Tastaturprüfungen sinnlos.
+            
+            
+            
             if (restoreOverlayOff) viewModel.OverlayEnabled = true;
             Pump(250);
         }
@@ -199,13 +199,13 @@ internal static class UiSelfTest
             if (page == 3) window.ScrollSettingsToEnd();
         }
 
-        // Der Reiterstrich muss sich mitbewegen, sonst gleitet die Anzeige nicht mit.
+        
         var glideMoved = glides.Distinct().Count() == glides.Count;
         report.AppendLine(glideMoved
-            ? $"  [OK  ] Der Reiterstrich folgt dem Wechsel ({string.Join(", ", glides.Select(x => x.ToString("0")))})."
-            : $"  [FAIL] Der Reiterstrich bleibt stehen ({string.Join(", ", glides.Select(x => x.ToString("0")))}).");
+            ? $"[OK ] The nav underline follows each page change ({string.Join(", ", glides.Select(x => x.ToString("0")))})."
+            : $"[FAIL] The nav underline stayed put ({string.Join(", ", glides.Select(x => x.ToString("0")))}).");
 
-        // Ein Vorschlag muss sich sofort ins JSON schreiben (und wieder herausnehmen).
+        
         try
         {
             var flagsFile = AppPaths.FastFlagsFile;
@@ -214,21 +214,21 @@ internal static class UiSelfTest
             window.SelectPage(2);
             Pump(300);
 
-            if (viewModel is null) throw new InvalidOperationException("Das Fenster hat kein ViewModel.");
+            if (viewModel is null) throw new InvalidOperationException("The window has no view model.");
 
-            // Die Kartenansicht ist der Start: Karten und Filter müssen gefüllt sein, nicht nur
-            // die (unsichtbare) JSON-Spalte dahinter.
+            
+            
             var visualCards = viewModel.VisiblePresets.Count;
             var visualCategories = viewModel.FastFlagCategories.Count;
             var visualStart = viewModel.FlagsVisualMode;
 
             report.AppendLine(visualStart && visualCards > 0 && visualCategories > 1
-                ? $"  [OK  ] FastFlag-Kartenansicht mit {visualCards} Karten und {visualCategories} Filtern."
-                : $"  [FAIL] Kartenansicht: sichtbar={visualStart}, Karten={visualCards}, Filter={visualCategories}.");
+                ? $"[OK ] FastFlag card view with {visualCards} cards and {visualCategories} filters."
+                : $"  [FAIL] Card view: visible={visualStart}, cards={visualCards}, filters={visualCategories}.");
 
             if (!visualStart || visualCards == 0 || visualCategories <= 1) hoverFailed++;
 
-            // Und der Umschalter muss beide Ansichten wirklich umschalten.
+            
             viewModel.ShowJsonFlagsCommand.Execute(null);
             Pump(180);
             var jsonShown = viewModel.FlagsJsonVisibility == Visibility.Visible;
@@ -237,13 +237,13 @@ internal static class UiSelfTest
             var visualShown = viewModel.FlagsVisualVisibility == Visibility.Visible;
 
             report.AppendLine(jsonShown && visualShown
-                ? "  [OK  ] Visual/JSON-Umschalter wechselt beide Ansichten."
-                : $"  [FAIL] Umschalter: JSON={jsonShown}, Visual={visualShown}.");
+                ? "[OK ] Visual/JSON switcher switches both views."
+                : $"  [FAIL] Switcher: JSON={jsonShown}, visual={visualShown}.");
 
             if (!jsonShown || !visualShown) hoverFailed++;
 
             var preset = viewModel.Presets.FirstOrDefault(p => !p.IsMarked && p.Flags.Count > 0)
-                         ?? throw new InvalidOperationException("Kein freier Vorschlag zum Prüfen gefunden.");
+                         ?? throw new InvalidOperationException("No unchecked preset found for the test.");
             var key = preset.Flags[0].Key;
 
             preset.IsMarked = true;
@@ -255,24 +255,24 @@ internal static class UiSelfTest
             var removed = !viewModel.FastFlagsJson.Contains(key, StringComparison.Ordinal);
 
             report.AppendLine(written && removed
-                ? $"  [OK  ] '{preset.Name}' schreibt sich sofort ins JSON und nimmt sich wieder heraus."
-                : $"  [FAIL] Vorschlag im JSON: geschrieben={written}, wieder entfernt={removed}.");
+                ? $"[OK ] '{preset.Name}' immediately writes itself into the JSON and takes itself out again."
+                : $"[FAIL] Preset in JSON: written={written}, removed again={removed}.");
 
             if (!written || !removed) hoverFailed++;
 
-            // Die Prüfung hat die Datei geschrieben - hier wieder auf den alten Stand bringen.
+            
             if (before is not null) File.WriteAllText(flagsFile, before);
         }
         catch (Exception ex)
         {
-            report.AppendLine($"  [FAIL] Vorschlag ließ sich nicht prüfen: {ex.GetType().Name} {ex.Message}");
+            report.AppendLine($"[FAIL] Preset could not be checked: {ex.GetType().Name} {ex.Message}");
             hoverFailed++;
         }
 
-        // Ein echter Mausklick auf eine Schaltfläche: dabei läuft der Klick-Ring los. Genau
-        // hier starb die App früher lautlos, weil die Animation von einem nicht gesetzten
-        // Canvas.Left (NaN) aus rechnen wollte. Format und Save sind die harmlose Variante
-        // desselben Wegs - danach wird FastFlags.json wieder auf den alten Stand gebracht.
+        
+        
+        
+        
         try
         {
             var flagsFile = AppPaths.FastFlagsFile;
@@ -281,8 +281,8 @@ internal static class UiSelfTest
             window.SelectPage(2);
             Pump(320);
 
-            // Die JSON-Werkzeugleiste liegt hinter dem Visual-Umschalter; für den echten
-            // Klick-Test erst auf JSON stellen.
+            
+            
             viewModel?.ShowJsonFlagsCommand.Execute(null);
             Pump(240);
 
@@ -291,7 +291,7 @@ internal static class UiSelfTest
 
             if (format is null || save is null)
             {
-                report.AppendLine("  [FAIL] 'Format' oder 'Save' im FastFlags-Editor nicht gefunden.");
+                report.AppendLine("[FAIL] 'Format' or 'Save' not found in FastFlags editor.");
                 hoverFailed++;
             }
             else
@@ -311,12 +311,12 @@ internal static class UiSelfTest
                     {
                         covered++;
                         coverNote = WindowUnderCursor();
-                        report.AppendLine($"  [SKIP] '{target.Content}' liegt nicht frei - dort ist {coverNote}.");
+                        report.AppendLine($"[SKIP] '{target.Content}' is not reachable - {coverNote} is covering it.");
                         continue;
                     }
 
-                    // Der Klick muss auch ankommen: ändert sich der Statustext nicht, hat der
-                    // Test daneben geklickt und würde den Absturz gar nicht bemerken.
+                    
+                    
                     var statusBefore = viewModel?.Status ?? "";
                     ClickLeftButton();
                     Pump(520);
@@ -329,17 +329,17 @@ internal static class UiSelfTest
 
                 if (clicked == 2 && landed == 2)
                 {
-                    report.AppendLine("  [OK  ] Echte Klicks auf 'Format' und 'Save' überlebt (Klick-Ring gelaufen, Befehl ausgelöst).");
+                    report.AppendLine("[OK ] Real clicks on 'Format' and 'Save' survived (click ring ran, command triggered).");
                 }
                 else if (clicked < 2 && clicked + covered == 2)
                 {
-                    // Ein anderes Fenster lag über den Knöpfen (z. B. das laufende Overlay
-                    // über einem Spiel). Dann lässt sich das hier nicht prüfen - ehrlich melden.
-                    report.AppendLine($"  [SKIP] Klicks nicht prüfbar - über den Knöpfen lag {coverNote}.");
+                    
+                    
+                    report.AppendLine($"[SKIP] Clicks cannot be checked - {coverNote} covered the buttons.");
                 }
                 else
                 {
-                    report.AppendLine($"  [FAIL] Klicks: {clicked} von 2 ausgelöst, {landed} von 2 angekommen - unter dem Zeiger lag {WindowUnderCursor()}.");
+                    report.AppendLine($"[FAIL] Clicks: {clicked}/2 triggered, {landed}/2 registered - under the pointer was {WindowUnderCursor()}.");
                     hoverFailed++;
                 }
             }
@@ -349,17 +349,17 @@ internal static class UiSelfTest
         }
         catch (Exception ex)
         {
-            report.AppendLine($"  [FAIL] Klicken ließ sich nicht prüfen: {ex.GetType().Name} {ex.Message}");
+            report.AppendLine($"[FAIL] Click could not be checked: {ex.GetType().Name} {ex.Message}");
             hoverFailed++;
         }
 
-        // Schnellansicht: aufgehen, schließen und das Kürzel umbelegen und zurücksetzen.
+        
         try
         {
-            if (viewModel is null) throw new InvalidOperationException("Das Fenster hat kein ViewModel.");
+            if (viewModel is null) throw new InvalidOperationException("The window has no view model.");
 
             var overlay = window.FindName("LayoutOverlay") as FrameworkElement;
-            if (overlay is null) throw new InvalidOperationException("LayoutOverlay fehlt im Fenster.");
+            if (overlay is null) throw new InvalidOperationException("LayoutOverlay is missing from the window.");
 
             viewModel.OpenLayoutCommand.Execute(null);
             Pump(700);
@@ -370,8 +370,8 @@ internal static class UiSelfTest
             var closed = overlay.Visibility == Visibility.Collapsed;
 
             report.AppendLine(opened && closed
-                ? "  [OK  ] Schnellansicht geht auf und wieder zu."
-                : $"  [FAIL] Schnellansicht: auf={opened} (Deckkraft {overlay.Opacity:0.00}), zu={closed}.");
+                ? "[OK ] Quick view opens and closes again."
+                : $"[FAIL] Quick view: open={opened} (opacity {overlay.Opacity:0.00}), closed={closed}.");
 
             if (!opened || !closed) hoverFailed++;
 
@@ -383,18 +383,18 @@ internal static class UiSelfTest
             var reset = viewModel.LayoutShortcutLabel == Shortcuts.Default;
 
             report.AppendLine(applied && relabelled && reset
-                ? "  [OK  ] Kürzel ließ sich auf Ctrl+L legen und wieder zurücksetzen."
-                : $"  [FAIL] Kürzel: gesetzt={applied} ({viewModel.LayoutShortcutLabel}), zurückgesetzt={reset}.");
+                ? "[OK] Shortcut could be set to Ctrl+L and reset again."
+                : $"[FAIL] Shortcut: set={applied} ({viewModel.LayoutShortcutLabel}), reset={reset}.");
 
             if (!applied || !relabelled || !reset) hoverFailed++;
         }
         catch (Exception ex)
         {
-            report.AppendLine($"  [FAIL] Schnellansicht ließ sich nicht prüfen: {ex.GetType().Name} {ex.Message}");
+            report.AppendLine($"[FAIL] Quick view could not be checked: {ex.GetType().Name} {ex.Message}");
             hoverFailed++;
         }
 
-        // Das Ingame-Overlay besteht aus mehreren Platten: Chips, Serverwechsel, Fenster.
+        
         try
         {
             var host = new OverlayHost(preview: true, settings: new LauncherSettings
@@ -414,8 +414,8 @@ internal static class UiSelfTest
             var hop = serverWindow is null ? null : FindButtonByText(serverWindow, "Leave & rejoin");
             var shown = host.Windows.Count(window => window.IsVisible) >= 5;
 
-            // Die Startaufteilung darf sich nicht selbst überdecken - sonst verdeckt die
-            // untere Platte den Rest der oberen, sobald neue Zeilen dazukommen.
+            
+            
             var openPlates = host.Windows.Where(plate => plate.IsVisible).ToList();
             var overlaps = 0;
             for (var a = 0; a < openPlates.Count; a++)
@@ -431,22 +431,22 @@ internal static class UiSelfTest
                 }
             }
 
-            // Alt+Tab und Win+Tab dürfen die Platten nicht als eigene Fenster zeigen:
-            // jede sichtbare Platte muss den Toolwindow-Stil tragen und darf kein Appwindow
-            // sein. Versteckte Platten sind egal - sie werden erst beim Öffnen geprüft
-            // (und bekommen den Stil dann nach dem Anzeigen erneut).
+            
+            
+            
+            
             var inTaskSwitcher = openPlates.Count(plate => !plate.HiddenFromTaskSwitcher);
 
             report.AppendLine(chips == 5 && hop is not null && shown && inTaskSwitcher == 0 && overlaps == 0
-                ? "  [OK  ] Ingame-Overlay rendert (6 Platten, 5 Chips, überlappungsfrei, aus Alt+Tab ausgeblendet)."
-                : $"  [FAIL] Ingame-Overlay: Platten={host.Windows.Count}, Chips={chips}, " +
-                  $"Serverwechsel={hop is not null}, sichtbar={shown}, Überdeckungen={overlaps}, " +
-                  $"im Fensterwechsler={inTaskSwitcher}.");
+                ? "[OK ] In-game overlay renders (6 panels, 5 chips, no overlap, hidden from Alt+Tab)."
+                : $"[FAIL] In-game overlay: panels={host.Windows.Count}, chips={chips}," +
+                  $"Server change={hop is not null}, visible={shown}, overlaps={overlaps}," +
+                  $"in window changer={inTaskSwitcher}.");
 
             if (chips != 5 || hop is null || !shown || inTaskSwitcher != 0 || overlaps != 0) hoverFailed++;
 
-            // Eine verborgene Platte über das Menü einschalten: sie muss in ihrer Spalte
-            // unter dem stehen, was dort schon liegt - nicht bei 0,0 über dem Menü.
+            
+            
             host.SetPanelVisible(PanelIds.AntiAfk, true);
             Pump(420);
             var anti = host.WindowFor(PanelIds.AntiAfk);
@@ -462,11 +462,11 @@ internal static class UiSelfTest
             }
 
             report.AppendLine(antiPlaced && antiClear
-                ? "  [OK  ] Anti-AFK einschalten setzt die Platte in ihre Spalte."
-                : "  [FAIL] Anti-AFK landete falsch oder über einer anderen Platte.");
+                ? "[OK] Turning on Anti-AFK places the panel in its column."
+                : "[FAIL] Anti-AFK was placed incorrectly or over another panel.");
             if (!antiPlaced || !antiClear) hoverFailed++;
 
-            // Deckkraft: die Platten müssen dem Wert folgen, ohne dass etwas flackert.
+            
             host.SetPanelOpacity(80);
             Pump(320);
             var faded = host.Windows.All(plate => !plate.IsVisible || Math.Abs(plate.Opacity - 0.8) < 0.03);
@@ -474,15 +474,15 @@ internal static class UiSelfTest
             Pump(220);
 
             report.AppendLine(faded
-                ? "  [OK  ] Deckkraft der Platten folgt dem Wert (80 %)."
-                : "  [FAIL] Die Platten ignorierten die Deckkraft.");
+                ? "[OK ] Opacity of the panels follows the value (80%)."
+                : "[FAIL] The panels ignored opacity.");
             if (!faded) hoverFailed++;
 
-            // Ziehen mit dem echten Zeiger: Die Platte muss folgen, nicht springen.
+            
             var menu = host.WindowFor(PanelIds.Menu);
             if (menu is null || !menu.IsVisible)
             {
-                report.AppendLine("  [SKIP] Das Menü ist nicht sichtbar - Ziehen nicht prüfbar.");
+                report.AppendLine("[SKIP] The menu is not visible - dragging cannot be checked.");
             }
             else
             {
@@ -509,8 +509,8 @@ internal static class UiSelfTest
                 var dragged = dx > 25 && dy > 10;
 
                 report.AppendLine(dragged
-                    ? $"  [OK  ] Ziehen folgt dem Zeiger und rastet ein (Δ {dx:0}×{dy:0})."
-                    : $"  [FAIL] Ziehen bewegte die Platte kaum (Δ {dx:0}×{dy:0}).");
+                    ? $"[OK ] Drag follows the pointer and snaps (Δ {dx:0}×{dy:0})."
+                    : $"[FAIL] Dragging barely moved the panel (Δ {dx:0}×{dy:0}).");
                 if (!dragged) hoverFailed++;
             }
 
@@ -519,44 +519,44 @@ internal static class UiSelfTest
         }
         catch (Exception ex)
         {
-            report.AppendLine($"  [FAIL] Ingame-Overlay ließ sich nicht prüfen: {ex.GetType().Name} {ex.Message}");
+            report.AppendLine($"[FAIL] In-game overlay could not be checked: {ex.GetType().Name} {ex.Message}");
             hoverFailed++;
         }
 
-        // Das eingestellte Kürzel muss die Schnellansicht wirklich öffnen - mit einem echten
-        // Tastendruck, sonst prüft der Test nur, dass der Befehl funktioniert, nicht das Kürzel.
+        
+        
         try
         {
             var handle = new WindowInteropHelper(window).Handle;
             window.Topmost = true;
             window.Activate();
             SetForegroundWindow(handle);
-            // Ein Eingabefeld aus dem vorherigen Test darf eine blanke Taste nicht schlucken.
-            // Ein normaler Reiter ist der realistische Fokus für den Tastendruck.
+            
+            
             Keyboard.ClearFocus();
             window.NavHome.Focus();
             Pump(240);
 
             if (GetForegroundWindow() != handle)
             {
-                report.AppendLine("  [SKIP] Das Fenster kam nicht in den Vordergrund - Tastendruck nicht prüfbar.");
+                report.AppendLine("[SKIP] The window did not come to the foreground - keypress cannot be checked.");
             }
             else if (viewModel is null)
             {
-                throw new InvalidOperationException("Das Fenster hat kein ViewModel.");
+                throw new InvalidOperationException("The window has no view model.");
             }
             else
             {
                 viewModel.CloseLayoutCommand.Execute(null);
                 Pump(240);
 
-                // Geprüft wird genau das eingestellte Kürzel - es darf sich ändern.
+                
                 var shortcut = viewModel.Settings.OverlayShortcut;
                 var keys = VirtualKeys(shortcut);
 
                 if (keys is null)
                 {
-                    report.AppendLine($"  [FAIL] Kürzel {shortcut} ließ sich nicht in Tastendrücke übersetzen.");
+                    report.AppendLine($"[FAIL] Shortcut {shortcut} could not be translated into keystrokes.");
                     hoverFailed++;
                 }
                 else
@@ -570,8 +570,8 @@ internal static class UiSelfTest
                     var closed = !viewModel.LayoutOpen;
 
                     report.AppendLine(opened && closed
-                        ? $"  [OK  ] {shortcut} öffnet die Schnellansicht, Esc schließt sie."
-                        : $"  [FAIL] {shortcut} geöffnet={opened}, Esc geschlossen={closed}.");
+                        ? $"[OK ] {shortcut} opens the quick view, Esc closes it."
+                        : $"[FAIL] {shortcut} opened={opened}, Esc closed={closed}.");
 
                     if (!opened || !closed) hoverFailed++;
                 }
@@ -581,11 +581,11 @@ internal static class UiSelfTest
         }
         catch (Exception ex)
         {
-            report.AppendLine($"  [FAIL] Tastendruck ließ sich nicht prüfen: {ex.GetType().Name} {ex.Message}");
+            report.AppendLine($"[FAIL] Keystroke could not be checked: {ex.GetType().Name} {ex.Message}");
             hoverFailed++;
         }
 
-        // Schalter wirklich umlegen: dabei laufen die Übergänge der Gleise und Knöpfe.
+        
         try
         {
             window.SelectPage(1);
@@ -594,7 +594,7 @@ internal static class UiSelfTest
             var toggle = Find<CheckBox>(window, box => box.IsChecked == true);
             if (toggle is null)
             {
-                report.AppendLine("  [FAIL] Kein eingeschalteter Schalter zum Umlegen gefunden.");
+                report.AppendLine("[FAIL] No enabled toggle found to flip.");
                 hoverFailed++;
             }
             else
@@ -603,18 +603,18 @@ internal static class UiSelfTest
                 Pump(260);
                 toggle.IsChecked = true;
                 Pump(260);
-                report.AppendLine("  [OK  ] Schalter hin und zurück geschaltet (Übergänge gelaufen).");
+                report.AppendLine("[OK] Toggle switched on and off (transitions completed).");
             }
         }
         catch (Exception ex)
         {
-            report.AppendLine($"  [FAIL] Schalter ließ sich nicht umlegen: {ex.GetType().Name} {ex.Message}");
+            report.AppendLine($"[FAIL] Toggle could not be flipped: {ex.GetType().Name} {ex.Message}");
             hoverFailed++;
         }
 
         if (hover)
         {
-            report.AppendLine("  Überfahren mit dem echten Zeiger (Playful-Animationen):");
+            report.AppendLine("Hovering with the real pointer (playful animations):");
             foreach (var (page, description, find) in HoverTargets)
             {
                 try
@@ -626,13 +626,13 @@ internal static class UiSelfTest
                     var target = find(window) as FrameworkElement;
                     if (target is null)
                     {
-                        report.AppendLine($"    [FAIL] {description}: Bauteil nicht gefunden.");
+                        report.AppendLine($"[FAIL] {description}: Component not found.");
                         continue;
                     }
 
                     if (!MovePointerTo(window, target))
                     {
-                        report.AppendLine($"    [SKIP] {description}: Zeiger ließ sich nicht setzen.");
+                        report.AppendLine($"[SKIP] {description}: Pointer could not be set.");
                         continue;
                     }
 
@@ -647,8 +647,8 @@ internal static class UiSelfTest
             }
         }
 
-        // Rahmenlose Fenster decken beim Maximieren gern die Taskleiste ab: prüfen,
-        // ob das Fenster in der Arbeitsfläche bleibt.
+        
+        
         var fitsWorkArea = true;
         try
         {
@@ -657,14 +657,14 @@ internal static class UiSelfTest
             var work = SystemParameters.WorkArea;
             fitsWorkArea = window.ActualHeight <= work.Height + 1 && window.ActualWidth <= work.Width + 1;
             report.AppendLine(fitsWorkArea
-                ? $"  [OK  ] Maximiert bleibt im Bildschirmbereich ({window.ActualWidth:0}x{window.ActualHeight:0} in {work.Width:0}x{work.Height:0})."
-                : $"  [FAIL] Maximiert ist das Fenster größer als der Bildschirmbereich ({window.ActualWidth:0}x{window.ActualHeight:0} in {work.Width:0}x{work.Height:0}).");
+                ? $"[OK ] Maximized stays in screen area ({window.ActualWidth:0}x{window.ActualHeight:0} in {work.Width:0}x{work.Height:0})."
+                : $"[FAIL] When maximized, the window is larger than the screen area ({window.ActualWidth:0}x{window.ActualHeight:0} in {work.Width:0}x{work.Height:0}).");
             window.WindowState = WindowState.Normal;
             Pump(250);
         }
         catch (Exception ex)
         {
-            report.AppendLine($"  [FAIL] Maximieren ließ sich nicht prüfen: {ex.Message}");
+            report.AppendLine($"[FAIL] Maximization could not be checked: {ex.Message}");
             fitsWorkArea = false;
         }
 
@@ -683,29 +683,29 @@ internal static class UiSelfTest
                         m.Contains("Cannot resolve", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        if (!glideMoved) failures.Add("Der Reiterstrich folgt dem Seitenwechsel nicht.");
+        if (!glideMoved) failures.Add("The nav underline does not follow the page change.");
 
         if (failures.Count == 0)
         {
-            report.AppendLine("  [OK  ] Alle Bindings aller fünf Seiten wurden aufgelöst.");
+            report.AppendLine("[OK ] All bindings on all five pages have been resolved.");
         }
 
-        // Erst die echten Fehler - auch dann, wenn es zusätzlich Hinweise gab.
+        
         foreach (var failure in failures) report.AppendLine($"  [FAIL] {Log.Redact(failure.Trim())}");
 
         if (messages.Count > 0)
         {
-            report.AppendLine($"  Hinweise ({messages.Count}), nicht als Fehler gewertet:");
+            report.AppendLine($"Notes ({messages.Count}), not considered errors:");
             foreach (var message in messages.Take(10))
                 report.AppendLine($"    - {Log.Redact(message.Trim())}");
         }
 
-        if (hoverFailed > 0) failures.Add($"{hoverFailed} Bauteil(e) ließen sich nicht überfahren.");
+        if (hoverFailed > 0) failures.Add($"{hoverFailed} component(s) could not be hovered.");
 
         return Finish(report, failures.Count == 0 && fitsWorkArea && hoverFailed == 0 ? 0 : 1);
     }
 
-    /// <summary>Lässt die WPF-Nachrichtenschleife weiterlaufen, damit Layout und Bindings fertig werden.</summary>
+    
     private static void Pump(int milliseconds)
     {
         var frame = new DispatcherFrame();
@@ -720,15 +720,15 @@ internal static class UiSelfTest
         timer.Stop();
     }
 
-    /// <summary>Bauteile, über die der Zeiger im erweiterten Test fährt.</summary>
+    
     private static readonly (int Page, string Description, Func<Window, object?> Find)[] HoverTargets =
     {
-        (0, "Hero-Karte", w => Find<CardPanel>(w, panel => panel.Name == "HeroCard")),
-        (0, "Schaltfläche 'Add game'", w => FindFirst<RippleButton>(w)),
-        (1, "Zeile in der Kontenliste", w => FindFirst<ListBoxItem>(w)),
-        (2, "Vorschlagszeile im FastFlags-Editor", w => FindFirst<CheckBox>(w)),
-        (3, "Umschalter in den Einstellungen", w => FindFirst<CheckBox>(w)),
-        (4, "Log-Fläche", w => FindFirst<TextBox>(w, box => box.Name == "LogBox")),
+        (0, "Hero card", w => Find<CardPanel>(w, panel => panel.Name == "HeroCard")),
+        (0, "Add game button", w => FindFirst<RippleButton>(w)),
+        (1, "Line in the account list", w => FindFirst<ListBoxItem>(w)),
+        (2, "Preset row in the FastFlags editor", w => FindFirst<CheckBox>(w)),
+        (3, "Toggle in settings", w => FindFirst<CheckBox>(w)),
+        (4, "Log area", w => FindFirst<TextBox>(w, box => box.Name == "LogBox")),
     };
 
     private static T? FindFirst<T>(DependencyObject root, Func<T, bool>? match = null) where T : DependencyObject
@@ -749,7 +749,7 @@ internal static class UiSelfTest
         }
     }
 
-    /// <summary>Sucht die Schaltfläche mit diesem Aufdruck (Text im Inhalt oder als TextBlock).</summary>
+    
     private static RippleButton? FindButtonByText(DependencyObject root, string text)
     {
         foreach (var button in Descendants(root).OfType<RippleButton>())
@@ -762,7 +762,7 @@ internal static class UiSelfTest
         return null;
     }
 
-    /// <summary>Echter Linksklick auf die aktuelle Zeigerposition.</summary>
+    
     private static void ClickLeftButton()
     {
         mouse_event(LeftDown, 0, 0, 0, UIntPtr.Zero);
@@ -784,10 +784,10 @@ internal static class UiSelfTest
     [DllImport("user32.dll")]
     private static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extraInfo);
 
-    /// <summary>
-    /// Übersetzt ein Kürzel in die virtuellen Tasten, die dafür zu drücken sind - erst die
-    /// Zusatztasten, dann die eigentliche. So prüft der Test immer das, was gerade eingestellt ist.
-    /// </summary>
+    
+    
+    
+    
     private static byte[]? VirtualKeys(string shortcut)
     {
         if (!Shortcuts.TryParse(shortcut, out var modifiers, out var key)) return null;
@@ -805,7 +805,7 @@ internal static class UiSelfTest
         return keys.ToArray();
     }
 
-    /// <summary>Drückt Tasten nacheinander und lässt sie in umgekehrter Reihenfolge los.</summary>
+    
     private static void PressKeys(params byte[] keys)
     {
         foreach (var key in keys) keybd_event(key, 0, 0, UIntPtr.Zero);
@@ -822,11 +822,11 @@ internal static class UiSelfTest
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
 
-    /// <summary>
-    /// Setzt den Mauszeiger auf die Mitte eines Bauteils (nur Windows, nur im Test). Liefert
-    /// false, wenn dort nicht mehr unser Fenster liegt: ein Klick träfe dann ein fremdes
-    /// Programm, und der Test würde einen Fehler melden, den es nicht gibt.
-    /// </summary>
+    
+    
+    
+    
+    
     private static bool MovePointerTo(Window window, FrameworkElement element)
     {
         if (element.ActualWidth <= 1 || element.ActualHeight <= 1) return false;
@@ -842,23 +842,23 @@ internal static class UiSelfTest
         return processId == (uint)Environment.ProcessId;
     }
 
-    /// <summary>Was liegt gerade unter dem Zeiger? Macht aus einem Rätsel einen Befund.</summary>
+    
     private static string WindowUnderCursor()
     {
-        if (!GetCursorPos(out var point)) return "nicht feststellbar";
+        if (!GetCursorPos(out var point)) return "not detectable";
 
         var handle = WindowFromPoint(new NativePoint { X = point.X, Y = point.Y });
-        if (handle == IntPtr.Zero) return $"kein Fenster an {point.X},{point.Y}";
+        if (handle == IntPtr.Zero) return $"no window at {point.X},{point.Y}";
 
         GetWindowThreadProcessId(handle, out var processId);
         try
         {
             using var process = Process.GetProcessById((int)processId);
-            return $"{process.ProcessName} (PID {processId}) an {point.X},{point.Y}";
+            return $"{process.ProcessName} (PID {processId}) at {point.X},{point.Y}";
         }
         catch
         {
-            return $"PID {processId} an {point.X},{point.Y}";
+            return $"PID {processId} at {point.X},{point.Y}";
         }
     }
 
@@ -872,9 +872,9 @@ internal static class UiSelfTest
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out NativePoint point);
 
-    // WindowFromPoint erwartet zwei 32-Bit-Ganzzahlen (POINT). WPF-<see cref="Point"/>
-    // besteht dagegen aus zwei Doubles - damit kamen hier unsinnige Koordinaten an, und
-    // der Test meldete "kein Fenster" an einer Stelle, an der das Fenster steht.
+    
+    
+    
     [DllImport("user32.dll")]
     private static extern IntPtr WindowFromPoint(NativePoint point);
 
@@ -889,8 +889,8 @@ internal static class UiSelfTest
     {
         report.AppendLine(new string('-', 78));
         report.AppendLine(failed == 0
-            ? "  Oberfläche in Ordnung."
-            : $"  {failed} Binding-Fehler gefunden.");
+            ? "UI OK."
+            : $"{failed} binding error(s) found.");
         report.AppendLine();
 
         var text = report.ToString();
@@ -900,7 +900,7 @@ internal static class UiSelfTest
         }
         catch
         {
-            // Nicht kritisch.
+            
         }
 
         try
@@ -909,7 +909,7 @@ internal static class UiSelfTest
         }
         catch
         {
-            // Siehe selftest-ui.log.
+            
         }
 
         return failed;

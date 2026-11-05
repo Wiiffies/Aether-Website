@@ -4,10 +4,10 @@ using AetherLauncher.Services;
 
 namespace AetherLauncher.Overlay;
 
-/// <summary>
-/// Der Serverwechsel: derselbe Platz auf einem frischen Server, ohne den Umweg über den
-/// Desktop. Daneben der harte Weg (Client neu starten), wenn neue Flags greifen sollen.
-/// </summary>
+
+
+
+
 public partial class ServerPanel : UserControl
 {
     private OverlayHost? _host;
@@ -26,9 +26,9 @@ public partial class ServerPanel : UserControl
     {
         if (_host is null) return;
 
-        // Der Platz kommt aus Roblox' Log, wenn es einen gibt: so zeigt das Panel auch ein
-        // Spiel an, das über Roblox' Startseite gewechselt wurde - und der Wechsel nimmt
-        // genau diesen Platz.
+        
+        
+        
         var place = RobloxLogImport.LastJoin()?.PlaceId ?? _host.Settings.LastPlaceId;
         var known = place is not null;
 

@@ -3,34 +3,34 @@ using System.Windows.Input;
 
 namespace AetherLauncher.Services;
 
-/// <summary>
-/// Anti-AFK als Makro: Roblox trennt eine Verbindung nach rund 20 Minuten ohne Eingabe.
-/// Aether holt das Spielfenster deshalb kurz nach vorn, wartet etwa eine Sekunde, tippt eine
-/// echte Taste und legt das Fenster danach wieder weg.
-///
-/// Das ist absichtlich ein sichtbarer Fokuswechsel - nur so kommt die Eingabe zuverlässig im
-/// Spiel an. Liegt Roblox schon vorn, wird nur getippt und nichts minimiert. Vor dem Tippen
-/// wird geprüft, dass wirklich der Client im Vordergrund steht; sonst ginge die Taste an ein
-/// fremdes Programm.
-/// </summary>
+
+
+
+
+
+
+
+
+
+
 public static class AntiAfk
 {
     public const int DefaultIntervalSeconds = 120;
     public const string DefaultKey = "F8";
 
-    /// <summary>Auswahl im Overlay - zwischen einer Minute und zehn Minuten.</summary>
+    
     public static readonly int[] Intervals = { 60, 120, 300, 600 };
 
-    /// <summary>Tasten, die sich als Stoß anbieten (F8 löst keine Spielfigur-Bewegung aus).</summary>
+    
     public static readonly string[] PresetKeys = { "F8", "LeftShift", "LeftCtrl", "Space" };
 
-    /// <summary>Nach einem Fehlversuch nicht eine ganze Runde warten - das war die Lücke.</summary>
+    
     public static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(20);
 
-    /// <summary>So lange bleibt das Spiel vorn, bevor die Taste kommt.</summary>
+    
     public static readonly TimeSpan PopupTime = TimeSpan.FromMilliseconds(950);
 
-    /// <summary>Ergebnis eines Stoßes.</summary>
+    
     public enum NudgeOutcome
     {
         Sent,
@@ -47,15 +47,15 @@ public static class AntiAfk
         _ => $"{seconds / 60} min {seconds % 60} s",
     };
 
-    /// <summary>
-    /// Führt einen Pop-up-Stoß aus. Läuft im Hintergrund-Thread: das Warten auf den Fokus
-    /// und die eine Sekunde Standzeit haben im Oberflächen-Thread nichts zu suchen.
-    /// </summary>
+    
+    
+    
+    
     public static NudgeOutcome Nudge(GameWindow? window, string? keyName, out string message)
     {
         message = "";
 
-        // Das übergebene Fenster kann veraltet sein (Serverwechsel). Lieber kurz neu suchen.
+        
         var game = window is { } given && given.Handle != IntPtr.Zero ? given : GameOverlay.FindWindow() ?? default;
         if (game.Handle == IntPtr.Zero)
         {
@@ -77,11 +77,11 @@ public static class AntiAfk
                 return NudgeOutcome.Failed;
             }
 
-            // Erst kurz stehen lassen, damit der Client wirklich Eingaben annimmt.
+            
             Thread.Sleep((int)PopupTime.TotalMilliseconds);
         }
 
-        // Nie blind tippen: wenn der Fokus inzwischen woanders ist, ginge die Taste dorthin.
+        
         if (GameOverlay.ForegroundWindow() != handle)
         {
             message = "Roblox lost the focus before the tap - nothing was sent.";
@@ -96,8 +96,8 @@ public static class AntiAfk
             GameOverlay.Minimize(handle);
             Thread.Sleep(60);
 
-            // Wer vorher da war, bekommt den Fokus zurück - nicht irgendein Fenster. Eigene
-            // Overlay-Platten werden übersprungen, sonst könnten sie dabei wieder aufblitzen.
+            
+            
             if (restoreTo != IntPtr.Zero && restoreTo != handle &&
                 GameOverlay.ProcessIdOf(restoreTo) != Environment.ProcessId)
                 GameOverlay.Activate(restoreTo);
@@ -116,10 +116,10 @@ public static class AntiAfk
         return NudgeOutcome.Sent;
     }
 
-    /// <summary>
-    /// Ein Stoß an jeden laufenden Client. Jeder wird kurz nach vorn geholt und danach
-    /// wieder minimiert; bei mehreren Instanzen bleibt so keine unversorgt.
-    /// </summary>
+    
+    
+    
+    
     public static NudgeOutcome NudgeEvery(GameWindow? window, string? keyName, out string message)
     {
         var windows = GameOverlay.ClientWindows();
@@ -158,11 +158,11 @@ public static class AntiAfk
         return NudgeOutcome.Sent;
     }
 
-    /// <summary>
-    /// Prüft die Eingabekette ohne Roblox: zwei Pixel hin und zurück, danach steht der Zeiger
-    /// wieder an seiner alten Stelle. Damit lässt sich im Selbsttest und im Panel beweisen,
-    /// dass SendInput überhaupt ankommt.
-    /// </summary>
+    
+    
+    
+    
+    
     public static bool TryTestInput(out string message)
     {
         if (!GetCursorPos(out var origin))
@@ -171,7 +171,7 @@ public static class AntiAfk
             return false;
         }
 
-        // Weit genug, dass auch eine langsame Zeigergeschwindigkeit sichtbar wird.
+        
         var targetX = origin.X + 12;
         if (targetX >= VirtualScreen().Right - 1) targetX = origin.X - 12;
 

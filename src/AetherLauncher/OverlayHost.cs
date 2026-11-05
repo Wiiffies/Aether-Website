@@ -10,30 +10,30 @@ using AetherLauncher.Services;
 
 namespace AetherLauncher;
 
-/// <summary>Welche Taste beim Umbelegen abgewartet wird.</summary>
+
 internal enum KeyCaptureKind
 {
-    /// <summary>Ein Kürzel fürs Menü - Zusatztasten und (fast) jede Taste.</summary>
+    
     Hotkey,
 
-    /// <summary>Eine einzelne Taste, z. B. für den Anti-AFK-Stoß.</summary>
+    
     SingleKey,
 }
 
-/// <summary>Eine Platte, wie das Menü sie zum Ein- und Ausschalten anbietet.</summary>
+
 internal readonly record struct PanelChoice(string Id, string Title);
 
-/// <summary>
-/// Der Host des Ingame-Overlays. Er selbst zeichnet nichts: die Oberfläche besteht aus
-/// mehreren kleinen Platten (<see cref="PanelWindow"/>), die sich einzeln verschieben lassen
-/// und jede für sich ihre Lage merken.
-///
-/// Hier läuft alles zusammen, was ohne Fenster funktioniert: Hotkey, Auto-Anzeige, das
-/// Zurücknehmen vor anderen Programmen, FastFlags, Anti-AFK, Notizen und der Serverwechsel.
-/// </summary>
+
+
+
+
+
+
+
+
 internal sealed class OverlayHost
 {
-    /// <summary>Abstand zwischen zwei Spalten der Startaufteilung.</summary>
+    
     private const double ColumnStep = 360;
 
     private readonly LauncherSettings _settings;
@@ -44,9 +44,9 @@ internal sealed class OverlayHost
     private readonly List<PanelWindow> _panels = new();
     private readonly Dictionary<string, double> _nominal = new();
 
-    // Unsichtbares Besitzerfenster für alle Platten. Ein Fenster mit Besitzer erscheint
-    // nicht als eigener Eintrag in Alt+Tab und Win+Tab - auch dann nicht, wenn Windows den
-    // Toolwindow-Stil beim Anzeigen erneut überschreibt.
+    
+    
+    
     private readonly Window _owner;
 
     private readonly HubPanel _hub;
@@ -94,9 +94,9 @@ internal sealed class OverlayHost
             ? new OverlayState { LayoutVersion = OverlayState.CurrentLayoutVersion }
             : OverlayPlacement.Load();
 
-        // Die Startaufteilung ist jetzt dreispaltig. Alte gespeicherte Stellen würden die
-        // neuen Platten übereinander legen, deshalb einmal aufräumen - nur die Lagen, nicht
-        // die Einstellungen. Danach bleibt jede eigene Anordnung erhalten.
+        
+        
+        
         if (_state.LayoutVersion < OverlayState.CurrentLayoutVersion)
         {
             _state.Panels.Clear();
@@ -112,8 +112,8 @@ internal sealed class OverlayHost
         _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(90) };
         _timer.Tick += OnTick;
 
-        // Die Platten: links das Menü mit Notizen und Server, rechts daneben Bildrate und
-        // Grafik - und ganz außen das Anti-AFK-Panel, das ab Werk zu ist.
+        
+        
         _hub = new HubPanel();
         _fps = new FpsPanel();
         _graphics = new GraphicsPanel();
@@ -121,8 +121,8 @@ internal sealed class OverlayHost
         _server = new ServerPanel();
         _antiAfk = new AntiAfkPanel();
 
-        // Drei Spalten, nach Höhe verteilt: links das Menü, in der Mitte Bildrate und Grafik,
-        // rechts Notizen, Server und Anti-AFK. So überlappt beim ersten Öffnen nichts mehr.
+        
+        
         AddPanel(PanelIds.Menu, "AETHER OVERLAY", "Roblox keeps running - this only draws over it.", _hub, 0, 680);
         AddPanel(PanelIds.Fps, "FRAME RATE", "Uncapped, fixed or your own value.", _fps, 1, 300);
         AddPanel(PanelIds.Graphics, "GRAPHICS", "On Roblox' allowlist - the client still reads these.", _graphics, 1, 360);
@@ -133,7 +133,7 @@ internal sealed class OverlayHost
         AttachPanels();
     }
 
-    // ---------------------------------------------------------------- Zustand
+    
 
     public LauncherSettings Settings => _settings;
 
@@ -145,10 +145,10 @@ internal sealed class OverlayHost
 
     public bool Busy => _busy;
 
-    /// <summary>Läuft das Overlay gerade? (Einzelne Platten können trotzdem zu sein.)</summary>
+    
     public bool PanelsOpen => _open;
 
-    /// <summary>Wird der Host gerade beendet? Dann dürfen die Fenster wirklich zugehen.</summary>
+    
     public bool Quitting { get; private set; }
 
     public string ShortcutText => _settings.OverlayShortcut;
@@ -161,10 +161,10 @@ internal sealed class OverlayHost
 
     public string AntiAfkKey => _state.AntiAfkKey;
 
-    /// <summary>Deckkraft aller Platten in Prozent.</summary>
+    
     public int PanelOpacity => _state.PanelOpacity;
 
-    /// <summary>Was das Anti-AFK-Panel unter den Schaltern anzeigt.</summary>
+    
     public string AntiAfkLine
     {
         get
@@ -188,7 +188,7 @@ internal sealed class OverlayHost
         }
     }
 
-    /// <summary>Die Platten, die das Menü ein- und ausschalten kann.</summary>
+    
     public IReadOnlyList<PanelChoice> PanelChoices { get; } = new[]
     {
         new PanelChoice(PanelIds.Fps, "Frame rate"),
@@ -204,14 +204,14 @@ internal sealed class OverlayHost
 
     public event Action? AntiAfkUpdated;
 
-    /// <summary>Ist diese Platte offen? Das Menü ist immer offen, sonst wäre nichts zu greifen.</summary>
+    
     public bool IsPanelVisible(string id)
     {
         if (string.Equals(id, PanelIds.Menu, StringComparison.OrdinalIgnoreCase)) return true;
 
         if (_state.Panels.TryGetValue(id, out var spot)) return spot.Visible;
 
-        // Ab Werk steht alles offen außer dem Anti-AFK-Panel.
+        
         return !string.Equals(id, PanelIds.AntiAfk, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -220,13 +220,13 @@ internal sealed class OverlayHost
     internal PanelWindow? WindowFor(string id) =>
         _panels.FirstOrDefault(panel => string.Equals(panel.PanelId, id, StringComparison.OrdinalIgnoreCase));
 
-    // ---------------------------------------------------------------- Aufbau
+    
 
-    /// <summary>
-    /// Ein winziges, unsichtbares Fenster außerhalb des Bildschirms. Es wird einmal gezeigt
-    /// und sofort versteckt; danach dürfen es die Platten als Besitzer benutzen. WPF verlangt
-    /// dafür, dass das Besitzerfenster schon einmal gezeigt wurde.
-    /// </summary>
+    
+    
+    
+    
+    
     private static Window CreateOwnerWindow()
     {
         var owner = new Window
@@ -273,7 +273,7 @@ internal sealed class OverlayHost
         _antiAfk.Attach(this);
     }
 
-    /// <summary>Startet die Überwachung. Im Vorschau-Modus steht alles sofort offen.</summary>
+    
     public void Start()
     {
         _timer.Start();
@@ -284,24 +284,24 @@ internal sealed class OverlayHost
         foreach (var panel in _panels) panel.UpdateLayout();
     }
 
-    // ---------------------------------------------------------------- Überwachung
+    
 
     private void OnTick(object? sender, EventArgs e)
     {
         _ticks++;
 
-        // Alle ~5 s die Einstellungen nachlesen: Kürzel umbelegt oder Overlay abgeschaltet?
+        
         if (_ticks % 55 == 0) ReloadSettings();
 
         if (_game is null || _ticks % 6 == 0) _game = GameOverlay.FindWindow();
 
         if (_game is not { } game)
         {
-            // Die Vorschau (Screenshots, UI-Selbsttest) zeigt die Platten ohne Roblox.
+            
             if (_preview) return;
 
-            // Kein Client mehr: sofort die Platten wegnehmen. Sonst bleibt ein Topmost-Fenster
-            // ohne Spiel im Vordergrund stehen und lässt sich nicht mehr sinnvoll bedienen.
+            
+            
             if (!_hiddenForMissingGame)
             {
                 _hiddenForMissingGame = true;
@@ -310,9 +310,9 @@ internal sealed class OverlayHost
                 Log.Warn("The Roblox window disappeared - the overlay hid itself.");
             }
 
-            // Ohne Prozess ist das Overlay nach drei Sekunden weg. Ein Client, der nur sein
-            // Fenster verliert (Ladebildschirm), bekommt etwas mehr Luft; ein Serverwechsel
-            // darf ebenfalls kurz dauern.
+            
+            
+            
             _missingSince ??= DateTimeOffset.UtcNow;
             var clientRunning = GameOverlay.IsClientRunning();
             var grace = _busy ? 60 : clientRunning ? 20 : 3;
@@ -333,8 +333,8 @@ internal sealed class OverlayHost
             }
         }
 
-        // Beim Umbelegen gehört jeder Tastendruck dem Kürzel - sonst würde die neue Taste
-        // gleich wieder das Overlay umschalten.
+        
+        
         if (_capture is not null)
         {
             TickCapture();
@@ -347,14 +347,14 @@ internal sealed class OverlayHost
         TickAntiAfk(game);
     }
 
-    /// <summary>
-    /// Von selbst aufgehen nur, wenn Roblox auch wirklich im Vordergrund ist - sonst würde
-    /// die Platte über einem ganz anderen Spiel landen.
-    /// </summary>
+    
+    
+    
+    
     private void TickAutoShow()
     {
-        // Während eines Anti-AFK-Pop-ups ist das Spiel nur kurz vorn - das Overlay soll
-        // dabei nicht aufblitzen, wenn es gerade hinter einem anderen Programm lag.
+        
+        
         if (_afkInFlight) return;
         if (!_settings.GameOverlayAutoShow || _autoShown || !GameOverlay.IsForegroundClient()) return;
 
@@ -362,10 +362,10 @@ internal sealed class OverlayHost
         ShowAll();
     }
 
-    /// <summary>
-    /// Das Overlay zurücknehmen, sobald ein anderes Programm vorne ist. Damit liegt es nie
-    /// über dem Browser, dem Launcher oder Discord - und kommt zurück, sobald man im Spiel ist.
-    /// </summary>
+    
+    
+    
+    
     private void TickNoOverlap()
     {
         if (_afkInFlight || _preview || !_state.HideOverOtherApps) return;
@@ -395,8 +395,8 @@ internal sealed class OverlayHost
 
         if (!toggled) return;
 
-        // Nur reagieren, wenn das Spiel oder das Overlay selbst den Fokus hat - sonst würde
-        // ein Tastendruck in einem anderen Programm die Platten über dem Spiel zumachen.
+        
+        
         if (!_panels.Any(panel => panel.IsActive) && !GameOverlay.IsForegroundClient()) return;
 
         if (_open)
@@ -450,7 +450,7 @@ internal sealed class OverlayHost
                         break;
 
                     default:
-                        // Kurz darauf erneut versuchen, statt eine ganze Runde zu verlieren.
+                        
                         _lastNudgeAt = DateTimeOffset.Now;
                         _afkFailures++;
                         _nextNudge = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(
@@ -464,10 +464,10 @@ internal sealed class OverlayHost
         });
     }
 
-    /// <summary>
-    /// Abstand mit etwas Streuung: ein exakter Takt ist leicht zu erkennen und sieht
-    /// nach Automation aus. Die Streuung bleibt innerhalb von neun Prozent.
-    /// </summary>
+    
+    
+    
+    
     private TimeSpan Interval()
     {
         var seconds = AntiAfk.ValidInterval(_state.AntiAfkIntervalSeconds)
@@ -478,10 +478,10 @@ internal sealed class OverlayHost
         return TimeSpan.FromSeconds(Math.Max(30, seconds * jitter));
     }
 
-    /// <summary>
-    /// Liest die gespeicherten Einstellungen erneut. Damit gilt ein neues Kürzel sofort und
-    /// ein abgeschaltetes Overlay beendet sich, statt bis zum Spielende weiterzulaufen.
-    /// </summary>
+    
+    
+    
+    
     private void ReloadSettings()
     {
         LauncherSettings fresh;
@@ -491,7 +491,7 @@ internal sealed class OverlayHost
         }
         catch
         {
-            return; // Im Zweifel mit dem weiterarbeiten, was schon da ist.
+            return; 
         }
 
         if (!fresh.GameOverlayEnabled)
@@ -528,9 +528,9 @@ internal sealed class OverlayHost
         if (changed) SettingsChanged?.Invoke();
     }
 
-    // ---------------------------------------------------------------- Anzeigen
+    
 
-    /// <summary>Alle offenen Platten zeigen - mit leichter Staffelung, damit es fließt.</summary>
+    
     public void ShowAll(bool animate = true)
     {
         _open = true;
@@ -556,7 +556,7 @@ internal sealed class OverlayHost
         }
     }
 
-    /// <summary>Nimmt alle Platten weg - die Sichtbarkeit selbst bleibt unverändert.</summary>
+    
     public void HideAll(bool animate = true)
     {
         _open = false;
@@ -572,7 +572,7 @@ internal sealed class OverlayHost
         }
     }
 
-    /// <summary>Eine Platte zumachen - gemerkt wird das nur, wenn der Benutzer sie zumacht.</summary>
+    
     public void HidePanel(string id, bool remember)
     {
         if (remember)
@@ -585,7 +585,7 @@ internal sealed class OverlayHost
         WindowFor(id)?.HideSoftly(animate: true);
     }
 
-    /// <summary>Eine Platte ein- oder ausschalten (Schalter im Menü).</summary>
+    
     public void SetPanelVisible(string id, bool visible)
     {
         if (string.Equals(id, PanelIds.Menu, StringComparison.OrdinalIgnoreCase)) return;
@@ -603,8 +603,8 @@ internal sealed class OverlayHost
 
         _open = true;
 
-        // Ein frisch angelegter Platz steht auf 0,0, weil das Panel noch nie gezeigt wurde.
-        // Den darf man nicht wiederverwenden - sonst erscheint die Platte über dem Menü.
+        
+        
         var placed = _state.Panels.TryGetValue(id, out var saved) && (saved.Left != 0 || saved.Top != 0);
         var spot = placed
             ? saved!
@@ -618,7 +618,7 @@ internal sealed class OverlayHost
         Anim.Pulse(panel, 1.02, 240);
     }
 
-    /// <summary>Eine verrutschte Platte wieder über das Spiel setzen.</summary>
+    
     public void ResetSpot(string id)
     {
         _state.Panels.Remove(id);
@@ -634,7 +634,7 @@ internal sealed class OverlayHost
         Anim.Pulse(panel, 1.02, 260);
     }
 
-    /// <summary>Die Lage einer Platte merken - beim nächsten Öffnen steht sie wieder dort.</summary>
+    
     public void SaveSpot(PanelWindow panel)
     {
         var spot = Spot(panel.PanelId);
@@ -649,7 +649,7 @@ internal sealed class OverlayHost
         SaveState();
     }
 
-    /// <summary>Alle Platten zusammen heller oder transparenter machen - weich, nicht ruckartig.</summary>
+    
     public void SetPanelOpacity(int percent)
     {
         _state.PanelOpacity = Math.Clamp(percent, 55, 100);
@@ -664,7 +664,7 @@ internal sealed class OverlayHost
         SaveState();
     }
 
-    /// <summary>Alle Platten zurück in die Startaufteilung - Sichtbarkeit bleibt, wie sie ist.</summary>
+    
     public void ResetAllSpots()
     {
         var visibility = _panels.ToDictionary(panel => panel.PanelId, panel => IsPanelVisible(panel.PanelId));
@@ -699,7 +699,7 @@ internal sealed class OverlayHost
         if (!OverlayPlacement.Save(_state)) Log.Warn("The overlay layout could not be saved.");
     }
 
-    /// <summary>Wo die nächste Platte einer Spalte hinkommt - unter dem, was dort schon steht.</summary>
+    
     private Dictionary<int, double> ColumnCursors(PanelWindow? except = null)
     {
         var cursors = new Dictionary<int, double>();
@@ -727,13 +727,13 @@ internal sealed class OverlayHost
         return new OverlaySpot { Left = left, Top = top, Visible = true };
     }
 
-    // ---------------------------------------------------------------- Kürzel
+    
 
-    /// <summary>
-    /// Wartet auf den nächsten Tastendruck. Das läuft über die Tastenabfrage des Hosts und
-    /// nicht über den Fokus: die Platten sind absichtlich nicht aktivierbar, sonst würde
-    /// jedes Umbelegen dem Spiel den Fokus stehlen.
-    /// </summary>
+    
+    
+    
+    
+    
     public void BeginCapture(KeyCaptureKind kind, Action<string?> applied, Action? cancelled = null)
     {
         var down = Shortcuts.CaptureCandidates(kind == KeyCaptureKind.SingleKey)
@@ -741,7 +741,7 @@ internal sealed class OverlayHost
             .ToHashSet();
 
         _capture = new KeyCapture(kind, applied, cancelled, down, DateTimeOffset.UtcNow);
-        _shortcutWasDown = true; // Ein laufendes Kürzel soll das Umbelegen nicht abwürgen.
+        _shortcutWasDown = true; 
     }
 
     public void CancelCapture()
@@ -756,7 +756,7 @@ internal sealed class OverlayHost
     {
         if (_capture is not { } capture) return;
 
-        // Abbruch: Esc - oder wenn sich eine Weile nichts rührt.
+        
         if (GameOverlay.IsPressed(Key.Escape) && !capture.DownAtStart.Contains(Key.Escape))
         {
             CancelCapture();
@@ -784,7 +784,7 @@ internal sealed class OverlayHost
         }
     }
 
-    /// <summary>Setzt das Menü-Kürzel und schreibt es in die Einstellungen.</summary>
+    
     public string SetShortcut(string text)
     {
         if (!Shortcuts.TryParse(text, out _, out _))
@@ -819,8 +819,8 @@ internal sealed class OverlayHost
 
         try
         {
-            // Nur das Kürzel anfassen: erst frisch lesen, damit die übrigen Einstellungen
-            // des Launchers nicht mit dem eigenen Stand überschrieben werden.
+            
+            
             var store = new SettingsStore();
             var fresh = store.Load();
             fresh.OverlayShortcut = text;
@@ -833,9 +833,9 @@ internal sealed class OverlayHost
         }
     }
 
-    // ---------------------------------------------------------------- FastFlags
+    
 
-    /// <summary>Die gespeicherten Werte, wie die Platten sie anzeigen.</summary>
+    
     public (int? FrameRate, int? Quality, int? Texture, int? Msaa, bool? GrassOff) ReadFlags()
     {
         var grass = FastFlags.Read("FIntFRMMaxGrassDistance");
@@ -887,10 +887,10 @@ internal sealed class OverlayHost
         return problem ?? StoreInClient(text);
     }
 
-    /// <summary>
-    /// Schreibt die Änderung außerdem in die ClientSettings der installierten Version. Damit
-    /// greift sie beim nächsten Clientstart - auch ohne den Launcher.
-    /// </summary>
+    
+    
+    
+    
     public string StoreInClient(string text)
     {
         if (_settings.VanillaMode)
@@ -900,9 +900,9 @@ internal sealed class OverlayHost
         return $"{text} {message} Roblox reads flags when it starts - a rejoin brings it in.";
     }
 
-    // ---------------------------------------------------------------- Aktionen
+    
 
-    /// <summary>Serverwechsel: alter Client geht zuerst, der neue Join startet sofort danach.</summary>
+    
     public async Task<string> HopAsync(Action<string> stage)
     {
         if (_busy) return "Already busy.";
@@ -923,9 +923,9 @@ internal sealed class OverlayHost
             var accounts = new AccountStore();
             accounts.Load();
 
-            // ServerHop arbeitet nach dem ersten await auf einem Threadpool-Thread. Die
-            // Statuszeile gehört aber dem Fenster - ohne diesen Umweg gab es beim Wechsel
-            // einen Thread-Fehler (und damit den Absturz beim Klick).
+            
+            
+            
             var safeStage = new Action<string>(text =>
             {
                 if (_dispatcher.CheckAccess()) stage(text);
@@ -947,10 +947,10 @@ internal sealed class OverlayHost
         }
     }
 
-    /// <summary>
-    /// Neu beitreten, damit neue FastFlags greifen. Der alte Client geht zuerst, der neue
-    /// Join startet sofort danach - der schnelle Makro-Weg.
-    /// </summary>
+    
+    
+    
+    
     public async Task<string> RejoinAsync(Action<string> stage)
     {
         if (_busy) return "Already busy.";
@@ -992,10 +992,10 @@ internal sealed class OverlayHost
         }
     }
 
-    /// <summary>
-    /// Der alte Weg: Client beenden und neu starten. Nötig, wenn neue FastFlags greifen
-    /// sollen - der Client liest sie nur beim Start.
-    /// </summary>
+    
+    
+    
+    
     public async Task<string> RestartAsync(Action<string> stage)
     {
         if (_busy) return "Already busy.";
@@ -1056,7 +1056,7 @@ internal sealed class OverlayHost
         }
     }
 
-    /// <summary>Kopiert den Link des Platzes, in dem der Spieler gerade sitzt, in die Zwischenablage.</summary>
+    
     public string CopyGameLink()
     {
         if ((RobloxLogImport.LastJoin()?.PlaceId ?? Settings.LastPlaceId) is not { } place)
@@ -1091,7 +1091,7 @@ internal sealed class OverlayHost
         }
     }
 
-    // ---------------------------------------------------------------- Anti-AFK
+    
 
     public void SetAntiAfkEnabled(bool enabled)
     {
@@ -1133,10 +1133,10 @@ internal sealed class OverlayHost
         AntiAfkUpdated?.Invoke();
     }
 
-    /// <summary>
-    /// Ein Stoß auf Knopfdruck - zum Ausprobieren. Läuft im Hintergrund-Thread und meldet
-    /// bewusst kein Ereignis: das Panel zeigt die Antwort selbst an.
-    /// </summary>
+    
+    
+    
+    
     public string NudgeNow()
     {
         var game = GameOverlay.FindWindow();
@@ -1146,8 +1146,8 @@ internal sealed class OverlayHost
         var outcome = AntiAfk.NudgeEvery(game, _state.AntiAfkKey, out var message);
         var sent = outcome == AntiAfk.NudgeOutcome.Sent;
 
-        // Der Aufrufer läuft im Hintergrund-Thread. Die Felder gehören der Oberfläche,
-        // deshalb werden sie dort gesetzt - und kein Ereignis von hier aus gefeuert.
+        
+        
         void Apply()
         {
             _lastNudgeText = message;
@@ -1167,18 +1167,18 @@ internal sealed class OverlayHost
         if (outcome == AntiAfk.NudgeOutcome.Sent) Log.Info($"Anti-AFK (manual): {message}");
         else Log.Warn($"Anti-AFK (manual) skipped: {message}");
 
-        // Kein Ereignis: das Panel zeigt die Antwort nach dem await selbst.
+        
         return message;
     }
 
-    /// <summary>Der Anti-AFK-Stoß, wie ihn das Panel beschreibt.</summary>
+    
     public string AntiAfkSummary()
     {
         var key = Shortcuts.TryParseKey(_state.AntiAfkKey, out var parsed) ? Shortcuts.Name(parsed) : _state.AntiAfkKey;
         return $"Pop-up tap ({key}) every {AntiAfk.DescribeInterval(_state.AntiAfkIntervalSeconds)}";
     }
 
-    // ---------------------------------------------------------------- Ende
+    
 
     public void Quit()
     {
@@ -1193,7 +1193,7 @@ internal sealed class OverlayHost
             }
             catch
             {
-                // Nicht kritisch - es geht hier nur ums Aufräumen.
+                
             }
         }
 
@@ -1205,14 +1205,14 @@ internal sealed class OverlayHost
         }
         catch
         {
-            // Beim Beenden nicht mehr wichtig.
+            
         }
 
         if (!_preview) Application.Current?.Shutdown(0);
     }
 }
 
-/// <summary>Die Schlüssel der Platten - einmal festgelegt, überall benutzt.</summary>
+
 internal static class PanelIds
 {
     public const string Menu = "menu";
@@ -1223,7 +1223,7 @@ internal static class PanelIds
     public const string AntiAfk = "antiafk";
 }
 
-/// <summary>Kleine Hilfe für die Statuszeile einer Platte.</summary>
+
 internal static class PanelUi
 {
     public static void Say(System.Windows.Controls.TextBlock line, string text, bool error = false)

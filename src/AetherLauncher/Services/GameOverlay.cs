@@ -6,7 +6,7 @@ using System.Windows.Input;
 
 namespace AetherLauncher.Services;
 
-/// <summary>Ein gefundenes Roblox-Spielfenster mit seiner Lage auf dem Bildschirm.</summary>
+
 public readonly record struct GameWindow(IntPtr Handle, int Left, int Top, int Right, int Bottom)
 {
     public int Width => Right - Left;
@@ -14,26 +14,26 @@ public readonly record struct GameWindow(IntPtr Handle, int Left, int Top, int R
     public int CenterX => Left + (Width / 2);
 }
 
-/// <summary>
-/// Das Ingame-Overlay: ein eigenes, kleines Fenster über dem Roblox-Client.
-///
-/// Es wird <b>nichts</b> in den Client eingeschleust - das Overlay zeichnet nur über das
-/// Spielfenster und arbeitet mit Dingen, die ohnehin erlaubt sind: FastFlags in den
-/// ClientSettings, ein normaler Neustart des Clients und der Launcher selbst.
-///
-/// Der Host läuft als eigener Prozess (<c>--overlay</c>), damit das Overlay auch dann da ist,
-/// wenn der Launcher geschlossen wurde. Solange das Overlay zu ist, zeichnet das Fenster
-/// nichts und der Timer prüft nur die Tastenkombination.
-/// </summary>
+
+
+
+
+
+
+
+
+
+
+
 public static class GameOverlay
 {
     public const string Argument = "--overlay";
     public const string HostMutexName = @"Local\AetherOverlayHost";
 
-    /// <summary>Läuft dieser Prozess selbst als Overlay-Host? Dann startet er keinen zweiten.</summary>
+    
     public static bool Hosted { get; set; }
 
-    /// <summary>Startet den Overlay-Prozess. Läuft schon einer, beendet der neue sich selbst.</summary>
+    
     public static void EnsureRunning()
     {
         if (Hosted) return;
@@ -55,11 +55,11 @@ public static class GameOverlay
         }
     }
 
-    /// <summary>
-    /// Das größte sichtbare Fenster eines Roblox-Clients. Bewusst über alle Fenster statt
-    /// über MainWindowHandle: der Client hat teils einen kleinen Startbildschirm, und der
-    /// wäre als Anker für das Overlay unbrauchbar.
-    /// </summary>
+    
+    
+    
+    
+    
     public static GameWindow? FindWindow()
     {
         Process[] processes;
@@ -114,10 +114,10 @@ public static class GameOverlay
         return best;
     }
 
-    /// <summary>
-    /// Das sichtbare Hauptfenster jedes laufenden Clients, ein Eintrag pro Prozess.
-    /// Für Anti-AFK: mehrere Instanzen dürfen nicht nur die erste erwischen.
-    /// </summary>
+    
+    
+    
+    
     public static List<GameWindow> ClientWindows()
     {
         var ids = ClientProcessIds();
@@ -154,7 +154,7 @@ public static class GameOverlay
         return found.Values.ToList();
     }
 
-    /// <summary>Die Prozess-IDs aller laufenden Roblox-Clients.</summary>
+    
     public static HashSet<int> ClientProcessIds()
     {
         var ids = new HashSet<int>();
@@ -168,13 +168,13 @@ public static class GameOverlay
         }
         catch
         {
-            // Ohne Prozessliste ist eben kein Client bekannt.
+            
         }
 
         return ids;
     }
 
-    /// <summary>Läuft gerade irgendein Roblox-Client? Auch ohne sichtbares Fenster.</summary>
+    
     public static bool IsClientRunning()
     {
         try
@@ -195,10 +195,10 @@ public static class GameOverlay
         }
     }
 
-    /// <summary>Hat dieser Client schon ein Fenster? (Der Startbildschirm zählt mit.)</summary>
+    
     public static bool HasWindow(int processId) => WindowOf(processId) != IntPtr.Zero;
 
-    /// <summary>Zu welchem Prozess gehört dieses Fenster?</summary>
+    
     public static int ProcessIdOf(IntPtr window)
     {
         if (window == IntPtr.Zero) return 0;
@@ -206,11 +206,11 @@ public static class GameOverlay
         return (int)processId;
     }
 
-    /// <summary>
-    /// Das sichtbare Spielfenster eines bestimmten Clients. MainWindowHandle ist dafür
-    /// ungeeignet: Roblox legt sein Fenster auf einem anderen Thread an, dort bleibt das
-    /// Handle oft leer - deshalb wird wie in <see cref="FindWindow"/> aufgezählt.
-    /// </summary>
+    
+    
+    
+    
+    
     public static IntPtr WindowOf(int processId)
     {
         if (processId <= 0) return IntPtr.Zero;
@@ -248,10 +248,10 @@ public static class GameOverlay
         return found;
     }
 
-    /// <summary>
-    /// Setzt das Fenster eines Clients auf dieselbe Größe und Stelle wie das alte. Damit
-    /// wirkt der Serverwechsel wie ein Fensterwechsel und nicht wie ein Neustart.
-    /// </summary>
+    
+    
+    
+    
     public static bool MoveWindowTo(int processId, int left, int top, int width, int height)
     {
         var handle = WindowOf(processId);
@@ -268,28 +268,28 @@ public static class GameOverlay
         }
     }
 
-    /// <summary>Holt den neuen Client nach vorn, sobald sein Fenster da ist.</summary>
+    
     public static bool ActivateProcess(int processId)
     {
         var handle = WindowOf(processId);
         return handle != IntPtr.Zero && ActivateAndWait(handle, 1200);
     }
 
-    /// <summary>Steht genau dieses Fenster im Vordergrund?</summary>
+    
     public static bool IsForeground(IntPtr window) => window != IntPtr.Zero && GetForegroundWindow() == window;
 
-    /// <summary>Welches Fenster hat gerade den Fokus? (0, wenn keins.)</summary>
+    
     public static IntPtr ForegroundWindow() => GetForegroundWindow();
 
-    /// <summary>Legt ein Fenster in die Taskleiste - für den Anti-AFK-Pop-up danach.</summary>
+    
     public static bool Minimize(IntPtr window) => window != IntPtr.Zero && ShowWindow(window, ShowMinimize);
 
     public static bool IsMinimized(IntPtr window) => window != IntPtr.Zero && IsIconic(window);
 
-    /// <summary>
-    /// Holt ein Fenster nach vorn. Windows weigert sich normalerweise, den Fokus an einen
-    /// fremden Prozess zu geben - mit angehängter Eingabeschlange geht es trotzdem.
-    /// </summary>
+    
+    
+    
+    
     public static bool Activate(IntPtr window)
     {
         if (window == IntPtr.Zero) return false;
@@ -301,9 +301,9 @@ public static class GameOverlay
 
         try
         {
-            // Nur ein minimiertes Fenster wiederherstellen. SW_RESTORE auf einem sichtbaren,
-            // maximierten Spielfenster würde es verkleinern - beim Anti-AFK-Pop-up wäre das
-            // nach jedem Intervall eine kleine Fensteränderung.
+            
+            
+            
             if (IsIconic(window)) ShowWindow(window, ShowRestore);
 
             SetForegroundWindow(window);
@@ -317,11 +317,11 @@ public static class GameOverlay
         return GetForegroundWindow() == window;
     }
 
-    /// <summary>
-    /// Holt das Fenster nach vorn und wartet, bis Windows den Fokus wirklich umgestellt hat.
-    /// SetForegroundWindow ist asynchron: ohne dieses Warten geht der erste Stoß noch an das
-    /// vorherige Fenster - genau deshalb wirkte Anti-AFK manchmal, manchmal nicht.
-    /// </summary>
+    
+    
+    
+    
+    
     public static bool ActivateAndWait(IntPtr window, int timeoutMs = 900)
     {
         if (window == IntPtr.Zero) return false;
@@ -342,7 +342,7 @@ public static class GameOverlay
         return GetForegroundWindow() == window;
     }
 
-    /// <summary>Gehört das Fenster im Vordergrund zu diesem Programm (Overlay selbst)?</summary>
+    
     public static bool IsForegroundOwn()
     {
         var foreground = GetForegroundWindow();
@@ -352,7 +352,7 @@ public static class GameOverlay
         return processId == (uint)Environment.ProcessId;
     }
 
-    /// <summary>Steht der Roblox-Client gerade im Vordergrund? Nur dann reagiert das Kürzel.</summary>
+    
     public static bool IsForegroundClient()
     {
         var foreground = GetForegroundWindow();
@@ -372,14 +372,14 @@ public static class GameOverlay
         }
     }
 
-    /// <summary>Ist die Taste gedrückt? (Abfrage, kein Haken - funktioniert auch ohne Fokus.)</summary>
+    
     public static bool IsPressed(Key key)
     {
         var virtualKey = KeyInterop.VirtualKeyFromKey(key);
         return virtualKey != 0 && (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
     }
 
-    /// <summary>Welche Zusatztasten sind gerade gedrückt?</summary>
+    
     public static ModifierKeys CurrentModifiers()
     {
         var modifiers = ModifierKeys.None;
@@ -390,26 +390,26 @@ public static class GameOverlay
         return modifiers;
     }
 
-    /// <summary>Stimmen die Zusatztasten genau mit der Angabe überein?</summary>
+    
     public static bool AreModifiersDown(ModifierKeys modifiers) => CurrentModifiers() == modifiers;
 
-    /// <summary>Gibt den Fokus an das Spielfenster zurück (nach dem Zumachen des Overlays).</summary>
+    
     public static void Focus(GameWindow window)
     {
         if (window.Handle != IntPtr.Zero) SetForegroundWindow(window.Handle);
     }
 
-    /// <summary>Arbeitsfläche des Bildschirms, auf dem das Fenster liegt (für das Andocken).</summary>
+    
     public static (int Left, int Top, int Right, int Bottom) WorkArea(IntPtr window)
     {
         var monitor = MonitorFromWindow(window, MonitorDefaultToNearest);
         return AreaOf(monitor);
     }
 
-    /// <summary>
-    /// Arbeitsfläche des Bildschirms an einem Punkt. Wird beim Verschieben gebraucht: das
-    /// Overlay darf nirgends landen, wo man es nicht mehr greifen kann.
-    /// </summary>
+    
+    
+    
+    
     public static (int Left, int Top, int Right, int Bottom) WorkAreaAt(int x, int y)
     {
         var monitor = MonitorFromPoint(new Point32 { X = x, Y = y }, MonitorDefaultToNearest);
@@ -429,13 +429,13 @@ public static class GameOverlay
         return ((int)area.Left, (int)area.Top, (int)area.Right, (int)area.Bottom);
     }
 
-    /// <summary>
-    /// Schließt alle laufenden Clients - erst höflich, nach der Frist hart. Wird nur auf
-    /// ausdrücklichen Knopfdruck benutzt (Server hop / Neustart für neue Flags).
-    /// </summary>
+    
+    
+    
+    
     public static bool CloseClients(TimeSpan? grace = null) => CloseProcesses(ClientProcessIds(), grace);
 
-    /// <summary>Schließt genau diese Clients - nicht mehr und nicht weniger.</summary>
+    
     public static bool CloseProcesses(IEnumerable<int> processIds, TimeSpan? grace = null)
     {
         var wanted = new HashSet<int>(processIds);
@@ -450,7 +450,7 @@ public static class GameOverlay
             }
             catch
             {
-                // Schon weg.
+                
             }
         }
 
@@ -466,7 +466,7 @@ public static class GameOverlay
                 }
                 catch
                 {
-                    // Schon weg oder ohne Fenster.
+                    
                 }
             }
 
@@ -482,7 +482,7 @@ public static class GameOverlay
                 }
                 catch
                 {
-                    // Nicht kritisch.
+                    
                 }
             }
 

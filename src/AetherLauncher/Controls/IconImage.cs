@@ -4,12 +4,12 @@ using System.Windows.Media;
 
 namespace AetherLauncher.Controls;
 
-/// <summary>
-/// Ein PNG-Icon (weiße Linien auf transparentem Grund), das in eine beliebige Farbe
-/// eingefärbt wird. Technik: das Bild dient als OpacityMask eines Rechtecks, das mit
-/// <see cref="Tint"/> gefüllt ist. Dadurch bleibt die Kante sauber und die Farbe kommt
-/// aus dem Theme - genauso wie es der Aether-Hub mit seiner Tint-Matrix macht.
-/// </summary>
+
+
+
+
+
+
 public class IconImage : Control
 {
     public static readonly DependencyProperty SourceProperty = DependencyProperty.Register(
@@ -36,8 +36,8 @@ public class IconImage : Control
         set => SetValue(TintProperty, value);
     }
 
-    /// <summary>Fertiger Brush für die Maske - bewusst als eigener Brush und nicht als
-    /// verschachteltes ImageBrush im Template: Bindings in Freezables finden den DataContext nicht.</summary>
+    
+    
     public Brush? MaskBrush
     {
         get => (Brush?)GetValue(MaskBrushProperty);

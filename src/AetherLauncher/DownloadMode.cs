@@ -2,13 +2,13 @@ using AetherLauncher.Services;
 
 namespace AetherLauncher;
 
-/// <summary>
-/// Hilfsmodus ohne Oberfläche: lädt den offiziellen Installer eines Builds herunter.
-/// Aufruf: AetherLauncher.exe --download current|next|past|version-&lt;hash&gt;
-///
-/// Damit lässt sich der Downloadweg (WEAO-Auflösung, Adresse, Fortschritt, Datei) auch
-/// ohne Klicks prüfen - und für Skripte benutzen.
-/// </summary>
+
+
+
+
+
+
+
 internal static class DownloadMode
 {
     public static int Run(string target)
@@ -46,7 +46,7 @@ internal static class DownloadMode
         var file = Path.Combine(AppPaths.DownloadDir, guid + "-RobloxPlayerInstaller.exe");
         Console.WriteLine($"  target:   {file}");
 
-        // Bewusst kein Progress<T>: der würde auf den Oberflächen-Thread schreiben, den es hier nicht gibt.
+        
         var progress = new DirectProgress();
         var success = RobloxVersions
             .DownloadInstallerAsync(guid, file, null, progress)

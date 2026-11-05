@@ -2,18 +2,18 @@ using Microsoft.Win32;
 
 namespace AetherLauncher.Services;
 
-/// <summary>
-/// Optional: Aether übernimmt den roblox-player-Protokollhandler. Dann landen Klicks auf
-/// "Play" der Roblox-Website bei uns, und wir können FastFlags und Multi-Instanz anwenden,
-/// bevor der Client die URI bekommt. Der vorherige Handler wird gespeichert und kann
-/// jederzeit wiederhergestellt werden.
-/// </summary>
+
+
+
+
+
+
 public static class ProtocolHandler
 {
     private const string KeyPath = @"Software\Classes\roblox-player";
     private const string CommandPath = KeyPath + @"\shell\open\command";
 
-    /// <summary>Aktuell hinterlegter Befehl, z. B. der des offiziellen Bootstrappers.</summary>
+    
     public static string? ReadCurrentCommand()
     {
         try
@@ -35,7 +35,7 @@ public static class ProtocolHandler
         return current is not null && current.Contains(exePath, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>Trägt uns als Handler ein. Der vorherige Wert muss vorher gesichert werden.</summary>
+    
     public static bool Register(string exePath, out string message)
     {
         message = "";
@@ -63,7 +63,7 @@ public static class ProtocolHandler
         }
     }
 
-    /// <summary>Stellt den vorherigen Handler wieder her (oder entfernt unseren Eintrag).</summary>
+    
     public static bool Restore(string? savedCommand, out string message)
     {
         message = "";
@@ -71,7 +71,7 @@ public static class ProtocolHandler
         {
             if (string.IsNullOrWhiteSpace(savedCommand))
             {
-                // Es gab vorher keinen Handler - dann den Schlüssel wieder entfernen.
+                
                 Registry.CurrentUser.DeleteSubKeyTree(KeyPath, throwOnMissingSubKey: false);
                 message = "Protocol handler entry removed.";
             }

@@ -9,8 +9,7 @@
         TextOptions.TextFormattingMode="Display" UseLayoutRounding="True">
 
     <Grid>
-    <!-- Leichter Schein hinter der Platte, nur beim Ziehen sichtbar. Kein Weichzeichner:
-         ein DropShadowEffect würde die transparenten Fenster teuer machen. -->
+    
     <Border x:Name="Lift" CornerRadius="15" Margin="-4" BorderThickness="1.5"
             BorderBrush="{DynamicResource AccentBrush}" Opacity="0" IsHitTestVisible="False" />
 
@@ -24,7 +23,7 @@
         </Border.RenderTransform>
 
         <StackPanel>
-            <!-- Kopfleiste: zugleich Ziehfläche. Die Lage wird beim Loslassen gemerkt. -->
+            
             <Border x:Name="Header" CornerRadius="11,11,0,0" Background="{DynamicResource OverlayHeaderBrush}" Padding="12,8"
                     Cursor="SizeAll"
                     MouseLeftButtonDown="Header_MouseLeftButtonDown"
@@ -51,7 +50,7 @@
                 </DockPanel>
             </Border>
 
-            <!-- Der Rumpf rollt, wenn eine Platte zu hoch würde - so bleibt sie immer im Bild. -->
+            
             <ScrollViewer MaxHeight="560" VerticalScrollBarVisibility="Auto" c:SmoothScroll.Enabled="True">
                 <ContentPresenter x:Name="BodyHost" Margin="12,10,12,12" />
             </ScrollViewer>

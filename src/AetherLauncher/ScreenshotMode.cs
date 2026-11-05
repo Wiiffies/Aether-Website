@@ -8,14 +8,14 @@ using AetherLauncher.ViewModels;
 
 namespace AetherLauncher;
 
-/// <summary>
-/// Rendert jede Seite des Fensters als PNG. Damit lässt sich die Oberfläche prüfen und
-/// dokumentieren, ohne ein Foto vom Bildschirm zu machen.
-/// Aufruf: AetherLauncher.exe --screenshot &lt;zielordner&gt;
-///
-/// Die Bilder zeigen Beispieldaten (das offizielle Roblox-Konto und der Platz 1818), damit
-/// die Listen nicht leer aussehen. Gespeicherte Konten des Benutzers werden nicht geschrieben.
-/// </summary>
+
+
+
+
+
+
+
+
 internal static class ScreenshotMode
 {
     private static readonly string[] PageNames = { "home", "accounts", "engine", "settings", "log" };
@@ -32,14 +32,14 @@ internal static class ScreenshotMode
             return 1;
         }
 
-        // Beim Schließen des Fensters würde WPF die Anwendung beenden - hier soll nur die
-        // Aufnahme enden, also den automatischen Shutdown ausschalten.
+        
+        
         Application.Current.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
         var task = ShootAsync(outputDirectory);
         var deadline = DateTime.UtcNow.AddSeconds(90);
 
-        // Die Continuations brauchen die Nachrichtenschleife, deshalb wird gepumpt.
+        
         while (!task.IsCompleted && DateTime.UtcNow < deadline) Pump(100);
 
         if (!task.IsCompleted)
@@ -55,7 +55,7 @@ internal static class ScreenshotMode
     {
         var window = new MainWindow(null);
         window.Show();
-        await WaitAsync(1200); // Client-Erkennung und Bilder abwarten
+        await WaitAsync(1200); 
 
         if (window.DataContext is MainViewModel viewModel)
         {
@@ -89,13 +89,13 @@ internal static class ScreenshotMode
             game.Refresh();
             viewModel.Places.Add(game);
             viewModel.SelectedPlace = game;
-            // Keine Vorschau-Flags anheften: der Screenshot-Modus darf die gespeicherten
-            // FastFlags des Benutzers nicht verändern.
+            
+            
             viewModel.Status = "Screenshot mode: sample account and sample game.";
             viewModel.AddGameOpen = false;
 
-            // Die Versionsliste kommt von WEAO und Roblox - hier wirklich holen, damit das
-            // Bild zeigt, was die Karte leistet (ohne Netz bleibt sie leer).
+            
+            
             if (viewModel.LoadBuildsCommand.CanExecute(null)) viewModel.LoadBuildsCommand.Execute(null);
             await WaitAsync(3000);
         }
@@ -103,13 +103,13 @@ internal static class ScreenshotMode
         for (var page = 0; page < PageNames.Length; page++)
         {
             window.SelectPage(page);
-            await WaitAsync(600); // die Einblendung der Karten auslaufen lassen
+            await WaitAsync(600); 
 
             var path = Path.Combine(outputDirectory, $"aether-{PageNames[page]}.png");
             Save(window, path);
             Console.WriteLine(path);
 
-            // Die Einstellungen sind länger als das Fenster - der untere Teil als eigenes Bild.
+            
             if (PageNames[page] == "settings")
             {
                 window.ScrollSettingsToEnd();
@@ -121,11 +121,11 @@ internal static class ScreenshotMode
             }
         }
 
-        // Die Schnellansicht über der zuletzt gezeigten Seite aufnehmen.
+        
         if (window.DataContext is MainViewModel layoutModel)
         {
-            // Der Screenshot soll das Feature zeigen, auch wenn es in den echten
-            // Einstellungen gerade ausgeschaltet ist. Danach wird der alte Wert wiederhergestellt.
+            
+            
             var overlayWasEnabled = layoutModel.OverlayEnabled;
             if (!overlayWasEnabled) layoutModel.OverlayEnabled = true;
 
@@ -141,8 +141,8 @@ internal static class ScreenshotMode
             if (!overlayWasEnabled) layoutModel.OverlayEnabled = false;
         }
 
-        // Die Ingame-Platten: jede ist ein eigenes Fenster - fürs Bild werden sie so
-        // zusammengelegt, wie sie auf dem Schirm nebeneinander stehen.
+        
+        
         var host = new OverlayHost(preview: true, settings: new LauncherSettings
         {
             LastPlaceId = 1818,
@@ -153,7 +153,7 @@ internal static class ScreenshotMode
         host.Start();
         await WaitAsync(900);
 
-        // Für die Aufnahme alle sechs Platten zeigen - auch Anti-AFK, das sonst zu ist.
+        
         host.SetPanelVisible(PanelIds.AntiAfk, true);
         await WaitAsync(500);
 
@@ -169,7 +169,7 @@ internal static class ScreenshotMode
         return 0;
     }
 
-    /// <summary>Legt alle sichtbaren Overlay-Platten auf ein Bild - mit der Lage wie am Schirm.</summary>
+    
     private static void SavePanels(IReadOnlyList<Window> windows, string path)
     {
         var visible = windows.Where(window => window.IsVisible).ToList();
@@ -186,7 +186,7 @@ internal static class ScreenshotMode
         var canvas = new DrawingVisual();
         using (var dc = canvas.RenderOpen())
         {
-            // Ein dunkler Grund, damit die Platten auch als Datei lesbar bleiben.
+            
             dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(0x10, 0x14, 0x1C)), null,
                 new Rect(0, 0, Math.Max(1, width), Math.Max(1, height)));
 
@@ -235,7 +235,7 @@ internal static class ScreenshotMode
         encoder.Save(stream);
     }
 
-    /// <summary>Lässt die Nachrichtenschleife laufen, damit Animationen und Layout fertig werden.</summary>
+    
     private static void Pump(int milliseconds)
     {
         var frame = new DispatcherFrame();
@@ -252,7 +252,7 @@ internal static class ScreenshotMode
 
     private static async Task WaitAsync(int milliseconds)
     {
-        // Aufteilen, damit zwischendurch gepumpt wird (sonst steht der UI-Thread).
+        
         var remaining = milliseconds;
         while (remaining > 0)
         {

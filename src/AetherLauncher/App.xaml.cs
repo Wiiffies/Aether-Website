@@ -7,25 +7,25 @@ public partial class App : Application
 {
     private SingleInstance? _singleInstance;
 
-    /// <summary>Wird ausgelöst, wenn eine externe Startanfrage (Protokollhandler) eintrifft.</summary>
+    
     public static event Action<string>? ExternalLaunchRequested;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
-        // Eigene Schriften, bevor das erste Fenster gebaut wird: die Schriftdatei muss
-        // angemeldet sein, sonst greift WPF still auf eine Ersatzschrift zurück.
+        
+        
         var settings = new SettingsStore().Load();
         ThemeManager.Apply(settings.Theme);
         AppFonts.LoadOwnFonts(settings);
         AppFonts.Apply(settings);
 
-        // Nach einem Absturz während der Roblox-Anmeldung kann ein temporäres
-        // Browserprofil mit einem Cookie zurückbleiben. Beim Start aufräumen.
+        
+        
         RobloxLoginWindow.CleanupStaleProfiles();
 
-        // Hilfsmodi ohne Oberfläche: Multi-Instanz-Wächter und Selbsttest.
+        
         if (e.Args.Contains(MultiInstance.WatcherArgument, StringComparer.OrdinalIgnoreCase))
         {
             MultiInstance.RunWatcher();
@@ -47,7 +47,7 @@ public partial class App : Application
 
         if (e.Args.Contains("--selftest-ui", StringComparer.OrdinalIgnoreCase))
         {
-            // Mit --hover fährt der Test zusätzlich mit dem echten Zeiger über die Bauteile.
+            
             Shutdown(UiSelfTest.Run(e.Args.Contains("--hover", StringComparer.OrdinalIgnoreCase)));
             return;
         }
@@ -60,8 +60,8 @@ public partial class App : Application
             return;
         }
 
-        // Das Ingame-Overlay: eigener Prozess, eigenes Fenster über dem Roblox-Client.
-        // Die Nachrichtenschleife kommt von Run() - hier wird nur das Fenster gebaut.
+        
+        
         if (e.Args.Contains(GameOverlay.Argument, StringComparer.OrdinalIgnoreCase))
         {
             InstallCrashHandlers();
@@ -79,24 +79,24 @@ public partial class App : Application
             return;
         }
 
-        // Ab hier läuft die echte Oberfläche: ein unerwarteter Fehler soll nicht mehr
-        // stillschweigend den Prozess beenden, sondern gemeldet und protokolliert werden.
+        
+        
         InstallCrashHandlers();
 
-        // Neustart (Knopf in der Fußzeile): warten, bis der alte Prozess weg ist, sonst
-        // würde die Einzelinstanz-Sperre den neuen Lauf sofort beenden.
+        
+        
         WaitForRestartTarget(e.Args);
 
         var launchUri = FindLaunchRequest(e.Args);
 
-        // "--show" ist keine Startanfrage, sondern der Wunsch, das laufende Fenster nach
-        // vorn zu holen (Knopf im Ingame-Overlay).
+        
+        
         if (string.Equals(launchUri, SingleInstance.ShowRequest, StringComparison.Ordinal)) launchUri = null;
 
         _singleInstance = new SingleInstance();
         if (!_singleInstance.IsFirstInstance)
         {
-            // Es läuft schon ein Fenster: Anfrage dorthin weitergeben.
+            
             if (launchUri is not null) _singleInstance.SendLaunch(launchUri);
             else if (e.Args.Contains("--show", StringComparer.OrdinalIgnoreCase))
                 _singleInstance.SendLaunch(SingleInstance.ShowRequest);
@@ -115,11 +115,11 @@ public partial class App : Application
         window.Show();
     }
 
-    /// <summary>
-    /// Fängt unbehandelte Fehler ab: schreibt sie mit Aufrufliste in launcher.log und
-    /// crash.log und zeigt eine kurze Meldung. Vorher verschwand das Fenster einfach -
-    /// genau das ist bei einem Fehler im Animationstakt passiert.
-    /// </summary>
+    
+    
+    
+    
+    
     private void InstallCrashHandlers()
     {
         DispatcherUnhandledException += (_, args) =>
@@ -143,7 +143,7 @@ public partial class App : Application
         }
         catch
         {
-            // Auch das Protokoll kann einmal nicht schreibbar sein.
+            
         }
 
         string? crashFile = null;
@@ -154,7 +154,7 @@ public partial class App : Application
         }
         catch
         {
-            // Siehe launcher.log.
+            
         }
 
         if (!fatal) return;
@@ -168,7 +168,7 @@ public partial class App : Application
         }
         catch
         {
-            // Ohne Oberfläche bleibt nur das Protokoll.
+            
         }
     }
 
@@ -191,11 +191,11 @@ public partial class App : Application
         }
         catch
         {
-            // Der alte Prozess ist schon beendet - umso besser.
+            
         }
     }
 
-    /// <summary>Sucht eine Start-URI in den Argumenten ("--launch &lt;uri&gt;" oder direkt übergeben).</summary>
+    
     private static string? FindLaunchRequest(string[] args)
     {
         for (var i = 0; i < args.Length; i++)

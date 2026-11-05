@@ -5,18 +5,18 @@ using AetherLauncher.Services;
 
 namespace AetherLauncher.Overlay;
 
-/// <summary>
-/// Anti-AFK: Intervall und Taste. Der Host holt das Spiel kurz nach vorn, tippt die Taste
-/// und legt das Fenster wieder weg - auch dann, wenn nur das Overlay läuft.
-/// </summary>
+
+
+
+
 public partial class AntiAfkPanel : UserControl
 {
     private OverlayHost? _host;
     private bool _loading;
     private DateTime _holdStatusUntil;
 
-    // Die Restzeit soll sichtbar herunterzählen, ohne dass der Host jede Sekunde alle
-    // Schalter neu setzt. Deshalb aktualisiert nur diese Uhr die Statuszeile.
+    
+    
     private readonly DispatcherTimer _clock;
 
     public AntiAfkPanel()
@@ -107,7 +107,7 @@ public partial class AntiAfkPanel : UserControl
         NudgeButton.IsEnabled = false;
         try
         {
-            // Der Stoß gehört nicht in den Oberflächen-Thread: er wartet kurz auf den Tastendruck.
+            
             var message = await Task.Run(() => _host.NudgeNow());
             _holdStatusUntil = DateTime.UtcNow.AddSeconds(4);
             PanelUi.Say(StatusLine, message);

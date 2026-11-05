@@ -7,25 +7,25 @@ using System.Windows.Threading;
 
 namespace AetherLauncher.Controls;
 
-/// <summary>
-/// Weiches Mausrad-Scrollen für einen <see cref="ScrollViewer"/>.
-///
-/// Anders als eine WPF-Animation pro Radschritt sammelt diese Variante die Eingaben ein und
-/// bewegt den Inhalt mit einer kurzen, zusammenlaufenden Bewegung zum Ziel. Dadurch kämpfen
-/// schnelle Radstöße oder ein Trackpad nicht mehr gegeneinander, und der Inhalt springt auch
-/// am Rand nicht. Verschachtelte Scroller werden von innen nach außen bedient: erst die Liste
-/// unter dem Zeiger, erst wenn die am Rand ist, die Seite.
-///
-/// Einfach in XAML anhängen mit <c>c:SmoothScroll.Enabled="True"</c>.
-/// </summary>
+
+
+
+
+
+
+
+
+
+
+
 public static class SmoothScroll
 {
     private sealed class State
     {
-        /// <summary>Wo der Inhalt gerade steht (nicht der evtl. verzögerte VerticalOffset).</summary>
+        
         public double Position;
 
-        /// <summary>Wohin die laufende Bewegung noch will - mehrere Radstöße sammeln sich hier.</summary>
+        
         public double Target;
 
         public bool Active;
@@ -62,16 +62,16 @@ public static class SmoothScroll
     {
         if (e.Delta == 0) return;
 
-        // Der äußerste Scroller sieht das Preview zuerst. Deshalb wird hier der innerste
-        // Scroller unter dem Zeiger gesucht - sonst würde eine Liste in einer Seite immer
-        // die ganze Seite rollen.
+        
+        
+        
         var viewer = FindScrollable(e.OriginalSource as DependencyObject, e.Delta);
         if (viewer is null) return;
 
         var state = States.GetOrCreateValue(viewer);
 
-        // Nach einer Pause an der echten Position anfangen; während einer Bewegung an deren
-        // Ziel anschließen, damit schnelle Radstöße sich addieren statt neu zu starten.
+        
+        
         if (!state.Active)
         {
             state.Position = viewer.VerticalOffset;
@@ -82,7 +82,7 @@ public static class SmoothScroll
         var wanted = state.Target - (e.Delta / 120.0 * step);
         var target = Math.Clamp(wanted, 0, viewer.ScrollableHeight);
 
-        if (Math.Abs(target - state.Target) < 0.01) return; // schon am Rand - nicht abfangen
+        if (Math.Abs(target - state.Target) < 0.01) return; 
 
         state.Target = target;
 
@@ -98,10 +98,10 @@ public static class SmoothScroll
         e.Handled = true;
     }
 
-    /// <summary>
-    /// Sucht vom Original-Source aufwärts den ersten Scroller, der in die gewünschte
-    /// Richtung noch Platz hat. So rollt am Ende der inneren Liste die äußere Seite weiter.
-    /// </summary>
+    
+    
+    
+    
     private static ScrollViewer? FindScrollable(DependencyObject? source, int delta)
     {
         for (var node = source; node is not null; node = ParentOf(node))
@@ -180,8 +180,8 @@ public static class SmoothScroll
                 continue;
             }
 
-            // Exponentielles Nachziehen: schnell los, weich ankommen. Bei 15 ms sind das
-            // rund 150-200 ms, unabhängig davon, wie viele Radstöße dazukommen.
+            
+            
             state.Position += diff * 0.33;
             viewer.ScrollToVerticalOffset(state.Position);
             any = true;

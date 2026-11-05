@@ -3,9 +3,7 @@
                     xmlns:c="clr-namespace:AetherLauncher.Controls"
                     xmlns:po="http://schemas.microsoft.com/winfx/2006/xaml/presentation/options">
 
-    <!-- ================= Palette =================
-         Exakt die Werte aus dem Aether-Hub-Projekt (AetherLoader/UiKit.cs, Klasse "Pal"),
-         damit beide Anwendungen dieselbe Sprache sprechen. -->
+    
 
     <SolidColorBrush x:Key="BgBrush" Color="#0A0C11" po:Freeze="False" />
     <SolidColorBrush x:Key="BgDeepBrush" Color="#07090E" po:Freeze="False" />
@@ -43,29 +41,27 @@
     <SolidColorBrush x:Key="EdgeBrush" Color="#222836" po:Freeze="False" />
     <SolidColorBrush x:Key="WhiteBrush" Color="#FFFFFF" po:Freeze="False" />
 
-    <!-- Flächen der Ingame-Platten. Sie werden vom ThemeManager mit umgefärbt. -->
+    
     <SolidColorBrush x:Key="OverlayCardBrush" Color="#F20C1018" po:Freeze="False" />
     <SolidColorBrush x:Key="OverlayHeaderBrush" Color="#16233C" po:Freeze="False" />
     <SolidColorBrush x:Key="OverlayBorderBrush" Color="#3A4A6E" po:Freeze="False" />
 
-    <!-- Aufleuchten beim Überfahren: halbtransparente Flächen über den Grundfarben.
-         Deckkraft lässt sich animieren, ein geteilter Pinsel nicht. -->
+    
     <SolidColorBrush x:Key="HoverWashBrush" Color="#0FFFFFFF" po:Freeze="False" />
     <SolidColorBrush x:Key="HoverWashSoftBrush" Color="#0AFFFFFF" po:Freeze="False" />
     <SolidColorBrush x:Key="HoverWashStrongBrush" Color="#1FFFFFFF" po:Freeze="False" />
 
-    <!-- Die Schrift wird zur Laufzeit gesetzt (DynamicResource), damit eigene Schriften
-         ohne Neustart greifen. -->
+    
     <FontFamily x:Key="UiFont">Segoe UI</FontFamily>
     <FontFamily x:Key="MonoFont">Consolas</FontFamily>
 
-    <!-- Hintergrund der Seiten: Bg -> BgDeep, 90 Grad (wie Draw.Gradient im Hub) -->
+    
     <LinearGradientBrush x:Key="PageGradient" po:Freeze="False" StartPoint="0,0" EndPoint="0,1">
         <GradientStop Color="#0A0C11" Offset="0" />
         <GradientStop Color="#07090E" Offset="1" />
     </LinearGradientBrush>
 
-    <!-- Glanz an der Oberkante einer Karte (Draw.Sheen im Hub) -->
+    
     <LinearGradientBrush x:Key="SheenBrush" StartPoint="0,0" EndPoint="0,1">
         <GradientStop Color="#14FFFFFF" Offset="0" />
         <GradientStop Color="#00FFFFFF" Offset="1" />
@@ -76,7 +72,7 @@
         <GradientStop Color="#080D1A" Offset="1" />
     </LinearGradientBrush>
 
-    <!-- ================= Text ================= -->
+    
     <Style TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{DynamicResource UiFont}" />
         <Setter Property="FontSize" Value="11.5" />
@@ -97,7 +93,7 @@
         <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
     </Style>
 
-    <!-- Kartenkopf, z. B. "RECENTLY PLAYED" -->
+    
     <Style x:Key="SectionHeader" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{DynamicResource UiFont}" />
         <Setter Property="FontSize" Value="10.5" />
@@ -105,7 +101,7 @@
         <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}" />
     </Style>
 
-    <!-- Zwischenüberschrift innerhalb einer Karte (Gruppen im FastFlags-Editor) -->
+    
     <Style x:Key="GroupLabel" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{DynamicResource UiFont}" />
         <Setter Property="FontSize" Value="9.5" />
@@ -165,7 +161,7 @@
         <Setter Property="Margin" Value="0,0,0,5" />
     </Style>
 
-    <!-- kleine Markierung, z. B. "IN USE" -->
+    
     <Style x:Key="Badge" TargetType="Border">
         <Setter Property="Background" Value="{DynamicResource ChipOnBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource ChipLineBrush}" />
@@ -182,7 +178,7 @@
         <Setter Property="Foreground" Value="#BFD8FF" />
     </Style>
 
-    <!-- Steht ein FastFlag-Vorschlag noch auf Roblox' Allowlist? Grün = wird gelesen. -->
+    
     <Style x:Key="HonorBadge" TargetType="Border" BasedOn="{StaticResource Badge}">
         <Setter Property="Background" Value="#151A23" />
         <Setter Property="BorderBrush" Value="{DynamicResource BorderSoftBrush}" />
@@ -205,7 +201,7 @@
         </Style.Triggers>
     </Style>
 
-    <!-- ================= Icon ================= -->
+    
     <Style TargetType="{x:Type c:IconImage}">
         <Setter Property="Width" Value="15" />
         <Setter Property="Height" Value="15" />
@@ -221,9 +217,7 @@
         </Setter>
     </Style>
 
-    <!-- ================= Karten =================
-         Eine Vorlage für alle Karten: Fläche, Kante, Glanz und eine weiche Aufhellung
-         beim Überfahren (Deckkraft der Auflage statt Farbwechsel). -->
+    
     <ControlTemplate x:Key="CardTemplate" TargetType="{x:Type c:CardPanel}">
         <Grid>
             <Border x:Name="Surface" Background="{TemplateBinding Fill}"
@@ -288,12 +282,9 @@
         <Setter Property="Template" Value="{StaticResource CardTemplate}" />
     </Style>
 
-    <!-- ================= Schaltflächen =================
-         Eine Vorlage für alle: Fläche, Aufhellung beim Überfahren, Ring beim Klick und
-         leichtes Zusammendrücken. Die einzelnen Arten setzen nur Farben und Maße. -->
+    
     <ControlTemplate x:Key="RippleTemplate" TargetType="{x:Type c:RippleButton}">
-        <!-- Die Skalierung beim Drücken legt der Code an: Transformationen aus einer
-             geteilten Vorlage friert WPF ein, und eingefrorene lässt sich nicht animieren. -->
+        
         <Grid x:Name="PART_Root" RenderTransformOrigin="0.5,0.5" Background="Transparent">
             <Border x:Name="Surface" Background="{TemplateBinding Fill}"
                     BorderBrush="{TemplateBinding StrokeBrush}"
@@ -365,7 +356,7 @@
         <Setter Property="Padding" Value="12,6" />
     </Style>
 
-    <!-- Kopfnavigation einer Karte: keine Box, nur ein Label das aufleuchtet -->
+    
     <Style x:Key="PlainButton" TargetType="{x:Type c:RippleButton}" BasedOn="{StaticResource ButtonBase}">
         <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}" />
         <Setter Property="Fill" Value="Transparent" />
@@ -385,7 +376,7 @@
         <Setter Property="Radius" Value="8" />
     </Style>
 
-    <!-- kleine runde Symbolschaltfläche in Zeilen -->
+    
     <Style x:Key="IconButton" TargetType="{x:Type c:RippleButton}" BasedOn="{StaticResource ButtonBase}">
         <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}" />
         <Setter Property="Fill" Value="Transparent" />
@@ -403,8 +394,8 @@
         </Style.Triggers>
     </Style>
 
-    <!-- Stern: heftet ein Spiel oben an. Immer sichtbar, damit man sieht was angeheftet ist. -->
-    <!-- Kopf einer Vorschlagsgruppe im FastFlags-Editor: klappt die Gruppe auf und zu. -->
+    
+    
     <Style x:Key="GroupHeader" TargetType="{x:Type c:RippleButton}" BasedOn="{StaticResource ButtonBase}">
         <Setter Property="Fill" Value="Transparent" />
         <Setter Property="HoverFill" Value="{DynamicResource HoverBrush}" />
@@ -417,8 +408,7 @@
     <Style x:Key="PinButton" TargetType="{x:Type c:RippleButton}" BasedOn="{StaticResource ButtonBase}">
         <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
         <Setter Property="Fill" Value="Transparent" />
-        <!-- Der Favoritenstern: deutlich größer als die übrigen Zeilenknöpfe, damit er
-             nicht wie ein Beiwerk wirkt. -->
+        
         <Setter Property="FontSize" Value="17" />
         <Setter Property="Width" Value="34" />
         <Setter Property="Height" Value="34" />
@@ -436,7 +426,7 @@
         </Style.Triggers>
     </Style>
 
-    <!-- Derselbe Stern für die Zuletzt-Liste: dort heißt der Zustand "schon in den eigenen Spielen". -->
+    
     <Style x:Key="SaveButton" TargetType="{x:Type c:RippleButton}" BasedOn="{StaticResource ButtonBase}">
         <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
         <Setter Property="Fill" Value="Transparent" />
@@ -457,7 +447,7 @@
         </Style.Triggers>
     </Style>
 
-    <!-- Fensterknöpfe (Vektorglyphen wie im Hub) -->
+    
     <Style x:Key="WindowButton" TargetType="{x:Type c:RippleButton}" BasedOn="{StaticResource ButtonBase}">
         <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}" />
         <Setter Property="Fill" Value="Transparent" />
@@ -483,8 +473,7 @@
         </Style.Triggers>
     </Style>
 
-    <!-- ================= Navigationsreiter =================
-         Kein eigener Strich mehr: den zeichnet die Kopfleiste und lässt ihn gleiten. -->
+    
     <Style x:Key="Tab" TargetType="RadioButton">
         <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}" />
         <Setter Property="FontFamily" Value="{DynamicResource UiFont}" />
@@ -498,8 +487,7 @@
                         <Border x:Name="Bd" Background="Transparent" CornerRadius="9" />
                         <Border x:Name="Hover" Background="{DynamicResource HoverBrush}" CornerRadius="9"
                                 Opacity="0" IsHitTestVisible="False" />
-                        <!-- Ausgewählt: leicht ansteigender Verlauf plus feine Kante - die Pille
-                             wirkt dadurch wie eine Fläche und nicht wie ein harter Balken. -->
+                        
                         <Border x:Name="On" CornerRadius="9" Opacity="0" IsHitTestVisible="False">
                             <Border.Background>
                                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
@@ -573,7 +561,7 @@
         </Setter>
     </Style>
 
-    <!-- ================= Eingaben ================= -->
+    
     <Style x:Key="InputBox" TargetType="TextBox">
         <Setter Property="Background" Value="{DynamicResource CardHiBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource TextHiBrush}" />
@@ -673,7 +661,7 @@
         </Setter>
     </Style>
 
-    <!-- Code-Fläche (FastFlags-Editor, Log) -->
+    
     <Style x:Key="CodeBox" TargetType="TextBox">
         <Setter Property="Background" Value="{DynamicResource CodeBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource CodeTextBrush}" />
@@ -730,7 +718,7 @@
         </Setter>
     </Style>
 
-    <!-- ================= Schalter ================= -->
+    
     <Style x:Key="Switch" TargetType="CheckBox">
         <Setter Property="Foreground" Value="{DynamicResource TextHiBrush}" />
         <Setter Property="FontFamily" Value="{DynamicResource UiFont}" />
@@ -743,7 +731,7 @@
                             Background="{DynamicResource TrackBrush}" BorderBrush="{DynamicResource BorderBrush}"
                             BorderThickness="1" SnapsToDevicePixels="True">
                         <Grid>
-                            <!-- Aufleuchten des Gleises statt hartem Farbwechsel -->
+                            
                             <Border x:Name="TrackOn" CornerRadius="10" Margin="-1"
                                     Background="{DynamicResource AccentBrush}" Opacity="0" />
                             <Ellipse x:Name="Knob" Width="16" Height="16" HorizontalAlignment="Left"
@@ -796,7 +784,7 @@
         </Setter>
     </Style>
 
-    <!-- ================= Chips (Bildrate im Ingame-Overlay) ================= -->
+    
     <Style x:Key="Chip" TargetType="RadioButton">
         <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}" />
         <Setter Property="FontFamily" Value="{DynamicResource UiFont}" />
@@ -871,7 +859,7 @@
         </Setter>
     </Style>
 
-    <!-- ================= Segmentsteuerung ================= -->
+    
     <Style x:Key="SegmentBar" TargetType="Border">
         <Setter Property="Background" Value="{DynamicResource PillBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource PillBorderBrush}" />
@@ -930,9 +918,8 @@
         </Setter>
     </Style>
 
-    <!-- ================= Listenzeilen ================= -->
-    <!-- Kachel für die Themenauswahl: Farbe statt Text, damit man die Welt sofort sieht.
-         Der Wechsel läuft über weiche Opacity-Flächen - dieselbe Sprache wie die Listenzeilen. -->
+    
+    
     <Style x:Key="ThemeTile" TargetType="ListBoxItem">
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="Cursor" Value="Hand" />
@@ -1018,9 +1005,7 @@
                                 Opacity="0" IsHitTestVisible="False" />
                         <Border x:Name="On" Background="{DynamicResource RowOnBrush}" CornerRadius="8"
                                 Opacity="0" IsHitTestVisible="False" />
-                        <!-- Auswahlbalken links. Er wächst in der Höhe aus der Mitte heraus:
-                             eine Höhe lässt sich animieren, ein Transformation nicht - Objekte in
-                             einer geteilten Vorlage friert WPF ein. -->
+                        
                         <Border x:Name="Rail" Width="2.5" Height="0" CornerRadius="2" Margin="1,0,0,0"
                                 HorizontalAlignment="Left" VerticalAlignment="Center" Opacity="0"
                                 Background="{DynamicResource AccentBrush}" />
@@ -1085,7 +1070,7 @@
         </Setter>
     </Style>
 
-    <!-- Zeile in einer Karte, die nicht auswählbar ist (nur Anzeige) -->
+    
     <Style x:Key="StaticRow" TargetType="Border">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="CornerRadius" Value="8" />
@@ -1100,7 +1085,7 @@
         <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
     </Style>
 
-    <!-- ================= Bildlaufleiste ================= -->
+    
     <Style x:Key="ScrollThumb" TargetType="Thumb">
         <Setter Property="IsTabStop" Value="False" />
         <Setter Property="Template">
@@ -1166,7 +1151,7 @@
         </Style.Triggers>
     </Style>
 
-    <!-- ================= Sonstiges ================= -->
+    
     <Style TargetType="ToolTip">
         <Setter Property="Background" Value="{DynamicResource CardHiBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource TextMidBrush}" />

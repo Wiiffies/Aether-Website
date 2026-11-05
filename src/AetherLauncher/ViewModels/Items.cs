@@ -8,7 +8,7 @@ using AetherLauncher.Services;
 
 namespace AetherLauncher.ViewModels;
 
-/// <summary>Ein Konto, wie es die Oberfläche braucht: Avatar, Kurzzeile, Markierung, Status.</summary>
+
 public sealed class AccountItem : ObservableObject
 {
     private bool _isMarked;
@@ -25,7 +25,7 @@ public sealed class AccountItem : ObservableObject
     public string Handle => "@" + Record.Username;
     public string Title => string.IsNullOrWhiteSpace(Record.DisplayName) ? Record.Username : Record.DisplayName;
 
-    /// <summary>Zeile wie im Aether-Hub: "key stored · added 2 d ago".</summary>
+    
     public string Subtitle => _hasProblem
         ? _status
         : $"key stored · added {Time.Ago(Record.AddedAt)}";
@@ -52,14 +52,14 @@ public sealed class AccountItem : ObservableObject
         }
     }
 
-    /// <summary>Wird im Multi-Start markiert.</summary>
+    
     public bool IsMarked
     {
         get => _isMarked;
         set => Set(ref _isMarked, value);
     }
 
-    /// <summary>Kurze Rückmeldung der letzten Aktion (z. B. "Launched").</summary>
+    
     public string Status
     {
         get => _status;
@@ -72,7 +72,7 @@ public sealed class AccountItem : ObservableObject
         }
     }
 
-    /// <summary>Setzt eine dauerhafte Warnung (Cookie ungültig) statt einer Momentaufnahme.</summary>
+    
     public void SetProblem(string message)
     {
         _status = message;
@@ -95,7 +95,7 @@ public sealed class AccountItem : ObservableObject
         }
     }
 
-    /// <summary>Rund zugeschnittenes Bild für die Zeile.</summary>
+    
     public Brush? AvatarBrush => _avatar is null
         ? null
         : new ImageBrush(_avatar) { Stretch = Stretch.UniformToFill };
@@ -103,7 +103,7 @@ public sealed class AccountItem : ObservableObject
     public void Refresh() => RaiseAll();
 }
 
-/// <summary>Ein gespeicherter Platz, wie ihn die Oberfläche braucht.</summary>
+
 public sealed class PlaceItem : ObservableObject
 {
     private ImageSource? _icon;
@@ -116,7 +116,7 @@ public sealed class PlaceItem : ObservableObject
 
     public string Title => Record.AccessCode is null ? Name : $"{Name} (private server)";
 
-    /// <summary>Untertitel der Zeile: "Place-ID 1818 · 3× · 2 d ago".</summary>
+    
     public string Subtitle
     {
         get
@@ -128,10 +128,10 @@ public sealed class PlaceItem : ObservableObject
         }
     }
 
-    /// <summary>Angeheftet (Favorit): steht oben in der Liste, egal wie alt der letzte Start ist.</summary>
+    
     public bool IsPinned => Record.IsPinned;
 
-    /// <summary>Der Stern neben der Zeile.</summary>
+    
     public string PinGlyph => Record.IsPinned ? "★" : "☆";
 
     public string PinTip => Record.IsPinned
@@ -154,7 +154,7 @@ public sealed class PlaceItem : ObservableObject
 
     public void Refresh() => RaiseAll();
 
-    /// <summary>Nach dem An- oder Abheften: Symbol und Hinweis neu zeichnen.</summary>
+    
     public void RefreshPin()
     {
         Raise(nameof(IsPinned));
@@ -163,10 +163,10 @@ public sealed class PlaceItem : ObservableObject
     }
 }
 
-/// <summary>
-/// Ein Eintrag der Liste "Recently played": ein Start, der mitgeschrieben wurde - auch wenn
-/// das Spiel nie gespeichert wurde. Von hier lässt es sich in die eigene Sammlung übernehmen.
-/// </summary>
+
+
+
+
 public sealed class RecentItem : ObservableObject
 {
     private ImageSource? _icon;
@@ -180,7 +180,7 @@ public sealed class RecentItem : ObservableObject
 
     public string Title => Name;
 
-    /// <summary>"Place-ID 1818 · 3× · 2 h ago · as @name"</summary>
+    
     public string Subtitle
     {
         get
@@ -194,7 +194,7 @@ public sealed class RecentItem : ObservableObject
         }
     }
 
-    /// <summary>Steckt der Platz schon in der eigenen Sammlung?</summary>
+    
     public bool IsSaved
     {
         get => _isSaved;
@@ -232,7 +232,7 @@ public sealed class RecentItem : ObservableObject
     }
 }
 
-/// <summary>Ein FastFlag-Vorschlag.</summary>
+
 public sealed class PresetItem : ObservableObject
 {
     private bool _isMarked;
@@ -259,13 +259,13 @@ public sealed class PresetItem : ObservableObject
     public string Group => Preset.Group;
     public IReadOnlyList<KeyValuePair<string, string>> Flags => Preset.Flags;
 
-    /// <summary>Die Flag-Namen unter dem Vorschlag - ein Vorschlag kann mehrere Flags setzen.</summary>
+    
     public string Keys => Preset.Keys;
 
-    /// <summary>
-    /// Steht der Vorschlag auf Roblox' Allowlist? Nur dann liest der Client das Flag noch -
-    /// seit September 2025 wirft er alles andere stillschweigend weg.
-    /// </summary>
+    
+    
+    
+    
     public bool Allowlisted => Preset.Allowlisted;
 
     public string HonorText => Preset.Allowlisted ? "still active" : "usually ignored";
@@ -280,7 +280,7 @@ public sealed class PresetItem : ObservableObject
 
     public string Glyph => _glyph;
 
-    /// <summary>Lesbare Kategorie für den Kartenkopf - die riesige Abkürzung war zu laut.</summary>
+    
     public string GroupLabel => Group switch
     {
         FastFlags.FrameRateGroup => "Frame rate",
@@ -355,7 +355,7 @@ public sealed class PresetItem : ObservableObject
     }
 }
 
-/// <summary>Ein Filter-Chip über der FastFlag-Kartenansicht.</summary>
+
 public sealed class FastFlagCategoryItem : ObservableObject
 {
     private bool _isSelected;
@@ -373,10 +373,10 @@ public sealed class FastFlagCategoryItem : ObservableObject
     }
 }
 
-/// <summary>
-/// Eine Gruppe von Vorschlägen ("GRAPHICS", "NETWORK", ...). Die Gruppe lässt sich
-/// zuklappen: bei gut 60 Vorschlägen ist die Liste sonst eine lange Rolle.
-/// </summary>
+
+
+
+
 public sealed class PresetGroupItem : ObservableObject
 {
     private bool _isOpen = true;
@@ -394,7 +394,7 @@ public sealed class PresetGroupItem : ObservableObject
 
     public ICommand ToggleCommand { get; }
 
-    /// <summary>"9 presets · 4 still active" - steht am Gruppenkopf.</summary>
+    
     public string Summary =>
         $"{Items.Count} preset{(Items.Count == 1 ? "" : "s")} · {Items.Count(item => item.Allowlisted)} still active";
 
@@ -414,7 +414,7 @@ public sealed class PresetGroupItem : ObservableObject
     public string Chevron => _isOpen ? "▾" : "▸";
 }
 
-/// <summary>Eine Zeile im Versionsschalter: "Automatisch" oder eine installierte Version.</summary>
+
 public sealed class VersionItem : ObservableObject
 {
     private bool _isPinned;
@@ -427,10 +427,10 @@ public sealed class VersionItem : ObservableObject
 
     public RobloxVersion? Version { get; }
 
-    /// <summary>Die Zeile "Automatic" (keine Version angeheftet).</summary>
+    
     public bool IsAutomatic => Version is null;
 
-    /// <summary>Die Version, die Roblox im eingestellten Kanal gerade ausliefert.</summary>
+    
     public bool IsDeployed { get; }
 
     public string Guid => Version?.Guid ?? "automatic";
@@ -461,11 +461,11 @@ public sealed class VersionItem : ObservableObject
         }
     }
 
-    /// <summary>Die Markierung "IN USE" nur an der gerade benutzten Zeile.</summary>
+    
     public Visibility PinnedVisibility => _isPinned ? Visibility.Visible : Visibility.Collapsed;
 }
 
-/// <summary>Ein Roblox-Build in der Download-Liste.</summary>
+
 public sealed class BuildItem
 {
     public BuildItem(RobloxBuild build, bool installed)
@@ -476,7 +476,7 @@ public sealed class BuildItem
 
     public RobloxBuild Build { get; }
 
-    /// <summary>Steckt dieser Build schon unter den installierten Versionen?</summary>
+    
     public bool IsInstalled { get; }
 
     public string Title => Build.Guid;
@@ -484,7 +484,7 @@ public sealed class BuildItem
     public Visibility InstalledVisibility => IsInstalled ? Visibility.Visible : Visibility.Collapsed;
 }
 
-/// <summary>Eine Farbwelt in der Auswahl. Der Punkt zeigt sofort, was man bekommt.</summary>
+
 public sealed class ThemeItem
 {
     public ThemeItem(ThemePalette palette)
@@ -507,7 +507,7 @@ public sealed class ThemeItem
     public Brush Surface { get; }
 }
 
-/// <summary>Eine Schriftart in der Auswahlliste.</summary>
+
 public sealed class FontItem
 {
     public FontItem(string? family, bool isDefault)
@@ -520,7 +520,7 @@ public sealed class FontItem
     public bool IsDefault { get; }
     public string Title => IsDefault ? AppFonts.DefaultLabel : Family!;
 
-    /// <summary>Der Eintrag zeigt sich selbst in seiner eigenen Schrift - so sieht man sofort, was man bekommt.</summary>
+    
     public FontFamily Preview => new(string.IsNullOrWhiteSpace(Family) ? AppFonts.DefaultFamily : Family);
 
     public string? Detail => IsDefault ? "The Windows default" : null;

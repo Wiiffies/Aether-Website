@@ -4,10 +4,10 @@ using System.Windows.Threading;
 
 namespace AetherLauncher.Services;
 
-/// <summary>
-/// Zentrales Log. Schreibt in eine Datei und hält die letzten Zeilen für die UI vor.
-/// Wichtig: Auth-Tickets und Cookies werden vor der Ausgabe maskiert.
-/// </summary>
+
+
+
+
 public static partial class Log
 {
     private const int MaxUiLines = 500;
@@ -16,7 +16,7 @@ public static partial class Log
 
     public static ObservableCollection<string> Lines { get; } = new();
 
-    /// <summary>Wird von der Oberfläche gesetzt, damit Log-Aufrufe aus Hintergrundthreads erlaubt sind.</summary>
+    
     public static void AttachUi(Dispatcher dispatcher) => _ui = dispatcher;
 
     public static void Info(string message) => Write("INFO", message);
@@ -39,7 +39,7 @@ public static partial class Log
             }
             catch
             {
-                // Logging darf die App nie zum Absturz bringen.
+                
             }
 
             var dispatcher = _ui;
@@ -60,10 +60,10 @@ public static partial class Log
         while (Lines.Count > MaxUiLines) Lines.RemoveAt(0);
     }
 
-    /// <summary>
-    /// Entfernt Geheimnisse aus Log-Zeilen: das Auth-Ticket aus einer roblox-player URI
-    /// und alle .ROBLOSECURITY-Werte. Die Log-Seite ist sichtbar und wird oft gescreenshottet.
-    /// </summary>
+    
+    
+    
+    
     public static string Redact(string text)
     {
         if (string.IsNullOrEmpty(text)) return text;

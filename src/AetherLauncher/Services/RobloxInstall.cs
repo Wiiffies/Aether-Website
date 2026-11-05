@@ -4,17 +4,17 @@ using AetherLauncher.Models;
 
 namespace AetherLauncher.Services;
 
-/// <summary>Eine installierte Roblox-Client-Version (Ordner "version-<hash>").</summary>
+
 public sealed record RobloxVersion(string Guid, string Directory, string PlayerExe, DateTimeOffset Modified)
 {
     private string? _numeric;
 
     public string ShortGuid => Guid.StartsWith("version-") ? Guid["version-".Length..] : Guid;
 
-    /// <summary>Der Roblox-Ordner, in dem diese Version liegt (z. B. %LOCALAPPDATA%\Roblox).</summary>
+    
     public string Root => Path.GetDirectoryName(Path.GetDirectoryName(Directory)) ?? "";
 
-    /// <summary>Versionsnummer aus der Datei, z. B. 0.738.0.41361 - wie im Aether-Hub angezeigt.</summary>
+    
     public string NumericVersion
     {
         get
@@ -34,15 +34,15 @@ public sealed record RobloxVersion(string Guid, string Directory, string PlayerE
     }
 }
 
-/// <summary>Die Version, die Roblox im gewählten Kanal gerade ausrollt.</summary>
+
 public sealed record RobloxDeployment(string Guid, string NumericVersion);
 
-/// <summary>Findet installierte Roblox-Clients und die im Kanal aktuell ausgerollte Version.</summary>
+
 public static class RobloxInstall
 {
     private const string PlayerExeName = "RobloxPlayerBeta.exe";
 
-    /// <summary>Alle Ordner "version-*" mit einem nutzbaren RobloxPlayerBeta.exe, neueste zuerst.</summary>
+    
     public static List<RobloxVersion> Discover(string? root)
     {
         var result = new List<RobloxVersion>();
@@ -56,7 +56,7 @@ public static class RobloxInstall
             foreach (var dir in System.IO.Directory.EnumerateDirectories(versionsDir, "version-*"))
             {
                 var exe = Path.Combine(dir, PlayerExeName);
-                if (!File.Exists(exe)) continue; // z. B. Studio- oder Launcher-Ordner ohne Player
+                if (!File.Exists(exe)) continue; 
 
                 DateTimeOffset modified;
                 try
@@ -79,11 +79,11 @@ public static class RobloxInstall
         return result.OrderByDescending(v => v.Modified).ToList();
     }
 
-    /// <summary>
-    /// Sucht die zu startende Version: Hinweis aus der Registry (das ist die zuletzt
-    /// installierte), sonst die neueste gefundene. Bloxstrap-Installationen werden
-    /// berücksichtigt, wenn im Roblox-Ordner nichts liegt.
-    /// </summary>
+    
+    
+    
+    
+    
     public static RobloxVersion? Resolve(LauncherSettings settings, out string searchedRoots)
     {
         var roots = Roots(settings);
@@ -92,7 +92,7 @@ public static class RobloxInstall
         var all = DiscoverAll(settings);
         if (all.Count == 0) return null;
 
-        // Eine angeheftete Version gewinnt: genau damit arbeiten externe Programme.
+        
         if (!string.IsNullOrWhiteSpace(settings.PinnedVersionGuid))
         {
             var pinned = all.FirstOrDefault(v => string.Equals(v.Guid, settings.PinnedVersionGuid, StringComparison.OrdinalIgnoreCase));
@@ -101,7 +101,7 @@ public static class RobloxInstall
             Log.Warn($"The pinned version {settings.PinnedVersionGuid} is not installed - using the newest one.");
         }
 
-        // Sonst der Hinweis aus der Registry (das ist die zuletzt installierte Version).
+        
         var hint = RegistryVersionHint();
         if (hint is not null)
         {
@@ -112,7 +112,7 @@ public static class RobloxInstall
         return all[0];
     }
 
-    /// <summary>Alle Ordner, in denen nach Clients gesucht wird (in dieser Reihenfolge).</summary>
+    
     public static List<string> Roots(LauncherSettings settings)
     {
         var roots = new List<string>();
@@ -122,7 +122,7 @@ public static class RobloxInstall
         return roots.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    /// <summary>Alle installierten Versionen über alle Suchordner hinweg, neueste zuerst.</summary>
+    
     public static List<RobloxVersion> DiscoverAll(LauncherSettings settings)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -132,7 +132,7 @@ public static class RobloxInstall
         {
             foreach (var version in Discover(root))
             {
-                // Dieselbe Version in zwei Ordnern (z. B. Roblox und Bloxstrap) nur einmal zeigen.
+                
                 if (!seen.Add(version.Guid)) continue;
                 result.Add(version);
             }
@@ -141,7 +141,7 @@ public static class RobloxInstall
         return result.OrderByDescending(v => v.Modified).ToList();
     }
 
-    /// <summary>Version, die Roblox selbst als Protokoll-Handler hinterlegt hat (HKCU).</summary>
+    
     public static string? RegistryVersionHint()
     {
         try
@@ -155,7 +155,7 @@ public static class RobloxInstall
         }
     }
 
-    /// <summary>Fragt beim Roblox-Deployment-Dienst nach der im Kanal ausgerollten Version.</summary>
+    
     public static async Task<RobloxDeployment?> GetDeployedVersionAsync(string channel, CancellationToken ct = default)
     {
         var channelName = string.IsNullOrWhiteSpace(channel) ? "production" : channel.Trim();

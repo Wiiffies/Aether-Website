@@ -5,10 +5,10 @@ using AetherLauncher.Services;
 
 namespace AetherLauncher.Overlay;
 
-/// <summary>
-/// Notizen als eigene Platte - man kann sie also irgendwohin schieben, wo sie beim Spielen
-/// nicht stören, und sie speichert sich selbst.
-/// </summary>
+
+
+
+
 public partial class NotesPanel : UserControl
 {
     private readonly DispatcherTimer _timer;
@@ -18,7 +18,7 @@ public partial class NotesPanel : UserControl
     {
         InitializeComponent();
 
-        // Geschrieben wird kurz nach dem letzten Tastendruck - nicht bei jedem Zeichen.
+        
         _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(700) };
         _timer.Tick += (_, _) =>
         {
@@ -44,7 +44,7 @@ public partial class NotesPanel : UserControl
         NotesLine.Text = "Saved automatically.";
     }
 
-    /// <summary>Was gerade im Feld steht, sofort sichern (beim Zumachen des Overlays).</summary>
+    
     internal void Flush()
     {
         if (!_timer.IsEnabled) return;

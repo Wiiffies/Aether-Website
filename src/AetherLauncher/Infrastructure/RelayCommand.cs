@@ -2,7 +2,7 @@ using System.Windows.Input;
 
 namespace AetherLauncher.Infrastructure;
 
-/// <summary>Synchroner ICommand mit optionaler CanExecute-Prüfung.</summary>
+
 public sealed class RelayCommand : ICommand
 {
     private readonly Action<object?> _execute;
@@ -29,7 +29,7 @@ public sealed class RelayCommand : ICommand
     public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 }
 
-/// <summary>Asynchroner ICommand. Verhindert Doppelklicks, während der Task läuft.</summary>
+
 public sealed class AsyncRelayCommand : ICommand
 {
     private readonly Func<object?, Task> _execute;
@@ -64,7 +64,7 @@ public sealed class AsyncRelayCommand : ICommand
         }
         catch (Exception ex)
         {
-            Services.Log.Error($"Unerwarteter Fehler in einem Befehl: {ex.Message}");
+            Services.Log.Error($"Unexpected error in a command: {ex.Message}");
         }
         finally
         {

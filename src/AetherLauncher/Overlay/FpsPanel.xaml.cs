@@ -5,7 +5,7 @@ using AetherLauncher.Services;
 
 namespace AetherLauncher.Overlay;
 
-/// <summary>Bildrate: ohne Deckel, fester Wert oder ein eigener.</summary>
+
 public partial class FpsPanel : UserControl
 {
     private OverlayHost? _host;

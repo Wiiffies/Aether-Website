@@ -4,7 +4,7 @@ using AetherLauncher.Controls;
 
 namespace AetherLauncher.Overlay;
 
-/// <summary>Grafik: Stufe, Texturen, Kantenglättung und Gras - alles allowlistete Flags.</summary>
+
 public partial class GraphicsPanel : UserControl
 {
     private OverlayHost? _host;

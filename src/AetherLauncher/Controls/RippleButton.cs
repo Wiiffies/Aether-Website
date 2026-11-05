@@ -7,12 +7,12 @@ using System.Windows.Shapes;
 
 namespace AetherLauncher.Controls;
 
-/// <summary>
-/// Schaltfläche mit weichen Übergängen: Farbe beim Überfahren, leichtes Zusammendrücken
-/// beim Klick und ein Ring, der von der Klickstelle ausläuft. Die Bauteile kommen aus dem
-/// Template (PART_Root, PART_Hover, PART_Ripple), die Bewegung macht der Code - so bleibt
-/// eine einzige Vorlage für alle Schaltflächenarten.
-/// </summary>
+
+
+
+
+
+
 public class RippleButton : Button
 {
     public static readonly DependencyProperty FillProperty = DependencyProperty.Register(
@@ -78,7 +78,7 @@ public class RippleButton : Button
         set => SetValue(RippleFillProperty, value);
     }
 
-    /// <summary>Wie stark die Schaltfläche beim Drücken zusammengedrückt wird (1 = gar nicht).</summary>
+    
     public double PressScale
     {
         get => (double)GetValue(PressScaleProperty);
@@ -89,9 +89,9 @@ public class RippleButton : Button
     {
         base.OnApplyTemplate();
 
-        // Die Vorlage bringt keine Skalierung mit: eine Transformation aus einer geteilten
-        // Vorlage wird eingefroren und lässt sich dann nicht mehr animieren. Also hier für
-        // jede Schaltfläche eine eigene anlegen - die bleibt veränderbar.
+        
+        
+        
         if (GetTemplateChild("PART_Root") is FrameworkElement root)
         {
             root.RenderTransformOrigin = new Point(0.5, 0.5);
@@ -110,7 +110,7 @@ public class RippleButton : Button
         }
     }
 
-    /// <summary>Der Ring darf nicht über die runden Ecken hinauslaufen.</summary>
+    
     private void UpdateRippleClip()
     {
         if (_clipTarget is null) return;
@@ -145,7 +145,7 @@ public class RippleButton : Button
         if (_scale is not null && e.LeftButton == MouseButtonState.Released) Anim.Press(_scale, 1, 220);
     }
 
-    /// <summary>Erzeugt einen kurzen Farbring ab der Klickstelle.</summary>
+    
     private void SpawnRipple(Point origin)
     {
         if (_rippleHost is null || RippleFill is null) return;
@@ -153,7 +153,7 @@ public class RippleButton : Button
         var width = Math.Max(1, ActualWidth);
         var height = Math.Max(1, ActualHeight);
 
-        // Radius bis zur weitesten Ecke - der Ring deckt die ganze Fläche ab.
+        
         var radius = new[]
         {
             Distance(origin, 0, 0), Distance(origin, width, 0),
@@ -169,13 +169,13 @@ public class RippleButton : Button
             IsHitTestVisible = false,
         };
 
-        // Canvas.Left/Top müssen einen echten Wert haben, bevor animiert wird: ein nicht
-        // gesetzter Anhang ist NaN, und die Animation kann von NaN aus nicht rechnen. WPF
-        // wirft das erst im Animationstakt - der Prozess stirbt dann ohne Meldung.
+        
+        
+        
         Canvas.SetLeft(ring, origin.X);
         Canvas.SetTop(ring, origin.Y);
 
-        // Kurz und weich: der Ring begleitet den Klick, er soll nicht nachlaufen.
+        
         var duration = TimeSpan.FromMilliseconds(440);
         var easing = Anim.Out();
 

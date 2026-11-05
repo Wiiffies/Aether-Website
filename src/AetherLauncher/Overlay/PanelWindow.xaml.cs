@@ -11,20 +11,20 @@ using AetherLauncher.Services;
 
 namespace AetherLauncher.Overlay;
 
-/// <summary>
-/// Eine einzelne Platte des Ingame-Overlays: Kopfzeile zum Ziehen, Rumpf mit dem Inhalt.
-///
-/// Jede Platte ist ein eigenes Fenster. Nur so lässt sie sich wirklich überallhin ziehen -
-/// und nur so kann jede ihre eigene Stelle merken, ohne dass die anderen mitwandern.
-/// </summary>
+
+
+
+
+
+
 public partial class PanelWindow : Window
 {
     private readonly OverlayHost _host;
     private readonly DispatcherTimer _follow;
     private bool _closing;
 
-    // Ziehen: Die Platte folgt dem Zeiger leicht gedämpft und läuft am Ende weich in
-    // die nächste Kante. Das ist der Unterschied zwischen "hängt am Cursor" und "gleitet".
+    
+    
     private bool _dragging;
     private bool _settling;
     private double _dragCursorX;
@@ -53,14 +53,14 @@ public partial class PanelWindow : Window
         _follow.Tick += (_, _) => TickFollow();
         Header.LostMouseCapture += (_, _) => FinishDrag();
 
-        // Ohne Toolwindow-Stil stünde jede Platte einzeln in Win+Tab und Alt+Tab. Sechs
-        // Fenster mit demselben Titel im Fensterwechsler sind genau das, was hier störte.
-        //
-        // Windows legt den Stil beim ersten Anzeigen selbst neu an (WS_EX_LAYERED für die
-        // transparente Fläche, WS_EX_TOPMOST für das Overlay) und überschreibt dabei ein
-        // frühes SetWindowLong. Deshalb wird der Stil nicht nur beim Erzeugen gesetzt,
-        // sondern nach jedem Anzeigen erneut - und ein zweites Mal, wenn WPF mit seinem
-        // eigenen Fensteraufbau fertig ist.
+        
+        
+        
+        
+        
+        
+        
+        
         SourceInitialized += (_, _) => HideFromTaskSwitcher();
         Loaded += (_, _) => ScheduleTaskSwitcherFix();
         IsVisibleChanged += (_, args) =>
@@ -74,7 +74,7 @@ public partial class PanelWindow : Window
 
         Closing += (_, args) =>
         {
-            // Das Schließen von außen (Host beendet sich) darf durch, ein Klick auf ✕ nicht.
+            
             if (_host.Quitting) return;
             args.Cancel = true;
             _host.HidePanel(PanelId, remember: true);
@@ -83,10 +83,10 @@ public partial class PanelWindow : Window
 
     public string PanelId { get; }
 
-    /// <summary>
-    /// Nimmt das Fenster aus dem Fensterwechsler. Der Stil allein genügt nicht - die Platte
-    /// besitzt zusätzlich ein unsichtbares Besitzerfenster (siehe <see cref="TaskSwitcher"/>).
-    /// </summary>
+    
+    
+    
+    
     private void HideFromTaskSwitcher()
     {
         try
@@ -99,24 +99,24 @@ public partial class PanelWindow : Window
         }
     }
 
-    /// <summary>Für den Selbsttest: steht die Platte wirklich nicht im Fensterwechsler?</summary>
+    
     internal bool HiddenFromTaskSwitcher => TaskSwitcher.IsHidden(this);
 
-    /// <summary>
-    /// Setzt den Stil noch einmal, wenn WPF den Fensteraufbau abgeschlossen hat. Beim
-    /// ersten Anzeigen legt WPF Layered/Topmost selbst an und würde den Toolwindow-Stil
-    /// sonst wieder verlieren - genau daran sind die Platten vorher in Alt+Tab aufgetaucht.
-    /// </summary>
+    
+    
+    
+    
+    
     private void ScheduleTaskSwitcherFix()
     {
         Dispatcher.BeginInvoke(new Action(HideFromTaskSwitcher), DispatcherPriority.Loaded);
         Dispatcher.BeginInvoke(new Action(HideFromTaskSwitcher), DispatcherPriority.ApplicationIdle);
     }
 
-    /// <summary>Der Inhalt - der Selbsttest misst daran die Höhe.</summary>
+    
     public FrameworkElement Body => (FrameworkElement)BodyHost.Content;
 
-    /// <summary>Zeigt die Platte an der Stelle und blendet sie weich ein.</summary>
+    
     public void ShowAt(double left, double top, bool animate, int delay)
     {
         _closing = false;
@@ -135,7 +135,7 @@ public partial class PanelWindow : Window
             UpdateLayout();
         }
 
-        // Nach dem Anzeigen gilt der von WPF gesetzte Stil - jetzt überschreiben.
+        
         HideFromTaskSwitcher();
         ScheduleTaskSwitcherFix();
 
@@ -160,7 +160,7 @@ public partial class PanelWindow : Window
         Anim.Slide(Card, spring ? -10 : -6, 0, spring ? 300 : 220, delay, spring);
     }
 
-    /// <summary>Blendet die Platte aus und nimmt sie danach aus dem Bild.</summary>
+    
     public void HideSoftly(bool animate, Action? done = null)
     {
         if (!IsVisible)
@@ -188,8 +188,8 @@ public partial class PanelWindow : Window
             EasingFunction = Anim.Out(),
         };
 
-        // Beim Zumachen zieht sich die Platte ein wenig zusammen und sinkt nach unten.
-        // Das ist dieselbe Richtung wie beim Öffnen, nur rückwärts - kein harter Schnitt.
+        
+        
         Anim.Slide(Card, 0, 4, 160);
         foreach (var property in new[] { ScaleTransform.ScaleXProperty, ScaleTransform.ScaleYProperty })
         {
@@ -217,7 +217,7 @@ public partial class PanelWindow : Window
         Card.BeginAnimation(OpacityProperty, fade);
     }
 
-    /// <summary>Setzt die Transformationswerte zurück, wenn die Platte wirklich verborgen ist.</summary>
+    
     private void ResetCardMotion()
     {
         foreach (var property in new[] { ScaleTransform.ScaleXProperty, ScaleTransform.ScaleYProperty })
@@ -234,7 +234,7 @@ public partial class PanelWindow : Window
         CardShift.Y = 0;
     }
 
-    /// <summary>Hält die Platte im sichtbaren Bereich - auch nach dem Verschieben.</summary>
+    
     public void ClampToScreen()
     {
         var width = ActualWidth > 1 ? ActualWidth : Width;
@@ -249,10 +249,10 @@ public partial class PanelWindow : Window
     {
         if (e.LeftButton != MouseButtonState.Pressed) return;
 
-        // Die kleinen Knöpfe in der Kopfzeile dürfen kein Ziehen auslösen.
+        
         if (IsFromButton(e.OriginalSource)) return;
 
-        // Ein laufendes Nachgleiten wird übernommen, nicht doppelt gestartet.
+        
         _settling = false;
         _follow.Stop();
 
@@ -295,7 +295,7 @@ public partial class PanelWindow : Window
         e.Handled = true;
     }
 
-    /// <summary>Beendet das Ziehen und lässt die Platte weich in ihre Endlage gleiten.</summary>
+    
     private void FinishDrag()
     {
         if (!_dragging) return;
@@ -314,7 +314,7 @@ public partial class PanelWindow : Window
             var dx = _targetLeft - Left;
             var dy = _targetTop - Top;
 
-            // Weich nachziehen, aber nie hinterherhinken: unter einem Pixel wird gesetzt.
+            
             if (Math.Abs(dx) < 0.35 && Math.Abs(dy) < 0.35)
             {
                 Left = _targetLeft;
@@ -344,7 +344,7 @@ public partial class PanelWindow : Window
         _host.SaveSpot(this);
     }
 
-    /// <summary>Kante in Reichweite? Dann dorthin einrasten - aber erst nach dem Loslassen.</summary>
+    
     private void BeginSettle()
     {
         var width = ActualWidth > 1 ? ActualWidth : Width;
@@ -378,7 +378,7 @@ public partial class PanelWindow : Window
         _targetTop = Math.Clamp(_targetTop, area.Top + 4, Math.Max(area.Top + 4, area.Bottom - height - 4));
     }
 
-    /// <summary>Anheben beim Ziehen: ein wenig größer und mit einem feinen Akzentrand.</summary>
+    
     private void SetLift(bool lifted)
     {
         var duration = TimeSpan.FromMilliseconds(lifted ? 120 : 190);

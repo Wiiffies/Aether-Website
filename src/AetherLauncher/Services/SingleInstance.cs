@@ -2,17 +2,17 @@ using System.Threading;
 
 namespace AetherLauncher.Services;
 
-/// <summary>
-/// Sorgt dafür, dass nur ein Fenster des Launchers läuft. Startet der Benutzer ein zweites
-/// Mal (z. B. weil die Roblox-Website unseren Protokollhandler aufruft), wird die
-/// Startanfrage an das laufende Fenster übergeben und der neue Prozess beendet sich.
-/// </summary>
+
+
+
+
+
 public sealed class SingleInstance : IDisposable
 {
     private const string MutexName = "AetherLauncher.SingleInstance";
     private const string SignalName = "AetherLauncher.LaunchSignal";
 
-    /// <summary>Kein Start, nur das laufende Fenster nach vorn holen (Knopf im Ingame-Overlay).</summary>
+    
     public const string ShowRequest = "aether:show";
 
     private readonly Mutex _mutex;
@@ -29,7 +29,7 @@ public sealed class SingleInstance : IDisposable
 
     public bool IsFirstInstance { get; }
 
-    /// <summary>Übergibt eine Start-URI an das laufende Fenster.</summary>
+    
     public void SendLaunch(string uri)
     {
         try
@@ -43,7 +43,7 @@ public sealed class SingleInstance : IDisposable
                 }
                 catch (IOException) when (attempt < 4)
                 {
-                    Thread.Sleep(80); // Das andere Fenster liest gerade - kurz warten.
+                    Thread.Sleep(80); 
                 }
             }
 
@@ -55,7 +55,7 @@ public sealed class SingleInstance : IDisposable
         }
     }
 
-    /// <summary>Hört im Hintergrund auf Startanfragen anderer Prozesse.</summary>
+    
     public void StartListener(Action<string> onLaunch)
     {
         _listener = new Thread(() =>
@@ -105,7 +105,7 @@ public sealed class SingleInstance : IDisposable
         }
         catch
         {
-            // egal
+            
         }
 
         _listener?.Join(500);

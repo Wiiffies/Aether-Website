@@ -2,41 +2,41 @@ using AetherLauncher.Models;
 
 namespace AetherLauncher.Services;
 
-/// <summary>Wie ein Serverwechsel ausgegangen ist.</summary>
+
 public sealed record HopResult(bool Success, string Message);
 
-/// <summary>
-/// Serverwechsel und Rejoin als Makro: der laufende Client wird zuerst geschlossen, danach
-/// startet sofort der neue Join. Roblox hat keine Schnittstelle, mit der ein laufender Client
-/// von außen auf einen anderen Server umziehen kann - es geht nur ein neuer Beitritt.
-///
-/// Das ist bewusst der schnelle, sichtbare Weg: der alte Client ist weg, Roblox startet neu,
-/// und der neue Client übernimmt die Fensterlage des alten. "Restart client" bleibt der
-/// getrennte harte Neustart für neue FastFlags.
-/// </summary>
+
+
+
+
+
+
+
+
+
 public static class ServerHop
 {
-    /// <summary>Wie lange auf den neuen Client-Prozess gewartet wird.</summary>
+    
     private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(20);
 
-    /// <summary>Wie lange ein neuer Client Zeit hat, sein Fenster zu zeigen.</summary>
+    
     private static readonly TimeSpan WindowGrace = TimeSpan.FromSeconds(12);
 
-    /// <summary>Zeit für den neuen Client, bis er wirklich im Spiel ist.</summary>
+    
     private static readonly TimeSpan JoinGrace = TimeSpan.FromSeconds(30);
 
-    /// <summary>Prozesse, die nach dem Start neu sind - also der Client mit dem neuen Server.</summary>
+    
     public static HashSet<int> FreshIds(IEnumerable<int> before, IEnumerable<int> after)
     {
         var known = before as ISet<int> ?? new HashSet<int>(before);
         return after.Where(id => !known.Contains(id)).ToHashSet();
     }
 
-    /// <summary>
-    /// Wählt einen spielbaren Server. Volle Server fallen raus; der aktuelle Server wird
-    /// übersprungen, damit ein Wechsel wirklich woanders landet. Unter den übrigen wird
-    /// zufällig gewählt.
-    /// </summary>
+    
+    
+    
+    
+    
     internal static RobloxApi.PublicServer? PickServer(
         IReadOnlyList<RobloxApi.PublicServer> servers,
         string? avoidJobId = null)
@@ -53,16 +53,16 @@ public static class ServerHop
         return playable.Count == 0 ? null : playable[Random.Shared.Next(playable.Count)];
     }
 
-    /// <summary>Wechselt auf einen anderen öffentlichen Server desselben Platzes.</summary>
+    
     public static async Task<HopResult> HopAsync(
         LauncherSettings settings,
         AccountStore accounts,
         Action<string> stage,
         CancellationToken ct = default)
     {
-        // Der Platz kommt aus Roblox' eigenem Log: so landet der Wechsel auch in dem Spiel,
-        // das über Roblox' Startseite geöffnet wurde, nicht in dem zuletzt über Aether
-        // gestarteten. Die Job-ID verhindert, dass derselbe Server noch einmal gewählt wird.
+        
+        
+        
         var current = RobloxLogImport.LastJoin();
         var placeId = current?.PlaceId ?? settings.LastPlaceId;
         if (placeId is not { } id || id <= 0)
@@ -76,8 +76,8 @@ public static class ServerHop
 
         RobloxApi.PublicServer? target = null;
 
-        // Für öffentliche Spiele einen echten Zielserver holen. Private Server haben nur
-        // einen Server - dort wäre eine Job-ID falsch.
+        
+        
         if (string.IsNullOrWhiteSpace(place.AccessCode))
         {
             stage("Looking for a different server…");
@@ -113,11 +113,11 @@ public static class ServerHop
             rejoin: target is null, stage, ct).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Verlässt das Spiel und tritt demselben Platz wieder bei - für neue FastFlags. Der
-    /// Client geht zuerst, der neue Join startet sofort danach; ein anderer Server wird
-    /// nicht gesucht.
-    /// </summary>
+    
+    
+    
+    
+    
     public static async Task<HopResult> RejoinAsync(
         LauncherSettings settings,
         AccountStore accounts,
@@ -137,16 +137,16 @@ public static class ServerHop
 
         stage("Leaving and rejoining the place…");
 
-        // Kein Zielserver: Roblox nimmt den nächsten freien. Für neue Flags ist der Server
-        // ohnehin egal.
+        
+        
         return await HandoffAsync(settings, accounts, place, null, null, rejoin: true, stage, ct)
             .ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Schließt zuerst den laufenden Client und startet direkt danach den neuen Join.
-    /// Scheitert der Start, ist das ehrlich gesagt: der alte Client ist dann bereits weg.
-    /// </summary>
+    
+    
+    
+    
     private static async Task<HopResult> HandoffAsync(
         LauncherSettings settings,
         AccountStore accounts,
@@ -168,8 +168,8 @@ public static class ServerHop
         var before = GameOverlay.ClientProcessIds();
         var watch = RobloxLogImport.Watch();
 
-        // Ein zweiter Client braucht den Singleton-Halter - auch wenn der Schalter für
-        // Multi-Instanz aus ist. Ohne ihn schluckt Roblox den Start.
+        
+        
         MultiInstance.EnsureWatcher();
 
         var account = accounts.Accounts.FirstOrDefault(a => a.Id == settings.LastAccountId);
@@ -187,7 +187,7 @@ public static class ServerHop
         var launch = await launcher.LaunchPlaceAsync(place, account, ct, targetJobId).ConfigureAwait(false);
         if (!launch.Success)
             return new HopResult(false,
-                $"The old client left, but the new one could not start: {launch.Message}");
+                $"The old client left, but the new one couldn't start: {launch.Message}");
 
         stage("Waiting for the new client…");
         var fresh = WaitForFreshClient(before, StartTimeout, ct);
@@ -206,15 +206,15 @@ public static class ServerHop
                 : "The new client never opened a window. Start the game again.");
         }
 
-        // Fensterlage des alten übernehmen: der Wechsel soll nicht wie ein Neustart aussehen.
+        
         GameOverlay.MoveWindowTo(fresh.Value, old.Left, old.Top, old.Width, old.Height);
         GameOverlay.ActivateProcess(fresh.Value);
 
         stage("Waiting until the new client is in the game…");
         var joined = WaitForJoin(watch, place.PlaceId, targetJobId, JoinGrace, ct);
 
-        // Roblox hat den Wunschserver nicht angenommen und einen anderen genommen? Auch das
-        // ist ein erfolgreicher Beitritt - nur eben nicht auf der gewünschten Job-ID.
+        
+        
         if (!joined && targetJobId is not null)
             joined = WaitForJoin(watch, place.PlaceId, null, TimeSpan.FromSeconds(6), ct);
 
@@ -255,7 +255,7 @@ public static class ServerHop
         return false;
     }
 
-    /// <summary>Wartet auf einen neuen Beitritt in Roblox' Log - der Beweis, dass der Join saß.</summary>
+    
     private static bool WaitForJoin(
         RobloxLogImport.JoinWatch watch,
         long placeId,

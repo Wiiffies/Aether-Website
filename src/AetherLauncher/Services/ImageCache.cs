@@ -3,14 +3,14 @@ using System.Windows.Media.Imaging;
 
 namespace AetherLauncher.Services;
 
-/// <summary>Lädt Profilbilder und Spiel-Icons und legt sie im Datenordner ab.</summary>
+
 public static class ImageCache
 {
-    /// <summary>
-    /// Eine Sperre je Datei: zwei Listen können dasselbe Icon anfordern (Spiel gespeichert und
-    /// zuletzt gespielt). Ohne das schreiben beide gleichzeitig und das Lesen scheitert dann mit
-    /// "being used by another process" - das Icon fehlte, bis man neu startet.
-    /// </summary>
+    
+    
+    
+    
+    
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> Gates =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -36,8 +36,8 @@ public static class ImageCache
                 var bytes = await download().ConfigureAwait(false);
                 if (bytes is null || bytes.Length == 0) return null;
 
-                // Erst daneben schreiben, dann umbenennen: ein halb geschriebenes Bild kann so
-                // nie gelesen werden, auch nicht von einem zweiten Fenster (dem Overlay).
+                
+                
                 var temp = $"{path}.{Environment.ProcessId}.part";
                 await File.WriteAllBytesAsync(temp, bytes).ConfigureAwait(false);
                 File.Move(temp, path, overwrite: true);
@@ -56,7 +56,7 @@ public static class ImageCache
         }
     }
 
-    /// <summary>Liest das Bild vollständig ein und friert es ein - so ist es threadübergreifend nutzbar.</summary>
+    
     private static BitmapImage? FromFile(string path)
     {
         try

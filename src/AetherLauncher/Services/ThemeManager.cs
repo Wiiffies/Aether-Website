@@ -4,10 +4,10 @@ using System.Windows.Media.Animation;
 
 namespace AetherLauncher.Services;
 
-/// <summary>
-/// Eine Farbwelt. Die Textfarben sind für alle dunklen Themen gleich - nur Flächen, Linien
-/// und der Akzent ändern sich, damit die Lesbarkeit überall gleich bleibt.
-/// </summary>
+
+
+
+
 public sealed class ThemePalette
 {
     public required string Id { get; init; }
@@ -41,10 +41,10 @@ public sealed class ThemePalette
     public required string ChipLine { get; init; }
 }
 
-/// <summary>
-/// Färbt die Oberfläche um. Die Pinsel aus Theme.xaml werden an Ort und Stelle geändert -
-/// dadurch folgen auch alle bereits gebauten Vorlagen, ohne dass ein Fenster neu aufgehen muss.
-/// </summary>
+
+
+
+
 public static class ThemeManager
 {
     public const string DefaultId = "midnight";
@@ -180,7 +180,7 @@ public static class ThemeManager
     public static ThemePalette Find(string? id) =>
         All.FirstOrDefault(theme => string.Equals(theme.Id, id, StringComparison.OrdinalIgnoreCase)) ?? All[0];
 
-    /// <summary>Setzt eine Farbwelt. Ohne gültige Kennung bleibt es beim Standard.</summary>
+    
     public static ThemePalette Apply(string? id)
     {
         var palette = Find(id);
@@ -215,7 +215,7 @@ public static class ThemeManager
         Set("ChipOnBrush", palette.ChipOn);
         Set("ChipLineBrush", palette.ChipLine);
 
-        // Ingame-Platten: die Werte standen vorher fest im XAML.
+        
         var cardColor = Parse(palette.Card);
         SetColor("OverlayCardBrush", Color.FromArgb(0xF2, cardColor.R, cardColor.G, cardColor.B));
         SetColor("OverlayHeaderBrush", Blend(palette.Card, palette.Accent, 0.20));
@@ -228,18 +228,18 @@ public static class ThemeManager
         return palette;
     }
 
-    /// <summary>Dauer des Farbübergangs zwischen zwei Farbwelten.</summary>
+    
     public const int TransitionMilliseconds = 420;
 
     private static readonly IEasingFunction ThemeEase = new CubicEase { EasingMode = EasingMode.EaseOut };
 
     private static void Set(string key, string hex) => SetColor(key, Parse(hex));
 
-    /// <summary>
-    /// Legt einen neuen Pinsel in die Anwendungsressourcen. Die Oberfläche bindet die Farben
-    /// mit DynamicResource, deshalb greift der Wechsel sofort - auch in schon gebauten Fenstern.
-    /// Ist der vorhandene Pinsel veränderbar, läuft die Farbe weich hinüber statt zu springen.
-    /// </summary>
+    
+    
+    
+    
+    
     private static void SetColor(string key, Color color)
     {
         var resources = Application.Current?.Resources;
@@ -282,8 +282,8 @@ public static class ThemeManager
             start = existing.StartPoint;
             end = existing.EndPoint;
 
-            // Die Start- und Endfarben einzeln animieren: Ein neuer Gradient würde den
-            // weichen Übergang der übrigen Flächen abrupt unterbrechen.
+            
+            
             if (!existing.IsFrozen && existing.GradientStops.Count == 2)
             {
                 AnimateStop(existing.GradientStops[0], Parse(from));

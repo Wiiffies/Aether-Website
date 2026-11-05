@@ -2,27 +2,27 @@ using System.Windows.Input;
 
 namespace AetherLauncher.Services;
 
-/// <summary>
-/// Tastenkürzel als Text ("Shift+Tab", "Ctrl+Alt+L"): schreiben, lesen und mit einem
-/// Tastendruck vergleichen. Reine Logik ohne Fenster, damit der Selbsttest sie prüfen kann.
-/// </summary>
+
+
+
+
 public static class Shortcuts
 {
-    /// <summary>
-    /// Das Kürzel, mit dem das Menü (Schnellansicht und Ingame-Overlay) ab Werk aufgeht:
-    /// <b>Entf</b>. Eine einzelne Taste, die man im Spiel nie versehentlich tippt - und die
-    /// sich in Menü ebenso wie in den Einstellungen umbelegen und zurücksetzen lässt.
-    /// </summary>
+    
+    
+    
+    
+    
     public const string Default = "Delete";
 
-    /// <summary>Tasten, die allein kein Kürzel sein können (nur Zusatztasten).</summary>
+    
     private static readonly HashSet<Key> NotUsableAlone = new()
     {
         Key.None, Key.System, Key.LeftShift, Key.RightShift, Key.LeftCtrl, Key.RightCtrl,
         Key.LeftAlt, Key.RightAlt, Key.LWin, Key.RWin,
     };
 
-    /// <summary>Baut den Text eines Kürzels - oder null, wenn sich die Tastenkombination nicht eignet.</summary>
+    
     public static string? Format(ModifierKeys modifiers, Key key)
     {
         if (!IsUsable(key)) return null;
@@ -34,21 +34,21 @@ public static class Shortcuts
         if ((parsed & ModifierKeys.Shift) != 0) parts.Add("Shift");
         if ((parsed & ModifierKeys.Windows) != 0) parts.Add("Win");
 
-        // Ohne Zusatztaste nur Tasten, die man nie versehentlich tippt: Funktionstasten und
-        // die Reihe Entf/Einfg/Pos1/Ende/Bild. Ein blankes "A" würde sonst bei jedem
-        // Tastendruck im Spiel das Overlay aufreißen.
+        
+        
+        
         if (parts.Count == 0 && !UsableAlone(key)) return null;
 
         parts.Add(Name(key));
         return string.Join("+", parts);
     }
 
-    /// <summary>Tasten, die auch allein ein Kürzel sein dürfen (Entf, Einfg, F1–F24, …).</summary>
+    
     public static bool UsableAlone(Key key) => key is >= Key.F1 and <= Key.F24 || key is
         Key.Delete or Key.Insert or Key.Home or Key.End or Key.PageUp or Key.PageDown or
         Key.Pause or Key.Scroll or Key.PrintScreen or Key.CapsLock or Key.NumLock;
 
-    /// <summary>Eine einzelne Taste aus Text - ohne die Einschränkungen eines Kürzels.</summary>
+    
     public static bool TryParseKey(string? text, out Key key)
     {
         key = Key.None;
@@ -58,10 +58,10 @@ public static class Shortcuts
         return key != Key.None;
     }
 
-    /// <summary>
-    /// Die Tasten, die beim Umbelegen abgefragt werden. Zusatztasten kommen nur dazu, wenn
-    /// eine einzelne Taste gesucht ist (etwa für den Anti-AFK-Stoß).
-    /// </summary>
+    
+    
+    
+    
     public static IEnumerable<Key> CaptureCandidates(bool includeModifiers = false)
     {
         for (var key = Key.A; key <= Key.Z; key++) yield return key;
@@ -84,7 +84,7 @@ public static class Shortcuts
             yield return key;
     }
 
-    /// <summary>Ist die Taste selbst nur eine Zusatztaste (Shift, Strg, Alt, Win)?</summary>
+    
     public static bool IsModifierKey(Key key) => NotUsableAlone.Contains(key) ||
         key is Key.LeftShift or Key.RightShift or Key.LeftCtrl or Key.RightCtrl or
             Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin or Key.System;
@@ -124,14 +124,14 @@ public static class Shortcuts
         return IsUsable(key);
     }
 
-    /// <summary>Passt der Tastendruck zu diesem Kürzel? Die Zusatztasten müssen genau stimmen.</summary>
+    
     public static bool Matches(string? shortcut, ModifierKeys modifiers, Key key)
     {
         if (!TryParse(shortcut, out var expectedModifiers, out var expectedKey)) return false;
         return expectedKey == key && expectedModifiers == Normalize(modifiers);
     }
 
-    /// <summary>Anzeigename einer Taste ("A", "Tab", "5", "F8").</summary>
+    
     public static string Name(Key key) => key switch
     {
         >= Key.D0 and <= Key.D9 => ((int)(key - Key.D0)).ToString(),

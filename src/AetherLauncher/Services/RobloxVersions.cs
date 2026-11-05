@@ -4,12 +4,12 @@ using System.Text.RegularExpressions;
 
 namespace AetherLauncher.Services;
 
-/// <summary>Ein Roblox-Build, den man herunterladen kann.</summary>
+
 public sealed record RobloxBuild(string Guid, string NumericVersion, DateTimeOffset? Date, string Source)
 {
     public string ShortGuid => Guid.StartsWith("version-", StringComparison.OrdinalIgnoreCase) ? Guid["version-".Length..] : Guid;
 
-    /// <summary>Zeile unter dem Namen: Version, Datum und woher der Eintrag stammt.</summary>
+    
     public string Detail
     {
         get
@@ -23,25 +23,25 @@ public sealed record RobloxBuild(string Guid, string NumericVersion, DateTimeOff
     }
 }
 
-/// <summary>
-/// Woher die Builds kommen:
-///
-///  · WEAO (https://docs.weao.xyz) - verfolgt die aktuellen, kommenden und vorherigen
-///    Versionen für Windows. Genau die Angaben, die man zum Zurücksetzen (Downgrade)
-///    braucht; der Dienst verlangt den User-Agent "WEAO-3PService".
-///  · DeployHistory.txt auf setup.rbxcdn.com - die offizielle Liste aller jemals
-///    ausgelieferten Builds. Enthält rund tausend Windows-Builds mit Hash und Datum.
-///
-/// Heruntergeladen wird immer der offizielle Installer des jeweiligen Builds direkt vom
-/// Roblox-CDN. Es werden keine fremden Dateien benutzt.
-/// </summary>
+
+
+
+
+
+
+
+
+
+
+
+
 public static class RobloxVersions
 {
     private const string InstallerHost = "https://setup.rbxcdn.com";
     private const string DeployHistoryUrl = InstallerHost + "/DeployHistory.txt";
     private const string WeaoHost = "https://weao.xyz";
 
-    /// <summary>Der von WEAO geforderte User-Agent; ohne ihn antwortet der Dienst nicht.</summary>
+    
     private const string WEAOUserAgentName = "WEAO-3PService";
 
     private static readonly Regex DeployLine = new(
@@ -59,10 +59,10 @@ public static class RobloxVersions
         }
     }
 
-    /// <summary>
-    /// Sammelt alle bekannten Builds: die drei von WEAO verfolgten plus die Liste aus der
-    /// offiziellen DeployHistory. Neueste zuerst.
-    /// </summary>
+    
+    
+    
+    
     public static async Task<List<RobloxBuild>> GetAvailableAsync(CancellationToken ct = default)
     {
         var builds = new List<RobloxBuild>();
@@ -82,7 +82,7 @@ public static class RobloxVersions
         return result;
     }
 
-    /// <summary>Die von WEAO verfolgten Versionen: aktuell, als Nächstes und die vorherige.</summary>
+    
     public static async Task<List<RobloxBuild>> GetWeaoAsync(CancellationToken ct = default)
     {
         var builds = new List<RobloxBuild>();
@@ -125,7 +125,7 @@ public static class RobloxVersions
         return builds;
     }
 
-    /// <summary>Alle Windows-Builds aus der offiziellen DeployHistory (ohne die versteckten).</summary>
+    
     public static async Task<List<RobloxBuild>> GetDeployHistoryAsync(CancellationToken ct = default)
     {
         var builds = new List<RobloxBuild>();
@@ -156,7 +156,7 @@ public static class RobloxVersions
         return builds;
     }
 
-    /// <summary>Die offizielle Installer-Adresse eines Builds.</summary>
+    
     public static string InstallerUrl(string guid, string? channel = null)
     {
         var useChannel = !string.IsNullOrWhiteSpace(channel) &&
@@ -167,10 +167,10 @@ public static class RobloxVersions
             : $"{InstallerHost}/{guid}-RobloxPlayerInstaller.exe";
     }
 
-    /// <summary>
-    /// Lädt den Installer eines Builds herunter. Der Fortschritt läuft in Prozent über
-    /// <paramref name="progress"/> (null erlaubt).
-    /// </summary>
+    
+    
+    
+    
     public static async Task<bool> DownloadInstallerAsync(string guid, string targetFile, string? channel,
         IProgress<double>? progress, CancellationToken ct = default)
     {
@@ -221,10 +221,10 @@ public static class RobloxVersions
 
     private static int SourceRank(string source) => source.StartsWith("WEAO", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
 
-    /// <summary>
-    /// Zeitstempel wie "10/27/2026, 4:01:04 PM UTC" und "3/11/2026 2:06:34 PM".
-    /// Das anhängende " UTC" versteht die Standardanalyse nicht - deshalb wird es vorher entfernt.
-    /// </summary>
+    
+    
+    
+    
     internal static DateTimeOffset? ParseTimestamp(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;

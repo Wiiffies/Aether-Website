@@ -3,17 +3,17 @@ using System.Windows.Media.Imaging;
 
 namespace AetherLauncher.Services;
 
-/// <summary>
-/// Bildgrößen lesen und PNG skalieren. Das macht WPF selbst (kein Zusatzpaket), und die
-/// Bilder werden eingefroren, damit sie auch außerhalb des Oberflächen-Threads gültig sind.
-/// </summary>
+
+
+
+
 public static class ImageTool
 {
-    /// <summary>
-    /// Pixelgröße einer Bilddatei oder null, wenn sie nicht gelesen werden kann.
-    /// Wichtig: die Datei wird vollständig in den Speicher gelesen und wieder geschlossen -
-    /// sonst hält WPF die Datei gesperrt und sie lässt sich danach nicht überschreiben.
-    /// </summary>
+    
+    
+    
+    
+    
     public static (int Width, int Height)? SizeOf(string path)
     {
         try
@@ -35,7 +35,7 @@ public static class ImageTool
         }
     }
 
-    /// <summary>Skaliert ein Bild auf genau die gewünschte Pixelgröße und schreibt es als PNG.</summary>
+    
     public static bool ResizePng(string sourcePath, string targetPath, int width, int height, out string error)
     {
         error = "";
@@ -71,7 +71,7 @@ public static class ImageTool
         }
     }
 
-    /// <summary>Lädt ein Bild vollständig in den Speicher (die Datei kann danach überschrieben werden).</summary>
+    
     public static BitmapSource? Load(string path)
     {
         try
@@ -92,7 +92,7 @@ public static class ImageTool
         }
     }
 
-    /// <summary>Legt das mitgelieferte Cursor-Bild auf der Platte ab und liefert den Pfad.</summary>
+    
     public static string EnsureBundledCursor(string targetPath)
     {
         try

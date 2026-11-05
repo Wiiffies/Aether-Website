@@ -3,25 +3,25 @@ using System.Threading;
 
 namespace AetherLauncher.Services;
 
-/// <summary>
-/// Erlaubt mehrere Roblox-Clients gleichzeitig.
-///
-/// Der Client prüft beim Start einen benannten Kernel-Objekt (Singleton). Wenn dort schon
-/// jemand "sitzt", beendet er sich bzw. verweigert den zweiten Start. Der Trick - auch von
-/// Bloxstrap und anderen Tools benutzt - ist, dieses Objekt SELBST zu erzeugen und zu
-/// besitzen, solange Clients laufen. Der Halter ist ein eigener, unsichtbarer Prozess
-/// (--multi-watcher), damit die Übernahme auch dann weiterläuft, wenn der Launcher
-/// geschlossen wird.
-/// </summary>
+
+
+
+
+
+
+
+
+
+
 public static class MultiInstance
 {
     public const string WatcherArgument = "--multi-watcher";
 
-    /// <summary>
-    /// Die Namen, unter denen Roblox je nach Version sucht. Win32-Namen sind
-    /// groß-/kleinschreibungssensitiv und typgebunden, deshalb werden alle Varianten
-    /// versucht; was nicht existiert oder einen anderen Typ hat, wird ignoriert.
-    /// </summary>
+    
+    
+    
+    
+    
     private static readonly string[] SingletonObjectNames =
     {
         "ROBLOX_singletonMutex",
@@ -33,7 +33,7 @@ public static class MultiInstance
     private static readonly TimeSpan IdleLimit = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
 
-    /// <summary>Startet den Wächterprozess. Läuft bereits einer, beendet sich der neue von selbst.</summary>
+    
     public static void EnsureWatcher()
     {
         try
@@ -54,10 +54,10 @@ public static class MultiInstance
         }
     }
 
-    /// <summary>
-    /// Läuft im Wächterprozess: Singleton-Objekte übernehmen, auf Roblox warten und
-    /// erst aufräumen, wenn eine Weile kein Client mehr läuft.
-    /// </summary>
+    
+    
+    
+    
     public static int RunWatcher()
     {
         var held = new List<Mutex>();
@@ -73,7 +73,7 @@ public static class MultiInstance
                 }
                 catch (AbandonedMutexException)
                 {
-                    owned = true; // Vorbesitzer ist abgestürzt, wir übernehmen.
+                    owned = true; 
                 }
 
                 if (owned) held.Add(mutex);
@@ -81,11 +81,11 @@ public static class MultiInstance
             }
             catch
             {
-                // Name belegt oder anderer Objekttyp (Event statt Mutex) - dann nicht unsere Sache.
+                
             }
         }
 
-        if (held.Count == 0) return 0; // Ein anderer Wächter hält den Singleton bereits.
+        if (held.Count == 0) return 0; 
 
         try
         {
@@ -115,7 +115,7 @@ public static class MultiInstance
                 }
                 catch
                 {
-                    // Nicht mehr im Besitz - egal.
+                    
                 }
 
                 mutex.Dispose();
@@ -125,7 +125,7 @@ public static class MultiInstance
         return 0;
     }
 
-    /// <summary>Läuft gerade ein Roblox-Client?</summary>
+    
     public static bool IsClientRunning()
     {
         Process[] processes;

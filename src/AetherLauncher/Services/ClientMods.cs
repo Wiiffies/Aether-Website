@@ -2,19 +2,19 @@ using AetherLauncher.Models;
 
 namespace AetherLauncher.Services;
 
-/// <summary>
-/// Änderungen an Dateien im Client-Ordner. Bisher nur der Mauszeiger im Spiel: der Client
-/// zeichnet seinen Pfeil aus PNG-Dateien unter content\textures. Jede Datei wird einmal als
-/// .aetherbak gesichert und lässt sich damit vollständig zurückholen.
-///
-/// Bewusste Grenze: es werden nur Zeiger-Texturen angefasst, keine Programme und keine
-/// Skripte. Im Vanilla-Modus passiert hier gar nichts.
-/// </summary>
+
+
+
+
+
+
+
+
 public static class ClientMods
 {
     public const string BackupSuffix = ".aetherbak";
 
-    /// <summary>Die Zeiger-Texturen des Clients, relativ zum Versionsordner.</summary>
+    
     public static IReadOnlyList<string> CursorTextures { get; } = new[]
     {
         @"content\textures\ArrowCursor.png",
@@ -27,7 +27,7 @@ public static class ClientMods
         @"content\textures\Cursors\CrossMouseIcon.png",
     };
 
-    /// <summary>Die tatsächlich vorhandenen Zeiger-Texturen dieser Version.</summary>
+    
     public static List<string> DiscoverCursorTextures(string versionDirectory)
     {
         var found = new List<string>();
@@ -42,14 +42,14 @@ public static class ClientMods
         return found;
     }
 
-    /// <summary>Wie viele Zeiger-Texturen gerade ersetzt sind.</summary>
+    
     public static int CountModified(string versionDirectory)
         => DiscoverCursorTextures(versionDirectory).Count(p => File.Exists(p + BackupSuffix));
 
-    /// <summary>
-    /// Ersetzt alle vorhandenen Zeiger-Texturen durch das gewählte Bild. Jede Datei behält
-    /// dabei ihre ursprüngliche Pixelgröße - der Client rechnet fest mit diesen Maßen.
-    /// </summary>
+    
+    
+    
+    
     public static bool ApplyCursor(string versionDirectory, string sourceImage, out string message)
     {
         message = "";
@@ -80,7 +80,7 @@ public static class ClientMods
                     continue;
                 }
 
-                // Einmalig das Original sichern - ein zweiter Lauf darf die Sicherung nicht überschreiben.
+                
                 if (!File.Exists(backup)) File.Copy(target, backup);
 
                 if (ImageTool.ResizePng(sourceImage, target, size.Value.Width, size.Value.Height, out var error))
@@ -112,7 +112,7 @@ public static class ClientMods
         return true;
     }
 
-    /// <summary>Stellt die ursprünglichen Zeiger-Texturen aus den Sicherungen wieder her.</summary>
+    
     public static bool RestoreCursor(string versionDirectory, out string message)
     {
         var restored = 0;
@@ -138,7 +138,7 @@ public static class ClientMods
         return restored > 0;
     }
 
-    /// <summary>Wendet die Einstellung auf eine Version an (beim Start und auf Knopfdruck).</summary>
+    
     public static void ApplySettings(LauncherSettings settings, string versionDirectory, out string message)
     {
         message = "";
@@ -158,7 +158,7 @@ public static class ClientMods
         ApplyCursor(versionDirectory, source, out message);
     }
 
-    /// <summary>Das gewählte Bild oder das mitgelieferte Aether-Zeigerbild.</summary>
+    
     public static string ResolveCursorImage(LauncherSettings settings)
     {
         if (!string.IsNullOrWhiteSpace(settings.InGameCursorPath) && File.Exists(settings.InGameCursorPath))

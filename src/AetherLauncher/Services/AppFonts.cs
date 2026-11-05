@@ -5,11 +5,11 @@ using AetherLauncher.Models;
 
 namespace AetherLauncher.Services;
 
-/// <summary>
-/// Schriftarten der Oberfläche. Man kann jede installierte Schrift wählen oder eine eigene
-/// Datei (.ttf/.otf) laden; die wird in den Datenordner kopiert und nur für diesen Prozess
-/// angemeldet (AddFontResourceEx mit FR_PRIVATE), damit nichts am System verändert wird.
-/// </summary>
+
+
+
+
+
 public static class AppFonts
 {
     public const string DefaultFamily = "Segoe UI";
@@ -24,7 +24,7 @@ public static class AppFonts
     [DllImport("gdi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool RemoveFontResourceEx(string file, uint flags, IntPtr reserved);
 
-    /// <summary>Alle installierten Schriftfamilien, alphabetisch.</summary>
+    
     public static List<string> InstalledFamilies()
     {
         var names = new List<string>();
@@ -47,10 +47,10 @@ public static class AppFonts
         return names;
     }
 
-    /// <summary>
-    /// Kopiert eine Schriftdatei in den Datenordner und meldet sie für diesen Prozess an.
-    /// Liefert den Namen der Familie oder null, wenn die Datei keine Schrift ist.
-    /// </summary>
+    
+    
+    
+    
     public static string? Import(string sourceFile, string? targetDirectory = null)
     {
         try
@@ -74,7 +74,7 @@ public static class AppFonts
         }
     }
 
-    /// <summary>Der Name der Familie in einer Schriftdatei.</summary>
+    
     public static string? FamilyNameOf(string file)
     {
         try
@@ -96,7 +96,7 @@ public static class AppFonts
         return null;
     }
 
-    /// <summary>Meldet alle eigenen Schriftdateien an - muss vor dem Aufbau der Fenster laufen.</summary>
+    
     public static void LoadOwnFonts(LauncherSettings settings)
     {
         try
@@ -117,27 +117,27 @@ public static class AppFonts
             LoadPrivate(settings.UiFontFile!);
     }
 
-    /// <summary>Die einzustellende Schriftfamilie; fällt auf Segoe UI zurück.</summary>
+    
     public static FontFamily Resolve(LauncherSettings settings)
     {
         var name = string.IsNullOrWhiteSpace(settings.UiFontFamily) ? DefaultFamily : settings.UiFontFamily!;
         var family = new FontFamily(name);
 
-        // Unbekannte Namen würden WPF still auf eine Ersatzschrift umstellen - hier gleich prüfen.
+        
         var known = InstalledFamilies().Contains(name, StringComparer.CurrentCultureIgnoreCase) ||
                     LoadedFiles.Any(file => string.Equals(FamilyNameOf(file), name, StringComparison.CurrentCultureIgnoreCase));
 
         return known ? family : new FontFamily(DefaultFamily);
     }
 
-    /// <summary>Übernimmt die Schrift in die laufende Anwendung (greift dank DynamicResource sofort).</summary>
+    
     public static void Apply(LauncherSettings settings)
     {
         if (Application.Current is null) return;
         Application.Current.Resources["UiFont"] = Resolve(settings);
     }
 
-    /// <summary>Der angezeigte Name in der Liste.</summary>
+    
     public static string Label(LauncherSettings settings)
         => string.IsNullOrWhiteSpace(settings.UiFontFamily) ? DefaultLabel : settings.UiFontFamily!;
 
@@ -150,7 +150,7 @@ public static class AppFonts
         if (added > 0) LoadedFiles.Add(full);
     }
 
-    /// <summary>Beim Beenden die privaten Schriften wieder abmelden.</summary>
+    
     public static void Release()
     {
         foreach (var file in LoadedFiles.ToList())
@@ -161,7 +161,7 @@ public static class AppFonts
             }
             catch
             {
-                // Beim Beenden nicht weiter wichtig.
+                
             }
         }
 

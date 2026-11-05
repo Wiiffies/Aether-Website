@@ -1,17 +1,15 @@
 <#
-    Baut aus einem Cursor-Bild (Pfeil auf einfarbigem Hintergrund) die Dateien, die der
-    Launcher benutzt:
+    Builds the cursor assets from a pointer image on a solid background:
 
-      src/AetherLauncher/Assets/cursor.cur   Windows-Cursor für die eigene Oberfläche (32 & 48 px)
-      src/AetherLauncher/Assets/cursor.png   freigestelltes PNG, dient als Standard für den
-                                             Ingame-Cursor (der Client skaliert selbst)
+      src/AetherLauncher/Assets/cursor.cur   Windows cursor for the launcher (32 & 48 px)
+      src/AetherLauncher/Assets/cursor.png   transparent PNG used as the default
+                                             in-game cursor (the client scales it)
 
-    Aufruf:
-      powershell -NoProfile -ExecutionPolicy Bypass -File tools/make-cursor.ps1 -Source <bild.png>
+    Usage:
+      powershell -NoProfile -ExecutionPolicy Bypass -File tools/make-cursor.ps1 -Source <image.png>
 
-    Das Skript entfernt den Hintergrund (Farbe wird automatisch aus den Bildecken bestimmt),
-    rechnet die grauen Ränder an den Kanten heraus (Unpremultiply) und schreibt einen
-    .cur-Container mit PNG-Frames. Alles nachvollziehbar, ohne Zusatzprogramme.
+    The script samples the background from the image corners, removes the background,
+    unpremultiplies the soft edge pixels, and writes a .cur container with PNG frames.
 #>
 
 param(
@@ -24,7 +22,7 @@ Add-Type -AssemblyName System.Drawing
 $ErrorActionPreference = 'Stop'
 $source = (Resolve-Path $Source).Path
 
-# Standardziel: Assets des Launchers, ausgehend vom Skriptordner (nicht vom Aufrufordner).
+# Default target: launcher assets, relative to this script rather than the caller.
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
     $OutputDirectory = Join-Path $scriptDir '../src/AetherLauncher/Assets'
@@ -32,12 +30,12 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 $outDir = [System.IO.Path]::GetFullPath($OutputDirectory)
 [System.IO.Directory]::CreateDirectory($outDir) | Out-Null
 
-Write-Host "Quelle : $source"
-Write-Host "Ziel   : $outDir"
+Write-Host "Source : $source"
+Write-Host "Output : $outDir"
 
 $image = [System.Drawing.Bitmap]::FromFile($source)
 
-# Hintergrundfarbe aus den vier Ecken bestimmen (Mehrheit gewinnt)
+# Pick the background color from the four corners (majority wins).
 $corners = @(
     $image.GetPixel(0, 0), $image.GetPixel($image.Width - 1, 0),
     $image.GetPixel(0, $image.Height - 1), $image.GetPixel($image.Width - 1, $image.Height - 1)
@@ -46,14 +44,14 @@ $bg = $corners | Group-Object { "$($_.R),$($_.G),$($_.B),$($_.A)" } |
       Sort-Object Count -Descending | Select-Object -First 1
 $bgColor = $corners[0]
 foreach ($c in $corners) { if ("$($c.R),$($c.G),$($c.B)" -eq $bg.Name) { $bgColor = $c; break } }
-Write-Host "Hintergrund erkannt: R=$($bgColor.R) G=$($bgColor.G) B=$($bgColor.B)"
+Write-Host "Background detected: R=$($bgColor.R) G=$($bgColor.G) B=$($bgColor.B)"
 
-# --- 1) Freistellen in voller Auflösung -------------------------------------
-# Farbe nahe am Hintergrund -> transparent. Der Übergang wird weich, und aus den
-# halbtransparenten Kantenpixeln wird der Hintergrundanteil herausgerechnet, damit
-# kein grauer Saum am Pfeil bleibt.
-$near = 18.0     # bis hierher vollständig transparent
-$far  = 90.0     # ab hier vollständig deckend
+# --- 1) Key the background at full resolution -------------------------------
+# Colors near the background become transparent. Edge pixels are softened and
+# the background contribution is removed from partially transparent pixels so no
+# gray fringe remains around the pointer.
+$near = 18.0     # fully transparent up to this distance
+$far  = 90.0     # fully opaque from this distance
 
 $keyed = New-Object System.Drawing.Bitmap $image.Width, $image.Height, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
 for ($y = 0; $y -lt $image.Height; $y++) {
@@ -70,7 +68,7 @@ for ($y = 0; $y -lt $image.Height; $y++) {
 
         $a = ($d - $near) / ($far - $near)
         $alpha = [int][Math]::Round(255 * $a)
-        # Ursprungsfarbe zurückrechnen: beobachtet = a*echt + (1-a)*hintergrund
+        # Recover the original color: observed = a*real + (1-a)*background
         $r = [int][Math]::Max(0, [Math]::Min(255, [Math]::Round(($c.R - (1 - $a) * $bgColor.R) / $a)))
         $g = [int][Math]::Max(0, [Math]::Min(255, [Math]::Round(($c.G - (1 - $a) * $bgColor.G) / $a)))
         $b = [int][Math]::Max(0, [Math]::Min(255, [Math]::Round(($c.B - (1 - $a) * $bgColor.B) / $a)))
@@ -91,24 +89,24 @@ function Resize-Transparent([System.Drawing.Bitmap]$source, [int]$size) {
     return $target
 }
 
-# --- 2) Spitze finden (für den Klickpunkt des Cursors) ----------------------
-# Die Spitze ist das oberste deckende Pixel; der Klickpunkt sitzt genau dort.
+# --- 2) Find the tip (the cursor hotspot) ------------------------------------
+# The tip is the topmost opaque pixel; the hotspot sits exactly there.
 $tipX = -1; $tipY = -1
 for ($y = 0; $y -lt $keyed.Height -and $tipY -lt 0; $y++) {
     for ($x = 0; $x -lt $keyed.Width; $x++) {
         if ($keyed.GetPixel($x, $y).A -gt 200) { $tipX = $x; $tipY = $y; break }
     }
 }
-if ($tipY -lt 0) { throw 'Kein deckendes Pixel gefunden - ist das ein Cursor-Bild?' }
-Write-Host "Spitze : $tipX,$tipY (von $($keyed.Width)x$($keyed.Height))"
+if ($tipY -lt 0) { throw 'No opaque pixel found - is this a cursor image?' }
+Write-Host "Tip    : $tipX,$tipY (of $($keyed.Width)x$($keyed.Height))"
 
-# --- 3) PNG für den Ingame-Cursor ------------------------------------------
+# --- 3) PNG for the in-game cursor -------------------------------------------
 $big = Resize-Transparent $keyed 256
 $pngPath = Join-Path $outDir 'cursor.png'
 $big.Save($pngPath, [System.Drawing.Imaging.ImageFormat]::Png)
-Write-Host "geschrieben: $pngPath"
+Write-Host "Wrote: $pngPath"
 
-# --- 4) .cur mit 32 und 48 px ----------------------------------------------
+# --- 4) .cur with 32 and 48 px -----------------------------------------------
 $sizes = @(32, 48)
 $frames = @()
 foreach ($size in $sizes) {
@@ -128,14 +126,14 @@ $curPath = Join-Path $outDir 'cursor.cur'
 $fs = [System.IO.File]::Create($curPath)
 $bw = New-Object System.IO.BinaryWriter $fs
 try {
-    # ICONDIR: reserviert, Typ 2 (Cursor), Anzahl
+    # ICONDIR: reserved, type 2 (cursor), frame count
     $bw.Write([uint16]0); $bw.Write([uint16]2); $bw.Write([uint16]$frames.Count)
 
-    # ICONDIRENTRY: bei Cursorn stehen an Stelle von Ebenen/Bittiefe die Hotspot-Koordinaten
+    # ICONDIRENTRY: cursor entries use hotspot coordinates instead of planes/bit depth
     $offset = 6 + 16 * $frames.Count
     foreach ($f in $frames) {
         $bw.Write([byte]($f.Size % 256)); $bw.Write([byte]($f.Size % 256))
-        $bw.Write([byte]0); $bw.Write([byte]0)             # Farbanzahl, reserviert
+        $bw.Write([byte]0); $bw.Write([byte]0)             # color count, reserved
         $bw.Write([uint16]$f.HotX); $bw.Write([uint16]$f.HotY)
         $bw.Write([uint32]$f.Data.Length)
         $bw.Write([uint32]$offset)
@@ -147,7 +145,7 @@ try {
 finally {
     $bw.Dispose(); $fs.Dispose()
 }
-Write-Host "geschrieben: $curPath  (Frames: $($frames | ForEach-Object { "$($_.Size)px@$($_.HotX),$($_.HotY)" }))"
+Write-Host "Wrote: $curPath  (frames: $($frames | ForEach-Object { "$($_.Size)px@$($_.HotX),$($_.HotY)" }))"
 
 $keyed.Dispose(); $big.Dispose(); $image.Dispose()
-Write-Host 'Fertig.'
+Write-Host 'Done.'

@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace AetherLauncher.Infrastructure;
 
-/// <summary>Kleiner Helfer für robustes Laden/Speichern von JSON-Dateien.</summary>
+
 public static class JsonFile
 {
     public static readonly JsonSerializerOptions Options = new()
@@ -16,7 +16,7 @@ public static class JsonFile
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    /// <summary>Lädt eine Datei; bei Fehlern oder fehlender Datei wird <paramref name="fallback"/> benutzt.</summary>
+    
     public static T Load<T>(string path, Func<T> fallback) where T : class
     {
         try
@@ -39,7 +39,7 @@ public static class JsonFile
         return fallback();
     }
 
-    /// <summary>Schreibt atomar über eine temporäre Datei, damit kein halber Zustand entsteht.</summary>
+    
     public static bool Save<T>(string path, T value)
     {
         try

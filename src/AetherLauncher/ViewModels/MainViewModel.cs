@@ -59,7 +59,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private BuildItem? _selectedBuild;
     private readonly List<BuildItem> _allBuilds = new();
 
-    // Schnellansicht ("Layout") und ihre Notizen
+    
     private bool _layoutOpen;
     private bool _shortcutCapture;
     private string _notesText = "";
@@ -70,7 +70,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         Log.AttachUi(Application.Current.Dispatcher);
 
-        // Ohne dieses Abo bliebe die Log-Seite auf dem Stand vom Öffnen stehen.
+        
         Log.Lines.CollectionChanged += (_, _) => Raise(nameof(LogText));
 
         Settings = _settingsStore.Load();
@@ -85,7 +85,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Recents = new ObservableCollection<RecentItem>(_recentStore.Entries.Select(e => new RecentItem(e)));
         SortPlaces();
 
-        // Der Multi-Start-Zähler soll immer zu dem passen, was in der Liste steht.
+        
         Accounts.CollectionChanged += (_, _) =>
         {
             RaiseMultiStart();
@@ -96,8 +96,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         PresetGroups = new ObservableCollection<PresetGroupItem>(
             Presets.GroupBy(p => p.Group).Select(g => new PresetGroupItem(g.Key, g.ToList())));
 
-        // Favoriten kommen aus einer eigenen kleinen Datei; erst danach abonnieren, damit
-        // das Laden nicht sofort wieder gespeichert wird.
+        
+        
         var favoriteNames = FastFlags.LoadFavorites();
         foreach (var preset in Presets)
         {
@@ -108,7 +108,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Builds = new ObservableCollection<BuildItem>();
         RecallDownloadedInstaller();
 
-        // Notizen werden kurz nach dem letzten Tastendruck geschrieben - nicht bei jedem Zeichen.
+        
         _notesTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(700) };
         _notesTimer.Tick += (_, _) =>
         {
@@ -183,7 +183,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             if (pinned)
             {
-                // Angeheftet heißt: nach oben - und dort bleibt es, bis man es wieder löst.
+                
                 var order = Places.ToList();
                 order.Remove(item);
                 order.Insert(0, item);
@@ -199,7 +199,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 : $"{item.Name} unpinned.";
         });
 
-        // Aus der Zuletzt-Liste in die eigene Sammlung übernehmen.
+        
         UseRecentCommand = new RelayCommand(parameter =>
         {
             if (parameter is not RecentItem item) return;
@@ -245,7 +245,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Status = "The recently played list is empty again.";
         });
 
-        // Ohne gewähltes Spiel startet der Knopf die Roblox-App selbst (Startseite).
+        
         LaunchCommand = new AsyncRelayCommand(LaunchSelectedAsync, () => !Busy);
         LaunchAppCommand = new AsyncRelayCommand(LaunchAppForAccountAsync, () => !Busy);
 
@@ -262,7 +262,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             SelectedAccount = item;
             UseCurrentLogin = false;
 
-            // Ohne Spiel in der Liste öffnet dieser Knopf die Roblox-App als dieses Konto.
+            
             return SelectedPlace is null
                 ? LaunchAppAsync(item.Record)
                 : LaunchCoreAsync(SelectedPlace.Record, item.Record);
@@ -324,7 +324,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         StartGameOverlayCommand = new RelayCommand(() =>
         {
-            // "Start now" ist eine klare Absicht - der Schalter geht dabei mit an.
+            
             if (!Settings.GameOverlayEnabled) GameOverlayEnabled = true;
             else GameOverlay.EnsureRunning();
 
@@ -414,7 +414,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public ICommand SaveNotesCommand { get; }
     public ICommand OpenNotesFileCommand { get; }
 
-    // ---------------------------------------------------------------- Zustand
+    
 
     public AccountItem? SelectedAccount
     {
@@ -438,7 +438,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Spiegelt die Einstellung, damit die Anzeige beim Umschalten mitgeht.</summary>
+    
     public bool UseCurrentLogin
     {
         get => Settings.UseCurrentLogin;
@@ -457,9 +457,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         set => Set(ref _status, value);
     }
 
-    // ------------------------------------------------ Versionsschalter, Schrift, Zeiger
+    
 
-    /// <summary>Der Versionsschalter: "Automatic" oder eine installierte Version.</summary>
+    
     public VersionItem? SelectedVersion
     {
         get => _selectedVersion;
@@ -484,10 +484,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>
-    /// Vanilla-Modus: der Client bleibt, wie Roblox ihn installiert hat. Damit finden
-    /// Programme wie Velocity, Madium oder Volt den normalen Zweig, den sie erwarten.
-    /// </summary>
+    
+    
+    
+    
     public bool VanillaMode
     {
         get => Settings.VanillaMode;
@@ -508,7 +508,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<ThemeItem> Themes { get; }
 
-    /// <summary>Farbwelt. Der Wechsel färbt die vorhandenen Pinsel sofort um.</summary>
+    
     public ThemeItem? SelectedTheme
     {
         get => _selectedTheme;
@@ -523,7 +523,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Federnde Einblendungen und Glanz beim Überfahren.</summary>
+    
     public bool PlayfulMode
     {
         get => Settings.PlayfulMode;
@@ -536,9 +536,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    // ------------------------------------------------ Schnellansicht ("Layout")
+    
 
-    /// <summary>Steht die Schnellansicht gerade über der App?</summary>
+    
     public bool LayoutOpen
     {
         get => _layoutOpen;
@@ -547,13 +547,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             if (!Set(ref _layoutOpen, value)) return;
             if (value) return;
 
-            // Beim Zumachen die Notizen sofort sichern, damit nichts hängen bleibt.
+            
             _notesTimer.Stop();
             SaveNotes(quiet: true);
         }
     }
 
-    /// <summary>Die Schnellansicht als Ganzes - ab Werk an, Schalter auf der Engine-Seite.</summary>
+    
     public bool OverlayEnabled
     {
         get => Settings.OverlayEnabled;
@@ -573,10 +573,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>
-    /// Die Schnellansicht über dem Roblox-Fenster. Sie ist ein eigener Prozess und zeigt
-    /// nur ein Fenster über dem Spiel - nichts wird in den Client eingeschleust.
-    /// </summary>
+    
+    
+    
+    
     public bool GameOverlayEnabled
     {
         get => Settings.GameOverlayEnabled;
@@ -599,7 +599,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Soll das Overlay aufgehen, sobald ein Roblox-Fenster da ist?</summary>
+    
     public bool GameOverlayAutoShow
     {
         get => Settings.GameOverlayAutoShow;
@@ -615,14 +615,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Das eingestellte Kürzel, wie es in der Oberfläche steht.</summary>
+    
     public string LayoutShortcutLabel => Settings.OverlayShortcut;
 
     public string LayoutShortcutHint => _shortcutCapture
         ? "Press the new shortcut now - Esc cancels."
         : $"Opens with {Settings.OverlayShortcut}.";
 
-    /// <summary>Wartet auf den nächsten Tastendruck für ein neues Kürzel.</summary>
+    
     public bool ShortcutCapture
     {
         get => _shortcutCapture;
@@ -633,7 +633,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Notizen der Schnellansicht - der Text wird kurz nach dem Tippen gespeichert.</summary>
+    
     public string NotesText
     {
         get => _notesText;
@@ -655,7 +655,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ? "No accounts saved yet - add one under Accounts."
         : $"Start with one of {Accounts.Count} saved account(s).";
 
-    /// <summary>Der Aether-Pfeil als Zeiger der Anwendung.</summary>
+    
     public bool CustomCursor
     {
         get => Settings.CustomCursor;
@@ -715,7 +715,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Filter für die Vorschlagsliste im FastFlags-Editor.</summary>
+    
     public string PresetSearch
     {
         get => _presetSearch;
@@ -725,10 +725,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>"all", "favorites" oder der Name einer Gruppe (z. B. "GRAPHICS").</summary>
+    
     public string FastFlagFilter => _fastFlagFilter;
 
-    /// <summary>Die Kartenansicht ist der Start; JSON bleibt über den Umschalter erreichbar.</summary>
+    
     public bool FlagsVisualMode
     {
         get => _flagsVisualMode;
@@ -747,44 +747,44 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public Visibility FlagsJsonVisibility => _flagsVisualMode ? Visibility.Collapsed : Visibility.Visible;
 
-    /// <summary>Zeile unter der Kartenansicht: sichtbare und bereits aktive Karten.</summary>
+    
     public string VisualFlagsCountLine
     {
         get => _visualFlagsCountLine;
         private set => Set(ref _visualFlagsCountLine, value);
     }
 
-    /// <summary>Wie viele Karten auf der aktuellen Allowlist stehen - ehrlich, nicht geschätzt.</summary>
+    
     public string FastFlagHealthLine =>
         $"{Presets.Count} cards · {Presets.Count(p => p.Allowlisted)} still read by current Roblox";
 
-    /// <summary>"Nothing matches" in der Kartenansicht.</summary>
+    
     public Visibility VisualEmptyVisibility =>
         VisiblePresets.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
-    /// <summary>Der Hinweistext im Suchfeld, solange es leer ist.</summary>
+    
     public Visibility PresetSearchPlaceholderVisibility =>
         string.IsNullOrWhiteSpace(_presetSearch) ? Visibility.Visible : Visibility.Collapsed;
 
-    /// <summary>Zeile unter dem Filter: wie viele Vorschläge gerade sichtbar sind.</summary>
+    
     public string PresetCountLine
     {
         get => _presetCountLine;
         private set => Set(ref _presetCountLine, value);
     }
 
-    /// <summary>"Nothing matches" - nur wenn der Filter alles weggefiltert hat.</summary>
+    
     public Visibility PresetEmptyVisibility =>
         PresetGroups.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
-    /// <summary>Anzahl der Flags im Editor - steht als Marke an der Überschrift.</summary>
+    
     public string FlagsCountLabel
     {
         get => _flagsCountLabel;
         private set => Set(ref _flagsCountLabel, value);
     }
 
-    /// <summary>Zeile unter dem Editor: Anzahl der Flags, Anzahl gesetzter Vorschläge oder der Fehler.</summary>
+    
     public string FlagsStatus
     {
         get => _flagsStatus;
@@ -797,7 +797,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         private set => Set(ref _flagsHasError, value);
     }
 
-    // ------------------------------------------------ Versionsdownload
+    
 
     public string BuildSearch
     {
@@ -832,7 +832,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public Visibility DownloadingVisibility => _downloading ? Visibility.Visible : Visibility.Collapsed;
 
-    /// <summary>Der in der Download-Liste angeklickte Build.</summary>
+    
     public BuildItem? SelectedBuild
     {
         get => _selectedBuild;
@@ -849,7 +849,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         private set => Set(ref _installerLine, value);
     }
 
-    /// <summary>Wird vom PasswordBox im Code-Behind gesetzt - nie gebunden, damit der Schlüssel nicht im UI-Baum landet.</summary>
+    
     public string NewCookie
     {
         get => _newCookie;
@@ -894,7 +894,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Schreibt die Flags vor jedem Start - der Schalter liegt auch in der Schnellansicht.</summary>
+    
     public bool ApplyFastFlagsOnLaunch
     {
         get => Settings.ApplyFastFlags;
@@ -932,15 +932,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public Visibility AccountsEmptyVisibility => Accounts.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
     public Visibility PlacesEmptyVisibility => Places.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
 
-    /// <summary>Die Zuletzt-Liste zeigt sich nur, wenn es etwas zu zeigen gibt.</summary>
+    
     public Visibility RecentsVisibility => Recents.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
     public Visibility RecentsEmptyVisibility => Recents.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
 
-    /// <summary>
-    /// Die Zeile über der Liste erklärt nur, woher sie kommt - die Spiele selbst stehen
-    /// darunter. Roblox' eigene Sitzungen werden beim Start aus den Logdateien nachgetragen.
-    /// </summary>
+    
+    
+    
+    
     public string RecentsLine => Recents.Count == 0
         ? "Start a game and it turns up here - Roblox's own sessions are picked up too."
         : "Newest first - from your Roblox sessions and every start through Aether.";
@@ -949,11 +949,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public string VersionLine => "version " + (Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0");
     public string DataFolderLine => AppPaths.DataDir;
 
-    // ---------------------------------------------------------------- Kopfkarte
+    
 
     public string HeroTitle => SelectedPlace?.Title ?? "Roblox home";
 
-    /// <summary>Beschriftung des Hauptknopfes: mit Spiel "Play", ohne Spiel "Open Roblox".</summary>
+    
     public string PlayLabel => SelectedPlace is null ? "Open Roblox" : "Play";
 
     public string HeroSubtitle
@@ -978,7 +978,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public Brush? HeroIconBrush => SelectedPlace?.IconBrush;
 
-    // ---------------------------------------------------------------- Clientkarte
+    
 
     public string ClientVersionLine => _installedVersion is null
         ? "No Roblox client found"
@@ -1010,7 +1010,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    // ---------------------------------------------------------------- Multi-Start-Pause
+    
 
     public bool DelayIs4
     {
@@ -1038,7 +1038,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(DelayIs15));
     }
 
-    // ---------------------------------------------------------------- Start
+    
 
     public async Task InitializeAsync(string? startupLaunchUri)
     {
@@ -1059,7 +1059,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             : $"Ready - {_installedVersion.Guid}.";
     }
 
-    /// <summary>Startanfrage von außen (Protokollhandler).</summary>
+    
     public async Task HandleExternalLaunchAsync(string uri)
     {
         Status = "Handling an external launch request…";
@@ -1104,8 +1104,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             RefreshVersions();
 
-            // "Neu einlesen" heißt auch: Roblox' eigene Sitzungen noch einmal nachtragen. So
-            // steht ein Spiel, das ohne Aether lief, sofort in der Zuletzt-Liste - ohne Neustart.
+            
+            
             ImportRobloxSessions();
             ReloadRecents();
             await LoadRecentIconsAsync().ConfigureAwait(true);
@@ -1120,11 +1120,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>
-    /// Bilder und Namen laden, ohne dass ein Fehler den Start stört. Ohne das Fangnetz endet
-    /// die Aufgabe unsichtbar - dann bliebe die Zuletzt-Liste bei "Place 123…" stehen, und
-    /// im Protokoll stünde kein Wort darüber.
-    /// </summary>
+    
+    
+    
+    
+    
     private async Task LoadImagesSafeAsync()
     {
         try
@@ -1133,7 +1133,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
         catch (OperationCanceledException)
         {
-            // Beim Schließen des Fensters ist das der normale Weg.
+            
         }
         catch (Exception ex)
         {
@@ -1155,11 +1155,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         await LoadRecentIconsAsync().ConfigureAwait(true);
     }
 
-    /// <summary>Holt Name und Spielebilder der Zuletzt-Liste nach (läuft im Hintergrund weiter).</summary>
+    
     private async Task LoadRecentIconsAsync()
     {
-        // Zwei Auslöser können kurz nacheinander kommen (Start und ein Import). Ohne diese
-        // Sperre liefen zwei Runden gleichzeitig und fragten Roblox doppelt.
+        
+        
         if (_loadingRecent)
         {
             _recentReloadQueued = true;
@@ -1175,13 +1175,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
                 foreach (var recent in Recents.ToList())
                 {
-                    // Ein Eintrag gilt erst als fertig, wenn Bild <b>und</b> Name da sind. Nur auf
-                    // das Bild zu schauen war der Fehler: ein zwischengespeichertes Icon ließ die
-                    // Zeile für immer als "Place 123…" stehen.
+                    
+                    
+                    
                     if (recent.Icon is not null && !NeedsName(recent)) continue;
 
-                    // Eine Sitzung aus Roblox' Logs kennt nur die IDs - der Name fehlt noch.
-                    // Deshalb wird auch dann gefragt, wenn die Universe-ID schon dasteht.
+                    
+                    
                     if (recent.Record.UniverseId is null || NeedsName(recent))
                         await ResolveRecentAsync(recent).ConfigureAwait(true);
                     else
@@ -1196,26 +1196,26 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Fehlt der echte Name noch? "Place 123…" ist nur der Platzhalter.</summary>
+    
     private static bool NeedsName(RecentItem item) =>
         string.IsNullOrWhiteSpace(item.Record.Name) ||
         string.Equals(item.Record.Name, $"Place {item.Record.PlaceId}", StringComparison.Ordinal);
 
-    /// <summary>Holt Name und Icon eines Eintrags der Zuletzt-Liste nach.</summary>
+    
     private async Task ResolveRecentAsync(RecentItem item)
     {
         var resolved = await RobloxApi.ResolveGameAsync(item.Record.PlaceId, _cts.Token).ConfigureAwait(true);
         if (resolved is null)
         {
-            // Auch das wird gesagt: sonst bliebe "Place 123…" stehen, ohne dass irgendwo
-            // stünde, warum. "Rescan" versucht es erneut.
+            
+            
             Log.Warn($"No name for place {item.Record.PlaceId} - Roblox did not answer.");
             return;
         }
 
-        // Erst den Eintrag in der Datei treffen, dann die Zeile: oft sind beide dasselbe
-        // Objekt. Würde erst die Zeile gesetzt, sähe Update keinen Unterschied mehr und
-        // würde nichts schreiben - genau daran blieb "Place 128…" stehen.
+        
+        
+        
         _recentStore.Update(item.Record.PlaceId, resolved.Value.Name, resolved.Value.UniverseId);
         _recentStore.Save();
 
@@ -1226,7 +1226,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         item.Icon = await ImageCache.GetGameIconAsync(resolved.Value.UniverseId, _cts.Token).ConfigureAwait(true);
     }
 
-    /// <summary>Holt Spielname, Universe-ID und Icon nach (z. B. nach einem Import).</summary>
+    
     private async Task ResolveGameAsync(PlaceItem item)
     {
         var resolved = await RobloxApi.ResolveGameAsync(item.Record.PlaceId, _cts.Token).ConfigureAwait(true);
@@ -1252,10 +1252,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         await AddAccountWithCookieAsync(cookie);
     }
 
-    /// <summary>
-    /// Nimmt ein Cookie aus der eingebetteten Roblox-Anmeldung oder aus dem Einfügefeld,
-    /// prüft es und legt das Konto an. Liefert false, wenn der Schlüssel nicht gültig ist.
-    /// </summary>
+    
+    
+    
+    
     public async Task<bool> AddAccountWithCookieAsync(string cookie)
     {
         cookie = cookie.Trim();
@@ -1406,7 +1406,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async Task LaunchSelectedAsync()
     {
-        // Ohne gewähltes Spiel ist der Start kein Fehler mehr: dann öffnet sich die Roblox-App.
+        
         if (SelectedPlace is null)
         {
             await LaunchAppAsync(UseCurrentLogin ? null : SelectedAccount?.Record).ConfigureAwait(true);
@@ -1417,7 +1417,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         await LaunchCoreAsync(SelectedPlace.Record, account).ConfigureAwait(true);
     }
 
-    /// <summary>Die Roblox-App (Startseite) öffnen - mit dem gerade gewählten Konto.</summary>
+    
     private Task LaunchAppForAccountAsync()
         => LaunchAppAsync(UseCurrentLogin ? null : SelectedAccount?.Record);
 
@@ -1463,7 +1463,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Startet denselben Platz nacheinander für alle eingeschalteten Konten.</summary>
+    
     private async Task MultiLaunchAsync()
     {
         if (SelectedPlace is null) return;
@@ -1502,7 +1502,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 account.Status = result.Success ? "launched" : result.Message;
                 if (!result.Success) Log.Warn($"{account.Handle}: {result.Message}");
 
-                // Roblox braucht zwischen zwei Clients einen Moment, sonst überholen sie sich.
+                
                 if (i < targets.Count - 1) await Task.Delay(Settings.MultiLaunchStaggerMs, _cts.Token).ConfigureAwait(true);
             }
 
@@ -1524,11 +1524,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    // ---------------------------------------------------------------- Engine / Einstellungen
+    
 
-    // ------------------------------------------------ FastFlags-Editor
+    
 
-    /// <summary>Ein Vorschlag wurde angehakt oder abgehakt - das JSON folgt sofort.</summary>
+    
     private void OnPresetChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (_syncingPresets) return;
@@ -1550,7 +1550,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         if (FastFlags.ParseJson(FastFlagsJson, out var flags) is { } error)
         {
-            // Ohne lesbares JSON wird nichts geschrieben - der Haken geht zurück und der Grund steht da.
+            
             _syncingPresets = true;
             try
             {
@@ -1583,7 +1583,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Log.Info(Status);
     }
 
-    /// <summary>Gleicht Statuszeile und Haken der Vorschläge an den JSON-Text an.</summary>
+    
     private void RefreshFlagState()
     {
         if (FastFlags.ParseJson(FastFlagsJson, out var flags) is not null)
@@ -1628,9 +1628,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _ => matched.Where(p => string.Equals(p.Group, _fastFlagFilter, StringComparison.Ordinal)).ToList(),
         };
 
-        // Noch gelesene Karten zuerst - sonst beginnt die Übersicht mit lauter
-        // "usually ignored"-Karten. Danach in der Reihenfolge der sichtbaren Filter:
-        // FPS, Graphics, Lighting, Effects, Textures, Interface, Network.
+        
+        
+        
         var visible = selected
             .OrderByDescending(p => p.Allowlisted)
             .ThenBy(p => GroupOrder(p.Group))
@@ -1781,7 +1781,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Status = "All flags cleared - press Save to keep the empty list.";
     }
 
-    // ------------------------------------------------ Versionen herunterladen
+    
 
     private async Task LoadBuildsAsync()
     {
@@ -1873,7 +1873,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Einen bereits heruntergeladenen Installer wieder anbieten (nach einem Neustart).</summary>
+    
     private void RecallDownloadedInstaller()
     {
         try
@@ -1943,7 +1943,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Status = message;
     }
 
-    // ------------------------------------------------ Versionsschalter
+    
 
     private void ApplyVersionChoice()
     {
@@ -1964,7 +1964,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _ = RefreshInstallAsync();
     }
 
-    /// <summary>Füllt den Versionsschalter aus den gefundenen Installationen.</summary>
+    
     private void RefreshVersions()
     {
         var installed = RobloxInstall.DiscoverAll(Settings);
@@ -1975,7 +1975,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         InstalledVersions.Clear();
         foreach (var item in items) InstalledVersions.Add(item);
 
-        // Auswahl wiederherstellen, ohne sie erneut zu setzen (sonst würde sie zurückgeschrieben).
+        
         _selectedVersion = InstalledVersions.FirstOrDefault(i => string.Equals(
                               i.Version?.Guid, Settings.PinnedVersionGuid, StringComparison.OrdinalIgnoreCase))
                           ?? InstalledVersions[0];
@@ -1989,7 +1989,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             item.IsPinned = string.Equals(item.Version?.Guid, Settings.PinnedVersionGuid, StringComparison.OrdinalIgnoreCase);
     }
 
-    // ------------------------------------------------ Schrift
+    
 
     private void ApplyFontChoice()
     {
@@ -2004,7 +2004,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Log.Info($"UI font set to {AppFonts.Label(Settings)}.");
     }
 
-    /// <summary>Lädt eine eigene Schriftdatei (.ttf/.otf) in den Datenordner.</summary>
+    
     private void LoadFontFile()
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
@@ -2033,7 +2033,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Status = $"{family} loaded and set as the UI font.";
     }
 
-    // ------------------------------------------------ Ingame-Zeiger
+    
 
     private void ChooseCursorImage()
     {
@@ -2153,7 +2153,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         RaiseCommandStates();
     }
 
-    /// <summary>Download bzw. Update des Clients - beides über die offizielle Installerseite.</summary>
+    
     private async Task ClientActionAsync()
     {
         if (_installedVersion is null)
@@ -2186,7 +2186,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OpenPath(_installedVersion.Directory);
     }
 
-    /// <summary>Neustart: der neue Prozess wartet, bis dieser beendet ist (sonst greift die Einzelinstanz-Sperre).</summary>
+    
     private void Restart()
     {
         try
@@ -2229,7 +2229,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    // ---------------------------------------------------------------- Schnellansicht
+    
 
     private void ToggleLayout()
     {
@@ -2248,7 +2248,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         LayoutOpen = false;
     }
 
-    /// <summary>Aus der Schnellansicht heraus als ein bestimmtes Konto starten.</summary>
+    
     private async Task QuickLaunchAsync(object? parameter)
     {
         if (parameter is not AccountItem item) return;
@@ -2267,7 +2267,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Status = "Press the new shortcut for the quick layout - Esc cancels.";
     }
 
-    /// <summary>Esc während des Umbelegens - das alte Kürzel bleibt.</summary>
+    
     public void CancelShortcutCapture()
     {
         if (!ShortcutCapture) return;
@@ -2275,7 +2275,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Status = "The shortcut is unchanged.";
     }
 
-    /// <summary>Nimmt die gedrückte Kombination als neues Kürzel - false, wenn sie sich nicht eignet.</summary>
+    
     public bool TryApplyShortcut(ModifierKeys modifiers, Key key)
     {
         var text = Shortcuts.Format(modifiers, key);
@@ -2299,7 +2299,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         Settings.OverlayShortcut = text;
 
-        // Hier absichtlich ohne Abgleich: das ist der neue Stand, den das Overlay später liest.
+        
         SaveSettings(mergeShortcut: false);
         ShortcutCapture = false;
         RaiseShortcut();
@@ -2307,12 +2307,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Log.Info($"The quick layout shortcut is now {text}.");
     }
 
-    /// <summary>
-    /// Speichert die Einstellungen. Vorher wird das Kürzel vom Datenträger nachgezogen:
-    /// das Ingame-Overlay kann es selbst umbelegen, und der Launcher hätte sonst noch seinen
-    /// Stand vom Start im Speicher - der würde die Änderung beim Speichern stillschweigend
-    /// zurücksetzen.
-    /// </summary>
+    
+    
+    
+    
+    
+    
     private void SaveSettings(bool mergeShortcut = true)
     {
         if (mergeShortcut)
@@ -2323,7 +2323,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             }
             catch
             {
-                // Ist die Datei gerade nicht lesbar, bleibt der eigene Stand stehen.
+                
             }
         }
 
@@ -2350,7 +2350,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (!quiet) Status = NotesLine;
     }
 
-    // ---------------------------------------------------------------- Hilfen
+    
 
     private AccountItem CreateAccountItem(AccountRecord record)
     {
@@ -2384,10 +2384,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _ = ResolveGameAsync(item);
     }
 
-    /// <summary>
-    /// Verschiebt ein Spiel in der Liste - mit der Maus gezogen. Die Reihenfolge landet in
-    /// places.json, damit sie nach einem Neustart noch genauso aussieht.
-    /// </summary>
+    
+    
+    
+    
     public void MovePlace(PlaceItem item, PlaceItem target, bool before)
     {
         if (ReferenceEquals(item, target)) return;
@@ -2405,7 +2405,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Status = $"{item.Name} moved.";
     }
 
-    /// <summary>Übernimmt eine Reihenfolge in die Liste und schreibt sie fest.</summary>
+    
     private void ApplyPlaceOrder(IReadOnlyList<PlaceItem> order)
     {
         for (var index = 0; index < order.Count; index++)
@@ -2417,10 +2417,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _placeStore.SetOrder(order.Select(item => item.Record));
     }
 
-    /// <summary>
-    /// Roblox' eigene Sitzungen nachtragen: der Client schreibt bei jedem Start eine Logdatei
-    /// mit der Platz-ID. So steht in "Recently played" auch, was ohne Aether gespielt wurde.
-    /// </summary>
+    
+    
+    
+    
     private void ImportRobloxSessions()
     {
         try
@@ -2445,11 +2445,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>
-    /// Die Reihenfolge der Liste: gezogene Spiele stehen genau da, wo sie stehen. Solange
-    /// noch nie gezogen wurde, gilt die alte Regel - Angeheftete zuerst, dann das zuletzt
-    /// Gespielte.
-    /// </summary>
+    
+    
+    
+    
+    
     private void SortPlaces()
     {
         var manual = Places.Any(place => place.Record.SortIndex > 0);
@@ -2468,7 +2468,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Liest die Zuletzt-Liste neu ein (nach einem Start schreibt der Dienst sie).</summary>
+    
     private void ReloadRecents()
     {
         _recentStore.Load();
@@ -2479,9 +2479,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Recents.Clear();
         foreach (var entry in _recentStore.Entries)
         {
-            // Bekannte Zeilen behalten ihr Bild - sonst lädt die Liste nach jedem Start neu.
-            // Die Zeile wird trotzdem neu gebaut, damit sie auf dem Eintrag sitzt, der gerade
-            // in der Datei steht: sonst schriebe ein späterer Name ins Leere.
+            
+            
+            
             var item = new RecentItem(entry)
             {
                 Icon = known.TryGetValue(entry.PlaceId, out var existing) ? existing.Icon : null,
@@ -2564,7 +2564,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
         catch
         {
-            // egal
+            
         }
 
         _cts.Dispose();

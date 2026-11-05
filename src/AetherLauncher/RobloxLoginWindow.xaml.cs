@@ -7,15 +7,15 @@ using Microsoft.Web.WebView2.Core;
 
 namespace AetherLauncher;
 
-/// <summary>
-/// Roblox' eigene Anmeldung in einem eingebetteten Browser.
-///
-/// Aether bekommt das Passwort nie zu sehen: es wird in Roblox' Seite getippt und geht direkt
-/// an roblox.com. Nach der Anmeldung liest Aether nur das <c>.ROBLOSECURITY</c>-Cookie aus dem
-/// temporären Browserprofil und übergibt es an den Kontospeicher, der es verschlüsselt ablegt.
-/// Das Profil liegt in %TEMP% und wird beim Schließen gelöscht - es bleibt keine zweite Kopie
-/// des Schlüssels zurück.
-/// </summary>
+
+
+
+
+
+
+
+
+
 public partial class RobloxLoginWindow : Window
 {
     private const string LoginUrl = "https://www.roblox.com/login";
@@ -38,10 +38,10 @@ public partial class RobloxLoginWindow : Window
         Closed += OnClosed;
     }
 
-    /// <summary>Das gefundene Cookie - null, wenn die Anmeldung abgebrochen wurde.</summary>
+    
     public string? Cookie { get; private set; }
 
-    /// <summary>Räumt Profile auf, die nach einem Absturz während der Anmeldung liegen blieben.</summary>
+    
     public static void CleanupStaleProfiles()
     {
         try
@@ -56,13 +56,13 @@ public partial class RobloxLoginWindow : Window
                 }
                 catch
                 {
-                    // Ein noch laufender Browser hält die Dateien - beim nächsten Start erneut.
+                    
                 }
             }
         }
         catch
         {
-            // %TEMP% nicht lesbar: kein Grund, den Start zu verhindern.
+            
         }
     }
 
@@ -115,10 +115,10 @@ public partial class RobloxLoginWindow : Window
         }
     }
 
-    /// <summary>
-    /// Roblox' Anmeldung darf keine eigenen Fenster aufmachen; alles bleibt in diesem
-    /// Browser, damit das Cookie im selben temporären Profil landet.
-    /// </summary>
+    
+    
+    
+    
     private void OnNewWindowRequested(object? sender, CoreWebView2NewWindowRequestedEventArgs e)
     {
         e.Handled = true;
@@ -134,11 +134,11 @@ public partial class RobloxLoginWindow : Window
         }
     }
 
-    /// <summary>
-    /// Hält die eingebettete Anmeldung auf Roblox' eigenen Seiten. Sonst könnte eine
-    /// untergeschobene Seite die Optik der Anmeldung nachbauen und den Schlüssel abgreifen.
-    /// Subressourcen (CDN, Bilder) sind davon nicht betroffen, nur die oberste Navigation.
-    /// </summary>
+    
+    
+    
+    
+    
     private void OnNavigationStarting(object? sender, CoreWebView2NavigationStartingEventArgs e)
     {
         if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri) || !IsTrustedLoginUri(uri))
@@ -193,7 +193,7 @@ public partial class RobloxLoginWindow : Window
         }
         catch (Exception ex)
         {
-            // Nicht bei jedem Tick erneut ins Log schreiben.
+            
             Log.Warn($"The Roblox login cookie could not be read: {ex.Message}");
         }
     }
@@ -241,7 +241,7 @@ public partial class RobloxLoginWindow : Window
         }
         catch
         {
-            // Der Browserprozess räumt selbst auf.
+            
         }
 
         _ = DeleteProfileAsync(_profileFolder);
@@ -249,7 +249,7 @@ public partial class RobloxLoginWindow : Window
 
     private static async Task DeleteProfileAsync(string path)
     {
-        // WebView2 hält die Dateien noch einen Moment - ein paar Versuche reichen.
+        
         for (var attempt = 0; attempt < 8; attempt++)
         {
             try

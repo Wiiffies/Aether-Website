@@ -1,6 +1,6 @@
 namespace AetherLauncher.Services;
 
-/// <summary>Kurze relative Zeitangaben für Zeilen wie "2 d ago".</summary>
+
 public static class Time
 {
     public static string Ago(DateTimeOffset when)

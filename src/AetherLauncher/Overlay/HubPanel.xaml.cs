@@ -4,10 +4,10 @@ using System.Windows.Media;
 
 namespace AetherLauncher.Overlay;
 
-/// <summary>
-/// Das Menü des Ingame-Overlays: welche Platten offen sind, welches Kürzel sie aufmacht und
-/// ob das Overlay vor anderen Programmen zurückweicht.
-/// </summary>
+
+
+
+
 public partial class HubPanel : UserControl
 {
     private OverlayHost? _host;

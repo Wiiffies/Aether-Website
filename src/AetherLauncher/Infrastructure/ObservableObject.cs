@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 
 namespace AetherLauncher.Infrastructure;
 
-/// <summary>Minimale INotifyPropertyChanged-Basis für ViewModels und Item-Wrapper.</summary>
+
 public abstract class ObservableObject : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;

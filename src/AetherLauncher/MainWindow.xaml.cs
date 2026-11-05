@@ -16,7 +16,7 @@ namespace AetherLauncher;
 
 public partial class MainWindow : Window
 {
-    /// <summary>Fußzeilen-Hinweis je Seite - wie im Aether-Hub: der Text erklärt die Seite, auf der man steht.</summary>
+    
     private static readonly string[] FooterNotes =
     {
         "Games, launch keys and settings stay on this PC - nothing is uploaded.",
@@ -39,7 +39,7 @@ public partial class MainWindow : Window
         PreviewKeyDown += OnPreviewKeyDown;
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
 
-        // Neu hinzugekommene Zeilen wachsen auf, statt hart zu erscheinen.
+        
         _viewModel.Places.CollectionChanged += (_, e) => PopNewRow(GamesList, e);
         _viewModel.Recents.CollectionChanged += (_, e) => PopNewRow(RecentsList, e);
         _viewModel.Accounts.CollectionChanged += (_, e) => PopNewRow(AccountsList, e);
@@ -48,8 +48,8 @@ public partial class MainWindow : Window
         {
             TryRoundWindowCorners();
 
-            // Ohne Titelzeile maximiert Windows das Fenster über die Taskleiste hinaus.
-            // Der Hook begrenzt es auf die Arbeitsfläche des jeweiligen Bildschirms.
+            
+            
             var handle = new WindowInteropHelper(this).Handle;
             HwndSource.FromHwnd(handle)?.AddHook(WindowProc);
         };
@@ -60,7 +60,7 @@ public partial class MainWindow : Window
         {
             MoveNavGlide(animate: false);
 
-            // Das Fenster fährt beim Öffnen kurz auf, statt hart zu erscheinen.
+            
             Anim.Fade(Shell, 0, 1, 300);
             Anim.Slide(Shell, 10, 0, 340, 0, _viewModel.Settings.PlayfulMode);
 
@@ -83,10 +83,10 @@ public partial class MainWindow : Window
             _viewModel.Dispose();
         };
 
-        NavHome.IsChecked = true; // zeigt die Startseite und setzt den Fußzeilentext
+        NavHome.IsChecked = true; 
     }
 
-    /// <summary>Nur für den Oberflächen-Selbsttest: eine Seite direkt anzeigen.</summary>
+    
     internal void SelectPage(int index)
     {
         var tab = index switch
@@ -102,16 +102,16 @@ public partial class MainWindow : Window
         if (tab is not null) tab.IsChecked = true;
     }
 
-    /// <summary>Nur für den Oberflächen-Selbsttest: Position des Reiterstrichs.</summary>
+    
     internal double NavUnderlineX => NavGlideShift.X;
 
-    /// <summary>Nur für den Oberflächen-Selbsttest: die Einstellungsseite bis nach unten rollen.</summary>
+    
     internal void ScrollSettingsToEnd() => PageSettings.ScrollToEnd();
 
     private void NavTab_Checked(object sender, RoutedEventArgs e)
     {
         if (sender is not RadioButton tab || tab.Tag is not string tag || !int.TryParse(tag, out var index)) return;
-        if (_viewModel is null || PageHome is null) return; // während InitializeComponent
+        if (_viewModel is null || PageHome is null) return; 
 
         FrameworkElement[] pages = { PageHome, PageAccounts, PageEngine, PageSettings, PageLog };
         for (var page = 0; page < pages.Length; page++)
@@ -119,18 +119,18 @@ public partial class MainWindow : Window
 
         if (index >= 0 && index < FooterNotes.Length) _viewModel.FooterNote = FooterNotes[index];
 
-        // Der Strich gleitet erst, wenn das Layout steht (der neue Reiter ist jetzt breiter).
+        
         Dispatcher.BeginInvoke(() => MoveNavGlide(animate: IsLoaded), DispatcherPriority.Loaded);
 
         if (index >= 0 && index < pages.Length)
         {
-            // Ganze Seite gleitet herein, die Karten darin steigen versetzt auf.
+            
             Anim.SlideX(pages[index], 14, 0, 320, 0, _viewModel.Settings.PlayfulMode);
             Anim.PageEntrance(pages[index], _viewModel.Settings.PlayfulMode);
         }
     }
 
-    /// <summary>Setzt den blauen Strich mittig unter den aktiven Reiter - gleitend oder sofort.</summary>
+    
     private void MoveNavGlide(bool animate)
     {
         var tab = NavHome.IsChecked == true ? NavHome
@@ -149,7 +149,7 @@ public partial class MainWindow : Window
         }
         catch (InvalidOperationException)
         {
-            return; // noch nicht im sichtbaren Baum
+            return; 
         }
 
         NavGlide.Opacity = 1;
@@ -164,7 +164,7 @@ public partial class MainWindow : Window
         Anim.Glide(NavGlide, from, target, 360, _viewModel.Settings.PlayfulMode);
     }
 
-    /// <summary>Der Glanz läuft im fröhlichen Modus über die Hauptkarte.</summary>
+    
     private void HeroCard_MouseEnter(object sender, MouseEventArgs e)
     {
         if (!_viewModel.Settings.PlayfulMode || HeroCard.ActualWidth <= 0) return;
@@ -184,7 +184,7 @@ public partial class MainWindow : Window
         HeroShineShift.BeginAnimation(TranslateTransform.XProperty, sweep);
     }
 
-    /// <summary>Der Zeigerpfeil aus Assets/cursor.cur (von tools/make-cursor.ps1 erzeugt).</summary>
+    
     private void ApplyCursor()
     {
         try
@@ -211,11 +211,11 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>
-    /// Eine einzelne neue Zeile bekommt ihren Auftritt. Bei einem Stapel (Neuladen der Liste)
-    /// bleibt es ruhig - dort wäre das Aufblitzen jeder Zeile nur Unruhe.
-    /// </summary>
-    // ---------------------------------------------------------------- Spiele sortieren
+    
+    
+    
+    
+    
 
     private Point _placeDragStart;
     private PlaceItem? _placeDragItem;
@@ -232,7 +232,7 @@ public partial class MainWindow : Window
 
         var position = e.GetPosition(GamesList);
 
-        // Erst ab ein paar Pixeln wird gezogen - sonst würde jeder Klick zum Ziehen.
+        
         if (Math.Abs(position.Y - _placeDragStart.Y) < 8) return;
 
         DragDrop.DoDragDrop(GamesList, _placeDragItem, DragDropEffects.Move);
@@ -254,7 +254,7 @@ public partial class MainWindow : Window
         _viewModel.MovePlace(item, target.Item, before: !target.LowerHalf);
         e.Handled = true;
 
-        // Die verschobene Zeile kurz aufleuchten lassen - sonst sieht man nicht, wo sie landet.
+        
         Dispatcher.BeginInvoke(() =>
         {
             if (GamesList.ItemContainerGenerator.ContainerFromItem(item) is FrameworkElement moved)
@@ -262,7 +262,7 @@ public partial class MainWindow : Window
         }, DispatcherPriority.Loaded);
     }
 
-    /// <summary>Welche Zeile liegt unter dem Punkt - und in welcher Hälfte?</summary>
+    
     private (PlaceItem Item, bool LowerHalf)? RowAt(Point position)
     {
         foreach (var entry in GamesList.Items)
@@ -285,7 +285,7 @@ public partial class MainWindow : Window
 
         var item = items[0];
 
-        // Der Behälter entsteht erst im nächsten Layoutdurchlauf.
+        
         Dispatcher.BeginInvoke(() =>
         {
             if (list.ItemContainerGenerator.ContainerFromItem(item) is not FrameworkElement row) return;
@@ -298,13 +298,13 @@ public partial class MainWindow : Window
         switch (e.PropertyName)
         {
             case nameof(MainViewModel.Status):
-                // Neue Meldungen blenden kurz auf und rutschen dabei herein.
+                
                 Anim.Fade(StatusText, 0.35, 1, 240);
                 Anim.SlideX(StatusText, 6, 0, 240);
                 break;
 
             case nameof(MainViewModel.HeroTitle):
-                // Anderes Spiel oder Konto gewählt: die Hauptkarte wechselt weich hinüber.
+                
                 if (_viewModel.Settings.PlayfulMode) Anim.Pulse(HeroIcon, 1.07, 320);
                 Anim.Fade(HeroName, 0.2, 1, 260);
                 Anim.SlideX(HeroName, 7, 0, 280, 0, _viewModel.Settings.PlayfulMode);
@@ -320,14 +320,14 @@ public partial class MainWindow : Window
                 break;
 
             case nameof(MainViewModel.AddAccountOpen):
-                // Nach dem Hinzufügen (oder beim Zuklappen) darf der Schlüssel nicht
-                // unsichtbar im Passwortfeld stehen bleiben.
+                
+                
                 if (!_viewModel.AddAccountOpen) CookieBox.Password = "";
                 break;
         }
     }
 
-    /// <summary>Blendet die Schnellansicht weich ein und wieder aus.</summary>
+    
     private void ShowLayout(bool open)
     {
         if (open)
@@ -346,8 +346,8 @@ public partial class MainWindow : Window
             EasingFunction = Anim.Out(),
         };
 
-        // Erst ausblenden, wenn wirklich zugemacht wurde - ein schnelles Wiederöffnen
-        // soll die Karte nicht unsichtbar zurücklassen.
+        
+        
         fade.Completed += (_, _) =>
         {
             if (!_viewModel.LayoutOpen) LayoutOverlay.Visibility = Visibility.Collapsed;
@@ -369,15 +369,15 @@ public partial class MainWindow : Window
 
     private void LayoutCard_Click(object sender, MouseButtonEventArgs e) => e.Handled = true;
 
-    /// <summary>
-    /// Tastenkürzel: Strg+1…5 Seiten, Strg+Enter starten, F5 neu einlesen, das eingestellte
-    /// Kürzel öffnet die Schnellansicht (ab Werk Entf), Esc schließt sie.
-    /// </summary>
+    
+    
+    
+    
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
         var pressed = e.Key == Key.System ? e.SystemKey : e.Key;
 
-        // Umbelegen: der nächste Tastendruck wird das neue Kürzel.
+        
         if (_viewModel.ShortcutCapture)
         {
             if (pressed == Key.Escape)
@@ -387,15 +387,15 @@ public partial class MainWindow : Window
                 return;
             }
 
-            // Einzelne Zusatztasten (Shift, Strg, …) sind noch keine Kombination - weiter warten.
+            
             if (Shortcuts.IsModifierKey(pressed))
             {
                 e.Handled = true;
                 return;
             }
 
-            // Auch eine unbrauchbare Kombination wird geschluckt - sie soll nicht
-            // nebenbei in ein Eingabefeld tippen, während auf das Kürzel gewartet wird.
+            
+            
             _viewModel.TryApplyShortcut(Keyboard.Modifiers, pressed);
             e.Handled = true;
             return;
@@ -403,11 +403,11 @@ public partial class MainWindow : Window
 
         if (Shortcuts.Matches(_viewModel.Settings.OverlayShortcut, Keyboard.Modifiers, pressed))
         {
-            // In einem Eingabefeld gehört eine blanke Taste dem Text. Sonst würde ein Entf
-            // beim Tippen in Notizen oder Suche die Schnellansicht aufreißen.
+            
+            
             if (Keyboard.FocusedElement is TextBox && Keyboard.Modifiers == ModifierKeys.None)
             {
-                // Nicht behandelt - der Text bekommt die Taste.
+                
             }
             else
             {
@@ -454,7 +454,7 @@ public partial class MainWindow : Window
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
 
-    /// <summary>Startanfrage von außen: Fenster nach vorn holen und verarbeiten.</summary>
+    
     private async void OnExternalLaunchRequested(string uri)
     {
         try
@@ -476,7 +476,7 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Holt das Launcher-Fenster in den Vordergrund (auch wenn ein Spiel läuft).</summary>
+    
     private void BringToFront()
     {
         if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
@@ -511,10 +511,10 @@ public partial class MainWindow : Window
         await ShowRobloxLoginAsync();
     }
 
-    /// <summary>
-    /// Roblox' eigene Anmeldung im temporären Browser. Das Passwort bleibt in Roblox' Seite;
-    /// Aether bekommt nur das Cookie und prüft es anschließend gegen die Roblox-API.
-    /// </summary>
+    
+    
+    
+    
     private async Task ShowRobloxLoginAsync()
     {
         if (_viewModel.Busy) return;
@@ -530,8 +530,8 @@ public partial class MainWindow : Window
                 return;
             }
 
-            // Abgebrochen oder kein Cookie: Das Konto-Panel bleibt offen, damit der
-            // Einfüge-Weg weiterhin sichtbar ist.
+            
+            
             _viewModel.AddAccountOpen = true;
         }
         catch (Exception ex)
@@ -541,18 +541,18 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Windows 11 zeichnet auch rahmenlose Fenster mit runden Ecken, wenn man es fragt.</summary>
+    
     private void TryRoundWindowCorners()
     {
         try
         {
             var handle = new WindowInteropHelper(this).Handle;
-            var preference = 2; // DWMWCP_ROUND
-            DwmSetWindowAttribute(handle, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, ref preference, sizeof(int));
+            var preference = 2; 
+            DwmSetWindowAttribute(handle, 33 , ref preference, sizeof(int));
         }
         catch
         {
-            // Ältere Windows-Versionen kennen das Attribut nicht - dann bleibt es eckig.
+            
         }
     }
 

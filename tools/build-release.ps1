@@ -1,30 +1,25 @@
 <#
-    Baut die Ausgabe, die heruntergeladen wird:
+    Builds the downloadable release:
 
-      dist/AetherLauncher-<Version>-<Runtime>/AetherLauncher.exe   eine Datei, kein Installer
-      dist/AetherLauncher-<Version>-<Runtime>.zip                  zum Hochladen
-      dist/AetherLauncher-<Version>-<Runtime>.zip.sha256           Prüfsumme
+      dist/AetherLauncher-<Version>-<Runtime>/AetherLauncher.exe   one file, no installer
+      dist/AetherLauncher-<Version>-<Runtime>.zip                  upload artifact
+      dist/AetherLauncher-<Version>-<Runtime>.zip.sha256           checksum
 
-    Was der Build für den Schutz tut:
-      * keine .pdb und keine XML-Dokumentation der Fremdbibliotheken im Download -
-        keine Klassennamen, Zeilennummern oder Kommentare für neugierige Blicke
-      * Single-File und ReadyToRun (IL bleibt enthalten, startet aber schneller)
-      * SHA-256 neben dem Archiv, damit ein Download prüfbar ist
-      * mit -CertificatePath zusätzlich eine echte Authenticode-Signatur (signtool):
-        Windows und der Nutzer sehen, dass die Datei von dir kommt und nicht verändert wurde
+    Release hardening:
+      * no .pdb files or dependency XML documentation in the download
+      * single-file and ReadyToRun output
+      * SHA-256 beside the archive so a download can be verified
+      * optional Authenticode signature with -CertificatePath
 
-    Wichtig, ehrlich: keine dieser Stufen macht eine .NET-Anwendung "unmöglich" zu
-    analysieren. Verschlüsselung schützt die gespeicherten Schlüssel, nicht den Code;
-    wer den Prozess unter demselben Windows-Benutzer debuggt, sieht entschlüsselte Werte.
-    Deshalb liegt in Aether nichts Geheimes im Programm: kein Passwort, kein API-Geheimnis.
-    Die Kontoschlüssel sind mit AES-256-GCM verschlüsselt, der AES-Schlüssel ist per DPAPI
-    an den Windows-Benutzer und eine app-eigene Entropie gebunden (siehe Dpapi.cs).
+    No build step makes a .NET application impossible to inspect. Encryption protects
+    stored account keys, not the code itself. Aether keeps no passwords or API secrets
+    in the binary. Account cookies use AES-256-GCM with a DPAPI-bound key; see Dpapi.cs.
 
-    Aufrufe:
+    Usage:
       powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-release.ps1
       ... -Version 1.2.0
-      ... -SelfContained                      (bringt die .NET-Runtime mit, ~70 MB)
-      ... -CertificatePath .\aether.pfx       (fragt das Passwort ab)
+      ... -SelfContained                      (bundles the .NET runtime, ~70 MB)
+      ... -CertificatePath .\aether.pfx       (prompts for the password)
 #>
 
 param(
@@ -46,10 +41,10 @@ $dist = Join-Path $distRoot $name
 $zip = Join-Path $distRoot "$name.zip"
 
 if (-not (Test-Path $project)) {
-    throw "Projekt nicht gefunden: $project"
+    throw "Project not found: $project"
 }
 
-# Alte Ausgabe derselben Version wegwerfen, damit keine Reste mit hochgeladen werden.
+# Remove the previous build of this version so no stale files are uploaded.
 if (Test-Path $dist) { Remove-Item $dist -Recurse -Force }
 if (Test-Path $zip) { Remove-Item $zip -Force }
 New-Item -ItemType Directory -Path $dist -Force | Out-Null
@@ -69,18 +64,18 @@ $publishArgs = @(
     '-o', $dist
 )
 
-Write-Host "Baue $name ..." -ForegroundColor Cyan
+Write-Host "Building $name ..." -ForegroundColor Cyan
 & dotnet @publishArgs
-if ($LASTEXITCODE -ne 0) { throw "dotnet publish ist mit $LASTEXITCODE fehlgeschlagen." }
+if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed with exit code $LASTEXITCODE." }
 
-# Falls das SDK trotz der Schalter Symbole oder Doku mitkopiert: raus damit.
+# Remove symbols or docs if the SDK copied them despite the switches.
 Get-ChildItem $dist -Filter *.pdb -File -ErrorAction SilentlyContinue | Remove-Item -Force
 Get-ChildItem $dist -Filter *.xml -File -ErrorAction SilentlyContinue | Remove-Item -Force
 
 $exe = Join-Path $dist 'AetherLauncher.exe'
-if (-not (Test-Path $exe)) { throw "Die Ausgabe enthält keine AetherLauncher.exe." }
+if (-not (Test-Path $exe)) { throw "The output does not contain AetherLauncher.exe." }
 
-# ---------------------------------------------------------------- Signieren (optional)
+# ---------------------------------------------------------------- Signing (optional)
 $signed = $false
 if (-not [string]::IsNullOrWhiteSpace($CertificatePath)) {
     $cert = (Resolve-Path $CertificatePath).Path
@@ -92,11 +87,11 @@ if (-not [string]::IsNullOrWhiteSpace($CertificatePath)) {
             Select-Object -First 1
     }
     if (-not $signtool) {
-        throw "signtool.exe wurde nicht gefunden. Installiere das Windows SDK oder signiere die Datei auf dem Build-Rechner."
+        throw "signtool.exe was not found. Install the Windows SDK or sign the file on the build machine."
     }
 
     if (-not $CertificatePassword) {
-        $CertificatePassword = Read-Host -Prompt "Passwort für $([IO.Path]::GetFileName($cert))" -AsSecureString
+        $CertificatePassword = Read-Host -Prompt "Password for $([IO.Path]::GetFileName($cert))" -AsSecureString
     }
 
     $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($CertificatePassword)
@@ -104,10 +99,10 @@ if (-not [string]::IsNullOrWhiteSpace($CertificatePath)) {
         $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
         $tool = if ($signtool -is [System.Management.Automation.ApplicationInfo]) { $signtool.Source } else { $signtool.FullName }
         & $tool sign /fd SHA256 /f $cert /p $plain /tr $TimestampUrl /td SHA256 $exe
-        if ($LASTEXITCODE -ne 0) { throw "signtool sign ist mit $LASTEXITCODE fehlgeschlagen." }
+        if ($LASTEXITCODE -ne 0) { throw "signtool sign failed with exit code $LASTEXITCODE." }
 
         & $tool verify /pa $exe
-        if ($LASTEXITCODE -ne 0) { throw "Die Signatur konnte nicht bestätigt werden." }
+        if ($LASTEXITCODE -ne 0) { throw "The signature could not be verified." }
 
         $signed = $true
     }
@@ -116,21 +111,21 @@ if (-not [string]::IsNullOrWhiteSpace($CertificatePath)) {
     }
 }
 
-# ---------------------------------------------------------------- Packen und prüfbar machen
+# ---------------------------------------------------------------- Package and checksum
 Compress-Archive -Path (Join-Path $dist '*') -DestinationPath $zip -CompressionLevel Optimal -Force
 
 $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
 $hashFile = "$zip.sha256"
-# LF statt CRLF: so lässt sich die Datei auch mit sha256sum -c prüfen.
+# LF instead of CRLF so sha256sum -c can verify the file.
 [IO.File]::WriteAllText($hashFile, "$hash  $([IO.Path]::GetFileName($zip))`n", [Text.Encoding]::ASCII)
 
 $size = [math]::Round((Get-Item $zip).Length / 1MB, 1)
 
 Write-Host ''
-Write-Host "Fertig: $zip ($size MB)" -ForegroundColor Green
+Write-Host "Done: $zip ($size MB)" -ForegroundColor Green
 Write-Host "SHA-256: $hash"
-Write-Host "Signiert: $(if ($signed) { 'ja' } else { 'nein (ohne -CertificatePath)' })"
+Write-Host "Signed: $(if ($signed) { 'yes' } else { 'no (-CertificatePath not set)' })"
 Write-Host ''
-Write-Host 'Zum Prüfen auf einem anderen Rechner:'
+Write-Host 'Verify on another machine:'
 Write-Host "  certutil -hashfile $([IO.Path]::GetFileName($zip)) SHA256"
 Write-Host "  Get-AuthenticodeSignature .\AetherLauncher.exe"
