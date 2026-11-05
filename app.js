@@ -831,7 +831,7 @@
   function setupParallax() {
     if (!ultraMotion) return;
 
-    var targets = $$(".split-media img, .fx-orbs i, .motion-debris span");
+    var targets = $$(".split-media img, .fx-orbs i");
     if (!targets.length) return;
     var scheduled = false;
 
@@ -855,44 +855,6 @@
     window.addEventListener("scroll", request, { passive: true });
     window.addEventListener("resize", request);
     request();
-  }
-
-  function setupHoverSparks() {
-    if (!ultraMotion) return;
-
-    var selector = ".btn, .nav-tab, .github-link, .feature-card, .stat, .panel-chip, .badge, .release-card, .release-row, .download-card, .callout, .split-card, .screenshot-frame, .settings-list li, .steps li, .notice, .footer-links a, .copy-btn, .text-link, .maintenance-pill, .maintenance-meta > div";
-    var palette = ["#b4c7ff", "#5696ff", "#8fe3a8", "#ff9ec4", "#ffd479"];
-
-    document.addEventListener("pointerover", function (event) {
-      var target = event.target && event.target.closest ? event.target.closest(selector) : null;
-      if (!target) return;
-      if (event.relatedTarget && event.relatedTarget.nodeType === 1 && target.contains(event.relatedTarget)) return;
-
-      var rect = target.getBoundingClientRect();
-      if (!rect.width || !rect.height) return;
-
-      for (var index = 0; index < 10; index += 1) {
-        var spark = document.createElement("span");
-        var color = palette[Math.floor(Math.random() * palette.length)];
-        spark.className = "hover-spark";
-        spark.setAttribute("aria-hidden", "true");
-        spark.style.left = (rect.left + rect.width * (0.18 + Math.random() * 0.64)) + "px";
-        spark.style.top = (rect.top + rect.height * (0.18 + Math.random() * 0.64)) + "px";
-        spark.style.background = color;
-        spark.style.boxShadow = "0 0 14px " + color;
-        spark.style.setProperty("--sx", ((Math.random() - 0.5) * 72).toFixed(1) + "px");
-        spark.style.setProperty("--sy", (-18 - Math.random() * 52).toFixed(1) + "px");
-        spark.style.setProperty("--spin", ((Math.random() - 0.5) * 220).toFixed(0) + "deg");
-        spark.style.setProperty("--spark-size", (3 + Math.random() * 4).toFixed(1) + "px");
-        spark.style.animationDelay = (index * 0.026) + "s";
-        document.body.appendChild(spark);
-        window.setTimeout((function (node) {
-          return function () {
-            if (node.parentNode) node.parentNode.removeChild(node);
-          };
-        })(spark), 1000);
-      }
-    });
   }
 
   function setupMagnetic() {
@@ -939,62 +901,6 @@
     });
   }
 
-  function setupCursorTrail() {
-    if (!ultraMotion) return;
-
-    var glyphs = ["·", "+", "✦"];
-    var palette = ["#b4c7ff", "#5696ff"];
-    var last = 0;
-
-    document.addEventListener("pointermove", function (event) {
-      var now = window.performance.now();
-      if (now - last < 95) return;
-      last = now;
-
-      var trail = document.createElement("span");
-      trail.className = "cursor-trail";
-      trail.setAttribute("aria-hidden", "true");
-      trail.textContent = glyphs[Math.floor(Math.random() * glyphs.length)];
-      trail.style.left = event.clientX + "px";
-      trail.style.top = event.clientY + "px";
-      trail.style.color = palette[Math.floor(Math.random() * palette.length)];
-      trail.style.fontSize = (6 + Math.random() * 4).toFixed(1) + "px";
-      trail.style.setProperty("--drift-x", ((Math.random() - 0.5) * 22).toFixed(1) + "px");
-      trail.style.setProperty("--drift-y", (6 + Math.random() * 12).toFixed(1) + "px");
-      trail.style.setProperty("--spin", ((Math.random() - 0.5) * 120).toFixed(0) + "deg");
-      document.body.appendChild(trail);
-
-      window.setTimeout(function () {
-        trail.remove();
-      }, 620);
-    }, { passive: true });
-  }
-
-  function setupFloatingDebris() {
-    if (!ultraMotion) return;
-
-    var host = document.createElement("div");
-    host.className = "motion-debris";
-    host.setAttribute("aria-hidden", "true");
-    var glyphs = ["+", "×", "·", "✦", "◇"];
-
-    for (var index = 0; index < 18; index += 1) {
-      var speck = document.createElement("span");
-      speck.textContent = glyphs[index % glyphs.length];
-      speck.style.left = (4 + Math.random() * 92) + "%";
-      speck.style.top = (6 + Math.random() * 88) + "%";
-      speck.style.fontSize = (6 + Math.random() * 12).toFixed(1) + "px";
-      speck.style.setProperty("--drift-x", ((Math.random() - 0.5) * 160).toFixed(0) + "px");
-      speck.style.setProperty("--drift-y", (-30 - Math.random() * 150).toFixed(0) + "px");
-      speck.style.setProperty("--spin", ((Math.random() - 0.5) * 360).toFixed(0) + "deg");
-      speck.style.animationDuration = (10 + Math.random() * 16).toFixed(1) + "s";
-      speck.style.animationDelay = (-Math.random() * 20).toFixed(1) + "s";
-      host.appendChild(speck);
-    }
-
-    document.body.appendChild(host);
-  }
-
   function setupMotion() {
     setupScrollProgress();
     setupSectionRail();
@@ -1006,12 +912,9 @@
     setupCursorAura();
     setupHeroParticles();
     setupHeroOrbs();
-    setupFloatingDebris();
     setupParallax();
-    setupHoverSparks();
     setupMagnetic();
     setupCardTilt();
-    setupCursorTrail();
   }
 
   function flash(button, label) {

@@ -3064,24 +3064,6 @@ body:not(.maintenance-page)::after {
 .maintenance-footer a:hover {
   transform: translateY(-1px);
 }
-
-.hover-spark {
-  position: fixed;
-  z-index: 91;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  pointer-events: none;
-  background: var(--accent-hi);
-  box-shadow: 0 0 12px rgba(86, 150, 255, 0.85);
-  animation: hover-spark 0.66s var(--ease-out) forwards;
-}
-
-@keyframes hover-spark {
-  from { opacity: 0.95; transform: translate(-50%, -50%) scale(0.4) rotate(0deg); }
-  to { opacity: 0; transform: translate(calc(-50% + var(--sx, 0px)), calc(-50% + var(--sy, 0px))) scale(1.6) rotate(180deg); }
-}
-
 .ambient::after {
   content: "";
   position: absolute;
@@ -3110,38 +3092,7 @@ body:not(.maintenance-page)::after {
 .scroll-progress {
   background-size: 180% 100%;
   animation: progress-shimmer 2.4s linear infinite;
-}
-
-.motion-debris {
-  position: fixed;
-  inset: 0;
-  z-index: 3;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.motion-debris span {
-  position: absolute;
-  color: rgba(180, 199, 255, 0.3);
-  font-family: var(--mono);
-  line-height: 1;
-  text-shadow: 0 0 12px rgba(86, 150, 255, 0.8);
-  animation: debris-drift 16s ease-in-out infinite alternate;
-  will-change: transform, opacity;
-}
-
-.cursor-trail {
-  position: fixed;
-  z-index: 94;
-  font-family: var(--mono);
-  font-weight: 700;
-  line-height: 1;
-  pointer-events: none;
-  text-shadow: 0 0 8px currentColor;
-  opacity: 0.62;
-  animation: trail-pop 0.62s var(--ease-out) forwards;
-}
-.magnetic {
+}.magnetic {
   translate: var(--mag-x, 0px) var(--mag-y, 0px);
   transition:
     translate 0.18s var(--ease-out),
@@ -3401,13 +3352,6 @@ body:not(.maintenance-page)::after {
 .maintenance-card:hover .maintenance-pill {
   animation: badge-spin 0.55s var(--ease-out);
 }
-
-.hover-spark {
-  width: var(--spark-size, 5px);
-  height: var(--spark-size, 5px);
-  animation: hover-spark 0.8s var(--ease-out) forwards;
-}
-
 @keyframes aurora-turn {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -3421,19 +3365,7 @@ body:not(.maintenance-page)::after {
 @keyframes progress-shimmer {
   from { background-position: 0% 50%; }
   to { background-position: 180% 50%; }
-}
-
-@keyframes debris-drift {
-  from { opacity: 0.12; transform: translate3d(0, 0, 0) rotate(0deg); }
-  to { opacity: 0.55; transform: translate3d(var(--drift-x, 40px), var(--drift-y, -80px), 0) rotate(var(--spin, 180deg)); }
-}
-
-@keyframes trail-pop {
-  0% { opacity: 0.62; transform: translate(-50%, -50%) scale(0.35) rotate(0deg); }
-  68% { opacity: 0.35; }
-  100% { opacity: 0; transform: translate(calc(-50% + var(--drift-x, 0px)), calc(-50% + var(--drift-y, 20px))) scale(1.2) rotate(var(--spin, 90deg)); }
-}
-@keyframes card-orbit {
+}@keyframes card-orbit {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
@@ -3574,12 +3506,6 @@ body:not(.maintenance-page)::after {
   0%, 100% { box-shadow: 0 10px 30px rgba(0, 0, 0, 0.26), 0 0 0 0 rgba(86, 150, 255, 0); }
   50% { box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3), 0 0 22px rgba(86, 150, 255, 0.2); }
 }
-
-@keyframes hover-spark {
-  from { opacity: 0.95; transform: translate(-50%, -50%) scale(0.4) rotate(0deg); }
-  to { opacity: 0; transform: translate(calc(-50% + var(--sx, 0px)), calc(-50% + var(--sy, 0px))) scale(1.6) rotate(var(--spin, 180deg)); }
-}
-
 main > section {
   scroll-margin-top: 76px;
 }
@@ -3588,8 +3514,7 @@ main > section {
   filter: blur(64px);
 }
 
-.fx-orbs i,
-.motion-debris span {
+.fx-orbs i {
   translate: 0 var(--parallax-y, 0px);
 }
 

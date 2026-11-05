@@ -15,12 +15,12 @@
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://get-aether.de/download.html" />
   <meta property="og:image" content="https://get-aether.de/assets/screenshots/home.png" />
-  <link rel="stylesheet" href="styles.css?v=23" />
-  <link rel="stylesheet" href="download.css?v=1" />
+  <link rel="stylesheet" href="styles.css?v=24" />
+  <link rel="stylesheet" href="download.css?v=2" />
   <script>document.documentElement.classList.add("js", "motion-forced");</script>
   <script src="config.js?v=26"></script>
   <script src="maintenance.js?v=24" defer></script>
-  <script src="app.js?v=27" defer></script>
+  <script src="app.js?v=28" defer></script>
 </head>
 <body class="download-page">
   <a class="skip-link" href="#main">Skip to content</a>
@@ -48,6 +48,10 @@
           <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h10M3 8h10M3 12h10"/><circle cx="6" cy="4" r="1.4" fill="currentColor" stroke="none"/><circle cx="10" cy="8" r="1.4" fill="currentColor" stroke="none"/><circle cx="7" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg>
           <span>FastFlags</span>
         </a>
+        <a class="nav-tab is-active" href="download.html" aria-current="page">
+          <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8M5 7l3 3 3-3M2.5 13.5h11"/></svg>
+          <span>Download</span>
+        </a>
         <a class="nav-tab" href="get-script.html">
           <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5.2 4.2-3 3.8 3 3.8m5.6-7.6 3 3.8-3 3.8"/></svg>
           <span>Script (Soon)</span>
@@ -55,10 +59,6 @@
         <a class="nav-tab" href="donate.html">
           <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M8 13.4S2.8 10.4 2.8 6.5A2.9 2.9 0 0 1 8 4.6a2.9 2.9 0 0 1 5.2 1.9C13.2 10.4 8 13.4 8 13.4Z"/></svg>
           <span>Donate</span>
-        </a>
-        <a class="nav-tab is-active" href="download.html" aria-current="page">
-          <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8M5 7l3 3 3-3M2.5 13.5h11"/></svg>
-          <span>Download</span>
         </a>
       </nav>
 
@@ -95,7 +95,6 @@
         <div class="release-main">
           <div class="asset-list" aria-label="Release files">
             <div class="asset-row">
-              <span class="asset-type">EXE</span>
               <div class="asset-copy">
                 <strong data-asset-name>AetherLauncher-1.2.0-win-x64.exe</strong>
                 <span>Windows x64 <span class="dot">&middot;</span> <span data-release-size>64.5 MB</span></span>
@@ -103,7 +102,6 @@
               <a class="btn btn-primary btn-sm" href="https://github.com/Wiiffies/Aether-Website/releases/download/v1.2.0/AetherLauncher-1.2.0-win-x64.exe" data-download>Download</a>
             </div>
             <div class="asset-row">
-              <span class="asset-type">SHA</span>
               <div class="asset-copy">
                 <strong>AetherLauncher-1.2.0-win-x64.exe.sha256</strong>
                 <span>SHA-256 checksum <span class="dot">&middot;</span> 99 B</span>
@@ -111,7 +109,6 @@
               <a class="text-link" href="https://github.com/Wiiffies/Aether-Website/releases/download/v1.2.0/AetherLauncher-1.2.0-win-x64.exe.sha256" data-checksum>Download</a>
             </div>
             <div class="asset-row">
-              <span class="asset-type">SRC</span>
               <div class="asset-copy">
                 <strong>Source code</strong>
                 <span>Programm branch</span>
