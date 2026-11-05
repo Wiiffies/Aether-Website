@@ -23,7 +23,7 @@ public static partial class Log
 
     public static void Warn(string message) => Write("WARN", message);
 
-    public static void Error(string message) => Write("FEHLER", message);
+    public static void Error(string message) => Write("ERROR", message);
 
     public static string Text => string.Join(Environment.NewLine, Lines);
 

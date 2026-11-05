@@ -108,6 +108,8 @@ public partial class App : Application
         _singleInstance.StartListener(uri =>
             Dispatcher.BeginInvoke(() => ExternalLaunchRequested?.Invoke(uri)));
 
+        WebView2Bootstrap.EnsureAvailable();
+
         ShutdownMode = ShutdownMode.OnMainWindowClose;
 
         var window = new MainWindow(launchUri);
@@ -150,7 +152,7 @@ public partial class App : Application
         try
         {
             crashFile = Path.Combine(AppPaths.DataDir, "crash.log");
-            File.AppendAllText(crashFile, $"\n==== {DateTime.Now:dd.MM.yyyy HH:mm:ss} ====\n{text}\n");
+            File.AppendAllText(crashFile, $"\n==== {DateTime.Now:yyyy-MM-dd HH:mm:ss} ====\n{text}\n");
         }
         catch
         {

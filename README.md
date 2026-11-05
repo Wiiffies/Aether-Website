@@ -66,6 +66,8 @@ The screenshots use sample data and are generated with `--screenshot`; see [Tool
 - [.NET SDK 10](https://dotnet.microsoft.com/download) to build
 - An installed Roblox client under `%LOCALAPPDATA%\Roblox`
 
+The downloadable release is self-contained; no .NET runtime installation is needed. On first launch, Aether installs the Microsoft Edge WebView2 Runtime if it is missing.
+
 ## Quick start
 
 ```bash
@@ -78,7 +80,7 @@ dotnet build src/AetherLauncher/AetherLauncher.csproj -c Release
 Build a single self-contained executable:
 
 ```bash
-dotnet publish src/AetherLauncher/AetherLauncher.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
+dotnet publish src/AetherLauncher/AetherLauncher.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true
 ```
 
 ## Usage
@@ -379,13 +381,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-release.ps1 -Ver
 # ... -CertificatePath .\aether.pfx
 ```
 
-The build creates `dist/AetherLauncher-<version>-win-x64.zip` and a `.sha256` file: single-file, ReadyToRun, without PDB or XML documentation. With `-CertificatePath`, the script signs the EXE with `signtool` (SHA-256 plus timestamp) and verifies the signature.
+The build creates `dist/AetherLauncher-<version>-win-x64.exe` and a `.sha256` file: self-contained, single-file, ReadyToRun, without PDB or XML documentation. The executable bundles the .NET runtime and installs the Microsoft Edge WebView2 Runtime on first launch if it is missing. With `-CertificatePath`, the script signs the EXE with `signtool` (SHA-256 plus timestamp) and verifies the signature.
 
 Verify a download on another machine:
 
 ```powershell
-certutil -hashfile AetherLauncher-1.2.0-win-x64.zip SHA256
-Get-AuthenticodeSignature .\AetherLauncher.exe
+certutil -hashfile AetherLauncher-1.2.0-win-x64.exe SHA256
+Get-AuthenticodeSignature .\AetherLauncher-1.2.0-win-x64.exe
 ```
 
 ### What this can and cannot protect
