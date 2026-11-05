@@ -133,7 +133,7 @@
       if (repo) {
         link.href = repoUrl;
         link.target = "_blank";
-        link.rel = "noopener";
+        link.rel = "noopener noreferrer";
         link.removeAttribute("data-needs-config");
         link.title = "";
       } else {
@@ -145,7 +145,7 @@
       if (releasesUrl) {
         link.href = releasesUrl;
         link.target = "_blank";
-        link.rel = "noopener";
+        link.rel = "noopener noreferrer";
         link.removeAttribute("data-needs-config");
         link.title = "";
       } else {
@@ -157,7 +157,7 @@
       if (repoUrl) {
         link.href = repoUrl + "/tree/programm";
         link.target = "_blank";
-        link.rel = "noopener";
+        link.rel = "noopener noreferrer";
         link.removeAttribute("data-needs-config");
         link.title = "";
       } else {
@@ -169,7 +169,7 @@
       $$("[data-download]").forEach(function (link) {
         link.href = config.fallbackDownloadUrl;
         link.target = "_blank";
-        link.rel = "noopener";
+        link.rel = "noopener noreferrer";
       });
     }
   }
@@ -211,6 +211,16 @@
     node.className = "status-pill" + (state === "ready" ? " is-ready" : state === "quiet" ? " is-quiet" : "");
   }
 
+  function updateVerifyCommand(assetName) {
+    var command = "Get-FileHash .\\" + assetName + " -Algorithm SHA256";
+    $$("[data-verify-command]").forEach(function (node) {
+      node.textContent = command;
+    });
+    $$("[data-verify-copy]").forEach(function (node) {
+      node.setAttribute("data-copy", command);
+    });
+  }
+
   function renderRelease() {
     var version = release.version || fallbackVersion;
     text("[data-version]", "v" + version);
@@ -219,7 +229,10 @@
     if (release.date) text("[data-release-date]", formatDate(release.date));
     if (release.size) text("[data-release-size]", humanBytes(release.size));
     if (release.downloads) text("[data-release-downloads]", release.downloads.toLocaleString("en-US"));
-    if (release.assetName) text("[data-asset-name]", release.assetName);
+    if (release.assetName) {
+      text("[data-asset-name]", release.assetName);
+      updateVerifyCommand(release.assetName);
+    }
 
     $$("[data-checksum]").forEach(function (link) {
       if (release.checksumUrl) link.href = release.checksumUrl;
@@ -233,7 +246,7 @@
         link.title = "";
         if (/^https?:\/\//i.test(target)) {
           link.target = "_blank";
-          link.rel = "noopener";
+          link.rel = "noopener noreferrer";
         }
       } else {
         link.setAttribute("data-needs-config", "true");

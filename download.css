@@ -250,3 +250,52 @@
     flex-direction: column;
   }
 }
+
+.verify-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 14px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--code);
+}
+
+.verify-row code {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--code-text);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.verify-row .copy-btn {
+  margin-left: auto;
+}
+
+.verify-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-bottom: 0;
+}
+
+.verify-links .text-link {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .verify-row {
+    flex-wrap: wrap;
+  }
+
+  .verify-row code {
+    flex-basis: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
