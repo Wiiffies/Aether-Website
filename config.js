@@ -1,6 +1,6 @@
 window.AETHER_CONFIG = {
   githubRepo: "Wiiffies/Aether-Website",
-  fallbackDownloadUrl: "https://github.com/Wiiffies/Aether-Website/releases/download/v1.2.0/AetherLauncher-1.2.0-win-x64.zip",
+  fallbackDownloadUrl: "https://github.com/Wiiffies/Aether-Website/releases/download/v1.2.0/AetherLauncher-1.2.0-win-x64.exe",
   versionFallback: "1.2.0",
 
   donations: {

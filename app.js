@@ -182,6 +182,16 @@
 
   function pickAsset(assets) {
     var list = assets || [];
+    var windowsExe = list.find(function (asset) {
+      return /win/i.test(asset.name || "") && /\.exe$/i.test(asset.name || "");
+    });
+    if (windowsExe) return windowsExe;
+
+    var anyExe = list.find(function (asset) {
+      return /\.exe$/i.test(asset.name || "");
+    });
+    if (anyExe) return anyExe;
+
     var windowsZip = list.find(function (asset) {
       return /win/i.test(asset.name || "") && /\.zip$/i.test(asset.name || "");
     });

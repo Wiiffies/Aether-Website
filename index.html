@@ -17,9 +17,9 @@
   <meta property="og:image" content="https://get-aether.de/assets/screenshots/home.png" />
   <link rel="stylesheet" href="styles.css?v=23" />
   <script>document.documentElement.classList.add("js");</script>
-  <script src="config.js?v=25"></script>
+  <script src="config.js?v=26"></script>
   <script src="maintenance.js?v=24" defer></script>
-  <script src="app.js?v=25" defer></script>
+  <script src="app.js?v=26" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -269,10 +269,10 @@
       <header class="section-head">
         <div>
           <p class="kicker"><span>05</span> Download</p>
-          <h2>Take the folder. Leave the installer.</h2>
+          <h2>Take the file. Leave the installer.</h2>
         </div>
         <p class="section-lede">
-          Windows 10 or 11, 64-bit. Unpack it, run <code>AetherLauncher.exe</code> and point it at
+          Windows 10 or 11, 64-bit. Download the executable, run <code>AetherLauncher.exe</code> and point it at
           your Roblox install. No background service, no account, no telemetry.
         </p>
       </header>
@@ -292,9 +292,10 @@
             <summary>Requirements &amp; first start</summary>
             <ul>
               <li>Windows 10 or 11, 64-bit.</li>
-              <li>The <a href="https://dotnet.microsoft.com/download/dotnet/10.0" target="_blank" rel="noopener">.NET 10 Desktop Runtime</a> if you use the smaller build.</li>
+              <li>No separate .NET install; the runtime is bundled in the executable.</li>
+              <li>Microsoft Edge WebView2 Runtime, installed automatically on first launch if missing.</li>
               <li>An installed Roblox client under <code>%LOCALAPPDATA%\Roblox</code>.</li>
-              <li>Unpack the zip. If Windows hesitates on the unsigned exe, choose <em>Unblock</em> in its file properties.</li>
+              <li>If Windows hesitates on the unsigned exe, choose <em>Unblock</em> in its file properties.</li>
             </ul>
           </details>
 
